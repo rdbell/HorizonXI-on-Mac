@@ -1,0 +1,33 @@
+# Recipe for the disposable `development` integration branch.
+#
+# One branch name per line, merged top-to-bottom onto a fresh copy of master by
+# scripts/build-development.sh. Blank lines and lines starting with `#` are ignored.
+#
+# This file is the manifest of everything our fork adds beyond upstream master: it is
+# the single source of truth for "what is ours." `development` is rebuilt from it and is
+# never committed to by hand. See docs/FORK-STRATEGY.md.
+#
+# Maintenance:
+#   * Scenario A (a PR lands upstream): re-sync master, then delete that branch's line
+#     here -- its changes now arrive through master.
+#   * Scenario B (permanent fork): this list becomes the integration manifest for
+#     fork-main. Add a line to pull a branch into the build; keep them rebased on master.
+#
+# Left out for now (add a line when you want them in the build):
+#   competing cursor/mouse -> pick ONE of: cursor-visible-as-dylib, winecursor-imgui-mouse,
+#                             wine-mouse-wndproc  (they conflict with each other)
+#   addon suites          -> vanagear, vanaguide (vanaguide arrives via winecursor-imgui-mouse)
+#   others               -> addons-sheet-per-world, ashita-signature-repair,
+#                            release-cadence-check, docs-findings-cleanup
+
+# Our fork's own control plane (this file, the build script, the strategy doc).
+fork-tooling
+
+# Runtime stack tip: contains wine-runtime-installer -> loading-stall-nx-fix ->
+# performance-harness -> the launch/shutdown beach-ball fix, in one lane.
+launch-shutdown-responsiveness
+
+# Install / download fixes, each an open PR upstream.
+fix-horizonxi-download-url
+fix-aria2-metadata-stalls
+fix-horizon-install-readiness
