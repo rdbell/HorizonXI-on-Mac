@@ -81,5 +81,455 @@
     "renderer_run": 6,
     "note": "The corrected i686 window fixture and fail-fast skipped tail passed on retry. Each architecture had one passing test with a Wine stdio leak report.",
     "renderer_report": 8
+  },
+  "town_runs": [
+    {
+      "run": "town-baseline",
+      "session": "20260905-125950-standard-nosample",
+      "problems": [],
+      "scenes": [
+        {
+          "name": "rules",
+          "zone": 0,
+          "start": 1788634870.334531,
+          "end": 1788634872.3765829,
+          "valid": false,
+          "windows": 1,
+          "seconds": 1.002,
+          "fps": 168.679,
+          "median_window_fps": 168.679,
+          "minimum_window_fps": 168.679,
+          "percent_time_below_120": 0.0,
+          "worst_window_p99_ms": 21.944,
+          "maximum_frame_ms": 22.97,
+          "jit_enabled": [
+            0
+          ],
+          "unaccounted_seconds": 0,
+          "reason": "short sample or missing frame-counter windows",
+          "note": "Two-second menu samples only verified advancing frames; they are too short for FPS comparisons."
+        },
+        {
+          "name": "main-menu",
+          "zone": 0,
+          "start": 1788634892.4164648,
+          "end": 1788634894.429228,
+          "valid": false,
+          "windows": 1,
+          "seconds": 1.02,
+          "fps": 78.408,
+          "median_window_fps": 78.408,
+          "minimum_window_fps": 78.408,
+          "percent_time_below_120": 100.0,
+          "worst_window_p99_ms": 28.408,
+          "maximum_frame_ms": 28.408,
+          "jit_enabled": [
+            0
+          ],
+          "unaccounted_seconds": 0,
+          "reason": "short sample or missing frame-counter windows",
+          "note": "Two-second menu samples only verified advancing frames; they are too short for FPS comparisons."
+        },
+        {
+          "name": "characters",
+          "zone": 0,
+          "start": 1788634913.938106,
+          "end": 1788634915.9599319,
+          "valid": false,
+          "windows": 1,
+          "seconds": 1.023,
+          "fps": 72.321,
+          "median_window_fps": 72.321,
+          "minimum_window_fps": 72.321,
+          "percent_time_below_120": 100.0,
+          "worst_window_p99_ms": 29.951,
+          "maximum_frame_ms": 29.951,
+          "jit_enabled": [
+            0
+          ],
+          "unaccounted_seconds": 0,
+          "reason": "short sample or missing frame-counter windows",
+          "note": "Two-second menu samples only verified advancing frames; they are too short for FPS comparisons."
+        },
+        {
+          "name": "city settled",
+          "zone": 235,
+          "start": 1788634974.978,
+          "end": 1788635032.999,
+          "position": {
+            "x": -201.904,
+            "y": -194.828,
+            "z": 4.0,
+            "yaw": -1.5706
+          },
+          "draw_distance": {
+            "world_distance": 20.0,
+            "entity_distance": 20.0
+          },
+          "clock": {
+            "vana_hour": 12,
+            "vana_minute": 14
+          },
+          "valid": true,
+          "windows": 56,
+          "seconds": 56.852,
+          "fps": 41.951,
+          "median_window_fps": 42.057,
+          "minimum_window_fps": 36.536,
+          "percent_time_below_120": 100.0,
+          "worst_window_p99_ms": 71.802,
+          "maximum_frame_ms": 71.802,
+          "jit_enabled": [
+            0
+          ],
+          "unaccounted_seconds": 0.0,
+          "reason": null
+        },
+        {
+          "name": "mines plaza settled",
+          "zone": 234,
+          "start": 1788635061.034,
+          "end": 1788635119.057,
+          "position": {
+            "x": 39.0,
+            "y": -49.0,
+            "z": 0.0,
+            "yaw": -3.1414
+          },
+          "draw_distance": {
+            "world_distance": 20.0,
+            "entity_distance": 20.0
+          },
+          "clock": {
+            "vana_hour": 12,
+            "vana_minute": 50
+          },
+          "valid": true,
+          "windows": 56,
+          "seconds": 56.85,
+          "fps": 36.253,
+          "median_window_fps": 36.32,
+          "minimum_window_fps": 31.463,
+          "percent_time_below_120": 100.0,
+          "worst_window_p99_ms": 83.087,
+          "maximum_frame_ms": 83.087,
+          "jit_enabled": [
+            0
+          ],
+          "unaccounted_seconds": 0.0,
+          "reason": null
+        }
+      ],
+      "boot_sha256": "434995b06ec67751427714321bffd950eb2c5f79086f506f64abb2c9b3bea0f8",
+      "shader_cache_seed_sha256": "05ab78a523bfed1230acac4c80a22a8fef0bb0fd9079ac98c5b1ef6cbebf66ca",
+      "renderer_sha256": {
+        "d3d8.dll": "ab6bf7a9a9f4b3e66a75ca038d8d10289c88acbfe8d52c3b5a8a9a259cb26cd5",
+        "d3d9.dll": "5c50f730f02ef38aee0b6bec847ae559e91d1dfc179de5f9895615f1ae3abdcf",
+        "mtld3d.dll": "6618f35ca777b8c16d76e01e3261d2f17040b86ed7e88f34f6975d3ec6ac3701",
+        "mtld3d.so": "a078a2848d83337def0c97920f8f8cf0428f2a9fa5bb2273e8baa47154db9208"
+      },
+      "graphics": {
+        "0000": 2,
+        "0001": 1024,
+        "0002": 742,
+        "0003": 4096,
+        "0004": 4096,
+        "0007": 1,
+        "0011": 2,
+        "0017": 0,
+        "0018": 2,
+        "0019": 1,
+        "0020": 1,
+        "0021": 0,
+        "0022": 0,
+        "0023": 0,
+        "0024": 0,
+        "0028": 0,
+        "0029": 12,
+        "0030": 0,
+        "0031": 1002740646,
+        "0032": 0,
+        "0033": 0,
+        "0034": 1,
+        "0035": 1,
+        "0036": 1,
+        "0037": 1024,
+        "0038": 742,
+        "0039": 1,
+        "0040": 0,
+        "0041": 0,
+        "0043": 0,
+        "0044": 1,
+        "0045": 0
+      },
+      "renderer_config": "color.hdr.enable=false;render.scale=1;present.maxFps=0;render.mergePasses=true;render.submitDraws=0",
+      "draw_distance_requested": 20,
+      "rendering_review_required": false,
+      "shader_compilation": {
+        "prewarm_compiles": 214,
+        "prewarm_compile_ms": 62,
+        "live_compiles": 1,
+        "live_compile_ms": 2,
+        "largest_live_burst_compiles": 1,
+        "largest_live_burst_ms": 2,
+        "prewarm_reused_variants": 0,
+        "minimum_total_reused_variants": 0,
+        "minimum_live_reused_variants": 0,
+        "note": "Logged compiler aggregates, not frame times. Reuse is a lower bound because live reports are batched."
+      },
+      "rendering_review": "Markets and Mines screenshots reviewed; character, terrain, textures and lighting remain correct with matching camera positions."
+    },
+    {
+      "run": "town-candidate",
+      "session": "20260905-130656-standard-nosample",
+      "problems": [],
+      "scenes": [
+        {
+          "name": "rules",
+          "zone": 0,
+          "start": 1788635298.323245,
+          "end": 1788635300.334638,
+          "valid": false,
+          "windows": 1,
+          "seconds": 1.011,
+          "fps": 148.305,
+          "median_window_fps": 148.305,
+          "minimum_window_fps": 148.305,
+          "percent_time_below_120": 0.0,
+          "worst_window_p99_ms": 19.209,
+          "maximum_frame_ms": 170.659,
+          "jit_enabled": [
+            0
+          ],
+          "unaccounted_seconds": 0,
+          "reason": "short sample or missing frame-counter windows",
+          "note": "Two-second menu samples only verified advancing frames; they are too short for FPS comparisons."
+        },
+        {
+          "name": "main-menu",
+          "zone": 0,
+          "start": 1788635319.943891,
+          "end": 1788635321.9584908,
+          "valid": false,
+          "windows": 1,
+          "seconds": 1.008,
+          "fps": 108.146,
+          "median_window_fps": 108.146,
+          "minimum_window_fps": 108.146,
+          "percent_time_below_120": 100.0,
+          "worst_window_p99_ms": 24.184,
+          "maximum_frame_ms": 28.202,
+          "jit_enabled": [
+            0
+          ],
+          "unaccounted_seconds": 0,
+          "reason": "short sample or missing frame-counter windows",
+          "note": "Two-second menu samples only verified advancing frames; they are too short for FPS comparisons."
+        },
+        {
+          "name": "characters",
+          "zone": 0,
+          "start": 1788635342.5777972,
+          "end": 1788635344.589875,
+          "valid": false,
+          "windows": 1,
+          "seconds": 1.007,
+          "fps": 91.379,
+          "median_window_fps": 91.379,
+          "minimum_window_fps": 91.379,
+          "percent_time_below_120": 100.0,
+          "worst_window_p99_ms": 27.951,
+          "maximum_frame_ms": 27.951,
+          "jit_enabled": [
+            0
+          ],
+          "unaccounted_seconds": 0,
+          "reason": "short sample or missing frame-counter windows",
+          "note": "Two-second menu samples only verified advancing frames; they are too short for FPS comparisons."
+        },
+        {
+          "name": "city settled",
+          "zone": 235,
+          "start": 1788635402.607,
+          "end": 1788635460.614,
+          "position": {
+            "x": -201.904,
+            "y": -194.828,
+            "z": 4.0,
+            "yaw": -1.5706
+          },
+          "draw_distance": {
+            "world_distance": 20.0,
+            "entity_distance": 20.0
+          },
+          "clock": {
+            "vana_hour": 12,
+            "vana_minute": 15
+          },
+          "valid": true,
+          "windows": 56,
+          "seconds": 56.484,
+          "fps": 45.004,
+          "median_window_fps": 44.804,
+          "minimum_window_fps": 40.404,
+          "percent_time_below_120": 100.0,
+          "worst_window_p99_ms": 51.507,
+          "maximum_frame_ms": 51.507,
+          "jit_enabled": [
+            0
+          ],
+          "unaccounted_seconds": 0.0,
+          "reason": null
+        },
+        {
+          "name": "mines plaza settled",
+          "zone": 234,
+          "start": 1788635488.634,
+          "end": 1788635546.638,
+          "position": {
+            "x": 39.0,
+            "y": -49.0,
+            "z": 0.0,
+            "yaw": -3.1414
+          },
+          "draw_distance": {
+            "world_distance": 20.0,
+            "entity_distance": 20.0
+          },
+          "clock": {
+            "vana_hour": 12,
+            "vana_minute": 50
+          },
+          "valid": true,
+          "windows": 56,
+          "seconds": 56.795,
+          "fps": 37.697,
+          "median_window_fps": 37.816,
+          "minimum_window_fps": 29.939,
+          "percent_time_below_120": 100.0,
+          "worst_window_p99_ms": 77.201,
+          "maximum_frame_ms": 77.201,
+          "jit_enabled": [
+            0
+          ],
+          "unaccounted_seconds": 0.0,
+          "reason": null
+        }
+      ],
+      "boot_sha256": "434995b06ec67751427714321bffd950eb2c5f79086f506f64abb2c9b3bea0f8",
+      "shader_cache_seed_sha256": "05ab78a523bfed1230acac4c80a22a8fef0bb0fd9079ac98c5b1ef6cbebf66ca",
+      "renderer_sha256": {
+        "d3d8.dll": "ab6bf7a9a9f4b3e66a75ca038d8d10289c88acbfe8d52c3b5a8a9a259cb26cd5",
+        "d3d9.dll": "10bb9153f2edc2ff5f6628e6ce7062581dfd2de5db2c7f948e53b80682c2deb6",
+        "mtld3d.dll": "6618f35ca777b8c16d76e01e3261d2f17040b86ed7e88f34f6975d3ec6ac3701",
+        "mtld3d.so": "a078a2848d83337def0c97920f8f8cf0428f2a9fa5bb2273e8baa47154db9208"
+      },
+      "graphics": {
+        "0000": 2,
+        "0001": 1024,
+        "0002": 742,
+        "0003": 4096,
+        "0004": 4096,
+        "0007": 1,
+        "0011": 2,
+        "0017": 0,
+        "0018": 2,
+        "0019": 1,
+        "0020": 1,
+        "0021": 0,
+        "0022": 0,
+        "0023": 0,
+        "0024": 0,
+        "0028": 0,
+        "0029": 12,
+        "0030": 0,
+        "0031": 1002740646,
+        "0032": 0,
+        "0033": 0,
+        "0034": 1,
+        "0035": 1,
+        "0036": 1,
+        "0037": 1024,
+        "0038": 742,
+        "0039": 1,
+        "0040": 0,
+        "0041": 0,
+        "0043": 0,
+        "0044": 1,
+        "0045": 0
+      },
+      "renderer_config": "color.hdr.enable=false;render.scale=1;present.maxFps=0;render.mergePasses=true;render.submitDraws=0",
+      "draw_distance_requested": 20,
+      "rendering_review_required": false,
+      "shader_compilation": {
+        "prewarm_compiles": 59,
+        "prewarm_compile_ms": 46,
+        "live_compiles": 0,
+        "live_compile_ms": 0,
+        "largest_live_burst_compiles": 0,
+        "largest_live_burst_ms": 0,
+        "prewarm_reused_variants": 155,
+        "minimum_total_reused_variants": 155,
+        "minimum_live_reused_variants": 0,
+        "note": "Logged compiler aggregates, not frame times. Reuse is a lower bound because live reports are batched."
+      },
+      "rendering_review": "Markets and Mines screenshots reviewed; character, terrain, textures and lighting remain correct with matching camera positions."
+    }
+  ],
+  "town_method": {
+    "game_limit_seconds": 400,
+    "capture_limit_seconds": 380,
+    "local_test_character_only": true,
+    "clock_pinned_to_noon": true,
+    "matched_scene_camera_graphics_boot_config_and_seed": true,
+    "restored_file_states_per_run": 44,
+    "docker_unchanged": true,
+    "limitations": [
+      "Single sequential pair; not a crowded player-arrival reproduction.",
+      "Metal driver source cache was already warm.",
+      "Baseline began in the Mines tunnel; candidate began at the Mines plaza. Comparisons use the later fixed scene positions.",
+      "Menus were sampled too briefly for FPS comparisons.",
+      "Per-window frame-time percentiles cannot be pooled from the CSV."
+    ]
+  },
+  "installed_validation": {
+    "build": "23",
+    "session": "20260905-131712-standard-nosample",
+    "exit_code": 0,
+    "installed_mtld3d": true,
+    "renderer_verified": {
+      "d3d8.dll": "ab6bf7a9a9f4b3e66a75ca038d8d10289c88acbfe8d52c3b5a8a9a259cb26cd5",
+      "d3d9.dll": "10bb9153f2edc2ff5f6628e6ce7062581dfd2de5db2c7f948e53b80682c2deb6",
+      "mtld3d.dll": "6618f35ca777b8c16d76e01e3261d2f17040b86ed7e88f34f6975d3ec6ac3701",
+      "mtld3d.so": "b9b48faed4923fe6110a6105e4d882622be3b459ae9c908f3f8877319f0c88d6"
+    },
+    "renderer_config": "color.hdr.enable=false;render.scale=1;present.maxFps=0;render.mergePasses=true;render.submitDraws=0",
+    "shader_compilation": {
+      "prewarm_compiles": 105,
+      "prewarm_compile_ms": 44,
+      "live_compiles": 0,
+      "live_compile_ms": 0,
+      "largest_live_burst_compiles": 0,
+      "largest_live_burst_ms": 0,
+      "prewarm_reused_variants": 399,
+      "minimum_total_reused_variants": 399,
+      "minimum_live_reused_variants": 0,
+      "note": "Logged compiler aggregates, not frame times. Reuse is a lower bound because live reports are batched."
+    },
+    "restoration": {
+      "files_restored": 44,
+      "preferences_restored": true,
+      "docker_unchanged": true,
+      "related_processes": []
+    },
+    "all_44_original_file_states_verified": true,
+    "original_shader_cache_preserved": true,
+    "only_preference_change": "renderer selected mtld3d",
+    "signature_verified": true,
+    "character_screenshot_reviewed": true,
+    "game_limit_seconds": 200,
+    "capture_limit_seconds": 180,
+    "returns_sent": 2,
+    "initial_preflight": "Refused DXVK selection before launching; selected mtld3d and repeated successfully."
   }
 }

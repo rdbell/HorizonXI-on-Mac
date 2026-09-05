@@ -381,7 +381,7 @@ the prewarm cache moves to the encoder. Equivalent functions also share pipeline
 
 The change keeps shader-cache schema 68 and existing warmed caches. It writes a disk record
 only when compiling new source. A state alias encountered after relaunch can resolve against
-the prewarmed source without another Metal compilation. Genuinely new source still compiles
+the prewarmed source without another Metal compilation. New source still compiles
 synchronously; this fix does not eliminate every possible loading or asset-upload stall.
 
 ### Recorded Metal compilation replay
@@ -401,7 +401,7 @@ limit is 120 seconds, checked between compilations.
 
 Live compiler work fell 83.9% and 81.9%. This measures library compilation and entry lookup,
 not game FPS, frame-time percentiles, or render-pipeline creation. The longest individual
-live compile remained 33.8–40.3 ms with reuse, because new shader code still needs compiling.
+live compile remained 33.8 to 40.3 ms with reuse, because new shader code still needs compiling.
 
 The replay lives in the renderer's `windows/core/examples/shader_cache_audit.rs`, included
 in both the cumulative and incremental patches. After applying one appropriate patch:
@@ -433,3 +433,55 @@ records the seed hash. It captures the result before restoring the original cach
 snapshot regression verifies that restoration, and all six harness tests pass. The report
 also records compiler bursts separately from frame times, carries the cache-seed hash, and
 labels the batched reuse counter as a lower bound. All eight report tests pass.
+
+### Local game comparison
+
+The production baseline and candidate completed the bounded local Hxitest town scenario.
+The settled scene positions, camera, noon clock schedule, 4096 x 4096 background, other
+graphics, minimal boot script, draw distance, renderer configuration and 214-record cache
+seed matched. Screenshots preserve the character, textures, terrain and lighting. The Mines
+vantage faces the plaza wall; it is not a crowd of player characters.
+
+| Settled scene | Baseline FPS | Candidate FPS | Baseline maximum frame | Candidate maximum frame |
+| --- | ---: | ---: | ---: | ---: |
+| Markets bridge | 41.951 | 45.004 | 71.802 ms | 51.507 ms |
+| Mines plaza wall | 36.253 | 37.697 | 83.087 ms | 77.201 ms |
+
+These are one sequential pair, not a repeatability claim or evidence of stable 120 FPS.
+The minimum one-second FPS improved in Markets but fell from 31.463 to 29.939 in Mines.
+Frame-time percentiles in the JSON are per-window values, not pooled percentiles.
+
+The driver source cache was already warm. Baseline prewarming compiled 214 libraries in
+62 ms; the candidate compiled 59 in 46 ms and reused 155 states. Baseline logged one live
+compile taking 2 ms; the candidate logged none. This local workload therefore did not
+reproduce the original live compilation burst. It confirms integration and rendering, while
+the recorded-source replay supplies the evidence for first-time compilation savings.
+Baseline initially entered at the Mines tunnel and the candidate at the plaza, so comparisons
+use the later fixed scene positions. Each run restored all 44 file states and saved
+preferences, kept Docker unchanged, and left no game or Wine processes running.
+
+Aggregate evidence and full scene summaries are in
+[benchmarks/2026-09-05-shader-dedup.json](benchmarks/2026-09-05-shader-dedup.json).
+
+### Installed build 23
+
+`/Applications/FFXI-on-Mac.app` now contains the production shader-reuse build. Its native
+D3D9 SHA-256 is `10bb9153f2edc2ff5f6628e6ce7062581dfd2de5db2c7f948e53b80682c2deb6`.
+The Wine shim and Unix implementation are unchanged. Bundle signing and all renderer hashes
+passed verification.
+
+The first normal-launch validation refused to run because the saved renderer was DXVK.
+Selecting mtld3d changed only that preference. The next bounded validation,
+`20260905-131712-standard-nosample`, passed through the local Hxitest character screen using
+the installed launcher's own renderer configuration and resources. Loaded hashes matched;
+x87 acceleration and frame counters were active. The original 504-record game cache produced
+105 prewarm compilations in 44 ms and 399 reused variants. Character-screen rendering was
+reviewed and remains correct.
+
+After validation, all 44 file states matched the originals from before the paired tests,
+including the shader cache. Every preference except the intended mtld3d selection matched
+the pre-install backup. Docker was unchanged and no launcher, game or Wine process remained.
+The local rollback copy is
+`ximac/benchmarks/20260905-shader-stutter/rollback-build22/FFXI-on-Mac.app`, with private
+settings backups beside it. Restoring that app while the game is closed reverts the renderer
+code; DXVK also remains selectable in build 23.
