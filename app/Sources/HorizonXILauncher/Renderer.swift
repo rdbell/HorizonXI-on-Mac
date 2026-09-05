@@ -351,12 +351,36 @@ enum RendererSetup {
 
     // MARK: - wine plumbing
 
+    /// Is a game already running out of this prefix?
+    ///
+    /// This matters because `wineserver -k` is not selective: it tears down every process in the
+    /// prefix. Both worlds share one prefix, so killing the server to flush a registry edit also
+    /// kills whatever the user is playing. Daniel caught exactly that -- starting one world shut
+    /// down a session on another -- and a launcher that closes somebody's game to tidy a setting
+    /// has its priorities backwards.
+    static func gameIsRunning(_ i: Install) -> Bool {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/pgrep")
+        p.arguments = ["-f", "horizon-loader\\.exe|xiloader\\.exe|pol\\.exe"]
+        let out = Pipe()
+        p.standardOutput = out
+        p.standardError = Pipe()
+        do { try p.run() } catch { return false }
+        p.waitUntilExit()
+        return p.terminationStatus == 0
+    }
+
     /// `reg` edits do not reach a running wineserver, and a stale one silently keeps the old
     /// value — which is how an earlier pass of this project produced a "success" screenshot from
     /// the pathway it thought it had just switched away from.
     /// Returns whether a wineserver was actually running when asked, so callers can say so.
+    ///
+    /// Returns false, and does nothing, when a game is already running in the prefix --
+    /// see `gameIsRunning`: a graphics setting is worth less than the session `wineserver -k`
+    /// would have killed. The caller's change then waits for the next launch.
     @discardableResult
     static func stopWineserver(_ i: Install) -> Bool {
+        if gameIsRunning(i) { return false }
         let chk = Process()
         chk.executableURL = URL(fileURLWithPath: "/usr/bin/pgrep")
         chk.arguments = ["-x", "wineserver"]
