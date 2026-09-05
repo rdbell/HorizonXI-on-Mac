@@ -123,6 +123,7 @@ class Snapshot:
         self.private.mkdir(mode=0o700, parents=True, exist_ok=False)
         paths = [game / "config/boot/lsb-docker.ini", game / "scripts/perfscene.txt",
                  game / "scripts/default.txt", game / "addons/perfscene/perfscene.lua",
+                 game / "bootloader/mtld3d_shaders.bin",
                  Path.home() / "Library/Application Support/HorizonXI-on-Mac/accounts.json"]
         directories = (game, game / "bootloader", game / "SquareEnix/PlayOnlineViewer",
                        game / "SquareEnix/FINAL FANTASY XI",
@@ -239,6 +240,8 @@ def main() -> int:
     parser.add_argument("--output", type=Path)
     parser.add_argument("--restore", type=Path)
     parser.add_argument("--renderer-bundle", type=Path)
+    parser.add_argument("--shader-cache", type=Path,
+                        help="seed mtld3d with a frozen shader cache for a matched comparison")
     parser.add_argument("--installed-mtld3d", action="store_true",
                         help="verify the installed app's mtld3d selection without renderer overrides")
     parser.add_argument("--dxmt-bundle", type=Path, help="DXMT release directory containing i386-windows and x86_64-unix")
@@ -297,6 +300,9 @@ def main() -> int:
             if self.args.world != WORLD or self.args.game_dir != menu.DEFAULT_GAME or self.args.profile != "lsb-docker.ini":
                 raise RuntimeError("Renderer runs are restricted to the installed local Hxitest profile")
             pin_local_account(self.game_dir)
+            if options.shader_cache:
+                shutil.copy2(options.shader_cache, self.game_dir / "bootloader/mtld3d_shaders.bin")
+                self.record["shader_cache_seed_sha256"] = digest(options.shader_cache)
             prefs = plistlib.loads(checked(["defaults", "export", menu.APP_BUNDLE_ID, "-"]).encode())
             perf = json.loads(prefs.get("perf.settings", b"{}"))
             if options.installed_mtld3d:
@@ -385,6 +391,9 @@ def main() -> int:
                 for path in paths:
                     shutil.copy2(path, self.session_dir / path.name)
                 self.record["renderer_logs"] = [path.name for path in paths]
+                cache = self.game_dir / "bootloader/mtld3d_shaders.bin"
+                if cache.is_file():
+                    shutil.copy2(cache, self.session_dir / "mtld3d_shaders.bin")
             super().collect_profile()
 
         def wait_for_scene(self, scene, timeout):

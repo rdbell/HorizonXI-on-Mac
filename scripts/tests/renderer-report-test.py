@@ -18,6 +18,26 @@ def window(end, seconds=1, fps=120, zone=235):
 
 
 class RendererReportTests(unittest.TestCase):
+    def test_shader_bursts_exclude_prewarm_and_cumulative_totals(self):
+        result = report.shader_compile_summary(["""
+[INFO] shaders: prewarm reused 155 identical state variants (59 unique libraries)
+[INFO] shaders:   59 pre-warmed in   62ms (FF: 59, 59 total)
+[INFO] shaders:    2 compiled in   10ms (FF: 2, 61 total)
+[INFO] shaders: 187 state variants reused identical compiled source (61 unique libraries)
+[INFO] shaders:    3 compiled in   12ms (FF: 3, 64 total)
+[INFO] shaders: 219 state variants reused identical compiled source (64 unique libraries)
+"""])
+        self.assertEqual(result["prewarm_compiles"], 59)
+        self.assertEqual(result["prewarm_compile_ms"], 62)
+        self.assertEqual(result["live_compiles"], 5)
+        self.assertEqual(result["live_compile_ms"], 22)
+        self.assertEqual(result["largest_live_burst_compiles"], 3)
+        self.assertEqual(result["largest_live_burst_ms"], 12)
+        self.assertEqual(result["minimum_live_reused_variants"], 64)
+        self.assertIsNone(report.shader_compile_summary(["No shader log available."]))
+        baseline = report.shader_compile_summary(["shaders: 214 pre-warmed in 62ms"])
+        self.assertEqual(baseline["minimum_live_reused_variants"], 0)
+
     def test_clock_and_zone_setup_fail_before_a_scene_can_be_accepted(self):
         marker = {"label": "city settled", "zone": 235, "epoch": 136,
                   "world_distance": 20, "entity_distance": 20,

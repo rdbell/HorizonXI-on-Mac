@@ -153,6 +153,128 @@ index 18e1be0..6eb9ee4 100644
      // dst_buffer drops here — Metal wrapper released, caller's memory
      // untouched (deallocator was None).
      true
+diff --git a/windows/core/examples/shader_cache_audit.rs b/windows/core/examples/shader_cache_audit.rs
+new file mode 100644
+index 0000000..f7a926a
+--- /dev/null
++++ b/windows/core/examples/shader_cache_audit.rs
+@@ -0,0 +1,116 @@
++//! Replay a recorded cache through the library deduplicator without loading Wine.
++//! Usage: `cargo run -p mtld3d-core --target aarch64-apple-darwin --example shader_cache_audit -- FILE WARM_COUNT`
++//! Append `baseline SALT` or `dedup SALT` to time actual Metal compiles. Distinct alphanumeric
++//! salts give each run fresh entry names, avoiding an already-warm driver source cache.
++//! This measures library compilation, not application FPS or render-pipeline creation.
++
++use std::{env, fs, time::Instant};
++
++use mtld3d_core::shader_cache::{
++    CacheEntry, CachedKind, CompiledShaders, SHADER_CACHE_SCHEMA_VERSION, read_header, read_records,
++};
++use objc2_foundation::NSString;
++use objc2_metal::{
++    MTLCompileOptions, MTLCreateSystemDefaultDevice, MTLDevice, MTLLanguageVersion, MTLLibrary,
++    MTLMathMode,
++};
++
++fn main() {
++    let args: Vec<_> = env::args().collect();
++    assert!(
++        matches!(args.len(), 3 | 5),
++        "usage: shader_cache_audit FILE WARM_COUNT [baseline|dedup SALT]"
++    );
++    let warm: usize = args[2].parse().expect("WARM_COUNT must be an integer");
++    let bytes = fs::read(&args[1]).expect("read shader cache");
++    assert_eq!(read_header(&bytes), Ok(SHADER_CACHE_SCHEMA_VERSION));
++    let (entries, _) = read_records(&bytes);
++    assert!(warm <= entries.len());
++    if args.len() == 5 {
++        assert!(matches!(args[3].as_str(), "baseline" | "dedup"));
++        assert!(!args[4].is_empty() && args[4].bytes().all(|c| c.is_ascii_alphanumeric()));
++        metal_replay(&entries, warm, args[3] == "dedup", &args[4]);
++        return;
++    }
++    let mut cache = CompiledShaders::default();
++    let mut warm_unique = 0;
++    for (index, entry) in entries.iter().enumerate() {
++        let name = entry.kind.entry_name(entry.key);
++        cache
++            .resolve(entry.key, &entry.msl, &name, || Some(entry.key))
++            .unwrap();
++        if index + 1 == warm {
++            warm_unique = cache.len();
++        }
++    }
++    println!(
++        "{{\"entries\":{},\"unique_sources\":{},\"duplicates\":{},\"warm_entries\":{warm},\"warm_unique\":{warm_unique},\"live_entries\":{},\"live_unique\":{}}}",
++        entries.len(),
++        cache.len(),
++        cache.reused(),
++        entries.len() - warm,
++        cache.len() - warm_unique,
++    );
++}
++
++fn metal_replay(entries: &[CacheEntry], warm: usize, dedup: bool, salt: &str) {
++    let device = MTLCreateSystemDefaultDevice().expect("Metal device");
++    let mut cache = CompiledShaders::default();
++    let mut baseline_libraries = Vec::new();
++    let mut calls = [0u32; 2];
++    let mut elapsed_ms = [0.0f64; 2];
++    let mut maximum_ms = [0.0f64; 2];
++    let start = Instant::now();
++    for (index, entry) in entries.iter().enumerate() {
++        assert!(
++            start.elapsed().as_secs() < 120,
++            "Metal replay exceeded 120 seconds"
++        );
++        let name = entry.kind.entry_name(entry.key);
++        let salted = format!("{name}_{salt}");
++        let msl = entry.msl.replace(&name, &salted);
++        let phase = usize::from(index >= warm);
++        let mut compile = || {
++            let started = Instant::now();
++            let options = MTLCompileOptions::new();
++            options.setLanguageVersion(MTLLanguageVersion::Version2_4);
++            options.setPreserveInvariance(true);
++            let vertex = matches!(
++                entry.kind,
++                CachedKind::FfVs | CachedKind::Sm1Vs | CachedKind::Sm2Vs | CachedKind::Sm3Vs
++            );
++            options.setMathMode(if vertex {
++                MTLMathMode::Safe
++            } else {
++                MTLMathMode::Fast
++            });
++            let library = device
++                .newLibraryWithSource_options_error(&NSString::from_str(&msl), Some(&options))
++                .expect("recorded MSL must compile");
++            let function = library
++                .newFunctionWithName(&NSString::from_str(&salted))
++                .expect("shader entry");
++            let ms = started.elapsed().as_secs_f64() * 1000.0;
++            calls[phase] += 1;
++            elapsed_ms[phase] += ms;
++            maximum_ms[phase] = maximum_ms[phase].max(ms);
++            Some((library, function))
++        };
++        if dedup {
++            cache.resolve(entry.key, &msl, &salted, compile).unwrap();
++        } else {
++            baseline_libraries.push(compile().unwrap());
++        }
++    }
++    // Keep baseline libraries alive through the replay, matching the encoder's ownership.
++    assert!(dedup || baseline_libraries.len() == entries.len());
++    println!(
++        "{{\"dedup\":{dedup},\"warm_compiles\":{},\"live_compiles\":{},\"warm_compile_ms\":{:.3},\"live_compile_ms\":{:.3},\"max_live_compile_ms\":{:.3},\"wall_ms\":{:.3}}}",
++        calls[0],
++        calls[1],
++        elapsed_ms[0],
++        elapsed_ms[1],
++        maximum_ms[1],
++        start.elapsed().as_secs_f64() * 1000.0,
++    );
++}
 diff --git a/windows/core/src/config.rs b/windows/core/src/config.rs
 index b78574d..a4f818f 100644
 --- a/windows/core/src/config.rs
@@ -687,10 +809,20 @@ index c450bab..15edd06 100644
      assert_eq!(cmd.cmd, CommandType::SetScissorRect as u32);
      let x = cmd.param_a;
 diff --git a/windows/core/src/shader_cache.rs b/windows/core/src/shader_cache.rs
-index dd195b7..ce56804 100644
+index dd195b7..ca91c8e 100644
 --- a/windows/core/src/shader_cache.rs
 +++ b/windows/core/src/shader_cache.rs
-@@ -269,7 +269,10 @@ use crate::shader_compile_stats::CompileBucket;
+@@ -49,6 +49,9 @@ use xxhash_rust::xxh3::Xxh3;
+ 
+ use crate::shader_compile_stats::CompileBucket;
+ 
++mod libraries;
++pub use libraries::CompiledShaders;
++
+ /// Bumped on any of: DXSO emitter changes, FF emitter changes, hash function, on-disk format.
+ ///
+ /// A cache file with a different schema is wiped and rebuilt from
+@@ -269,7 +272,10 @@ use crate::shader_compile_stats::CompileBucket;
  /// bound to a volume or cube texture emits `texture3d<float>` /
  /// `texturecube<float>` and a `.xyz` coordinate whatever its `dcl_<dim>` said,
  /// which is new MSL and a new programmable-VS disk-key input.
@@ -702,6 +834,230 @@ index dd195b7..ce56804 100644
  
  /// File magic.
  ///
+diff --git a/windows/core/src/shader_cache/libraries.rs b/windows/core/src/shader_cache/libraries.rs
+new file mode 100644
+index 0000000..aba0120
+--- /dev/null
++++ b/windows/core/src/shader_cache/libraries.rs
+@@ -0,0 +1,218 @@
++//! Share one compiled library across state keys that emit identical MSL.
++//!
++//! A fixed-function key includes state the emitter can ignore, such as unused texture
++//! arguments. The generated entry name contains that key's hash, so Metal sees a different
++//! source even when every instruction is identical. Compare the full source with only that
++//! entry name normalized, on a state-key miss. Existing disk keys and files remain valid.
++
++use rustc_hash::FxHashMap;
++
++#[derive(Eq, PartialEq, Hash)]
++struct SourceIdentity {
++    msl: String,
++    entry: String,
++}
++
++impl SourceIdentity {
++    fn new(msl: &str, entry: &str) -> Self {
++        // Generated shaders declare exactly one entry and never refer to it elsewhere.
++        // If a cache record doesn't have that shape, preserve its complete identity.
++        // This also prevents replacing an entry's spelling inside another identifier.
++        let declaration = format!(" {entry}(");
++        if !entry.is_empty() && msl.matches(entry).count() == 1 && msl.contains(&declaration) {
++            Self {
++                msl: msl.replacen(&declaration, " mtld3d_shared_entry(", 1),
++                entry: String::new(),
++            }
++        } else {
++            Self {
++                msl: msl.to_owned(),
++                entry: entry.to_owned(),
++            }
++        }
++    }
++}
++
++/// Per-device library ownership and its non-owning state/source indices.
++///
++/// `values()` visits each compilation once, so shader aliases neither leak handles nor
++/// release them twice. The same cache moves from prewarm to the live encoder before draws.
++pub struct CompiledShaders<T> {
++    keys: FxHashMap<u64, usize>,
++    sources: FxHashMap<SourceIdentity, usize>,
++    libraries: Vec<T>,
++    reused: usize,
++}
++
++impl<T> Default for CompiledShaders<T> {
++    fn default() -> Self {
++        Self {
++            keys: FxHashMap::default(),
++            sources: FxHashMap::default(),
++            libraries: Vec::new(),
++            reused: 0,
++        }
++    }
++}
++
++impl<T> CompiledShaders<T> {
++    #[must_use]
++    pub fn get(&self, key: &u64) -> Option<&T> {
++        self.keys.get(key).map(|&index| &self.libraries[index])
++    }
++
++    #[must_use]
++    pub const fn len(&self) -> usize {
++        self.libraries.len()
++    }
++
++    #[must_use]
++    pub const fn is_empty(&self) -> bool {
++        self.libraries.is_empty()
++    }
++
++    #[must_use]
++    pub const fn reused(&self) -> usize {
++        self.reused
++    }
++
++    pub fn values(&self) -> impl Iterator<Item = &T> {
++        self.libraries.iter()
++    }
++
++    pub fn clear(&mut self) {
++        self.keys.clear();
++        self.sources.clear();
++        self.libraries.clear();
++        self.reused = 0;
++    }
++
++    /// Resolve a state miss, compiling only a new source. The bool reports an actual compile.
++    /// Failed compiles are not cached, and can be retried. Source comparison uses full Eq,
++    /// so a hash collision cannot make distinct shader bodies share a handle.
++    pub fn resolve(
++        &mut self,
++        key: u64,
++        msl: &str,
++        entry: &str,
++        compile: impl FnOnce() -> Option<T>,
++    ) -> Option<(&T, bool)> {
++        if let Some(&index) = self.keys.get(&key) {
++            return Some((&self.libraries[index], false));
++        }
++        let source = SourceIdentity::new(msl, entry);
++        if let Some(&index) = self.sources.get(&source) {
++            self.keys.insert(key, index);
++            self.reused += 1;
++            return Some((&self.libraries[index], false));
++        }
++        let library = compile()?;
++        let index = self.libraries.len();
++        self.libraries.push(library);
++        self.keys.insert(key, index);
++        self.sources.insert(source, index);
++        Some((&self.libraries[index], true))
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    fn shader(entry: &str, value: u8) -> String {
++        format!("fragment float4 {entry}() {{ return float4({value}); }}")
++    }
++
++    #[test]
++    fn different_state_names_share_one_compilation_and_owner() {
++        let mut cache = CompiledShaders::default();
++        assert_eq!(
++            cache.resolve(1, &shader("first", 1), "first", || Some(42)),
++            Some((&42, true))
++        );
++        assert_eq!(
++            cache.resolve(2, &shader("second", 1), "second", || panic!(
++                "duplicate compile"
++            )),
++            Some((&42, false))
++        );
++        assert_eq!(cache.get(&1), cache.get(&2));
++        assert_eq!(cache.values().copied().collect::<Vec<_>>(), [42]);
++        assert_eq!(cache.reused(), 1);
++        // Moving the prewarm cache preserves source reuse for a never-before-seen state key.
++        let mut live = cache;
++        assert_eq!(
++            live.resolve(3, &shader("third", 1), "third", || panic!(
++                "warm source lost"
++            )),
++            Some((&42, false))
++        );
++        assert_eq!(live.len(), 1);
++        live.clear();
++        assert!(live.is_empty());
++        assert_eq!(live.get(&1), None);
++        assert_eq!(
++            live.resolve(2, &shader("second", 1), "second", || Some(43)),
++            Some((&43, true))
++        );
++    }
++
++    #[test]
++    fn different_instructions_and_stages_do_not_alias() {
++        let mut cache = CompiledShaders::default();
++        assert!(
++            cache
++                .resolve(1, &shader("first", 1), "first", || Some(1))
++                .unwrap()
++                .1
++        );
++        assert!(
++            cache
++                .resolve(2, &shader("second", 0), "second", || Some(2))
++                .unwrap()
++                .1
++        );
++        let vertex = shader("third", 1).replace("fragment", "vertex");
++        assert!(cache.resolve(3, &vertex, "third", || Some(3)).unwrap().1);
++        assert_eq!(cache.len(), 3);
++    }
++
++    #[test]
++    fn failed_compiles_retry_and_existing_keys_skip_the_compiler() {
++        let mut cache = CompiledShaders::default();
++        let source = shader("entry", 1);
++        assert_eq!(cache.resolve(1, &source, "entry", || None::<u8>), None);
++        assert!(cache.is_empty());
++        assert_eq!(
++            cache.resolve(1, &source, "entry", || Some(1)),
++            Some((&1, true))
++        );
++        assert_eq!(
++            cache.resolve(1, &source, "entry", || panic!("recompiled a known key")),
++            Some((&1, false))
++        );
++        assert_eq!(cache.reused(), 0);
++    }
++
++    #[test]
++    fn entry_references_and_unknown_source_shapes_keep_exact_identity() {
++        let mut cache = CompiledShaders::default();
++        for (key, entry, source) in [
++            (1, "entry", "fragment float4 entry() { return entry(); }"),
++            (2, "other", "fragment float4 other() { return entry(); }"),
++            (
++                3,
++                "entry",
++                "fragment float4 entry_suffix() { return float4(0); }",
++            ),
++            (
++                4,
++                "other",
++                "fragment float4 entry_suffix() { return float4(0); }",
++            ),
++        ] {
++            assert!(cache.resolve(key, source, entry, || Some(key)).unwrap().1);
++        }
++        assert_eq!(cache.len(), 4);
++    }
++}
 diff --git a/windows/d3d9/src/device.rs b/windows/d3d9/src/device.rs
 index 9f0ab21..043a64b 100644
 --- a/windows/d3d9/src/device.rs
@@ -832,10 +1188,167 @@ index 77dd655..27a6bab 100644
          // constants (screen scale, linearization); print the window those
          // shaders read so wrong uploads are visible next to the draw.
 diff --git a/windows/d3d9/src/encoder.rs b/windows/d3d9/src/encoder.rs
-index 4441efb..c902e2f 100644
+index 4441efb..0668514 100644
 --- a/windows/d3d9/src/encoder.rs
 +++ b/windows/d3d9/src/encoder.rs
-@@ -9466,6 +9466,9 @@ fn trailing_blit_descriptor(trailing_blits: &[BlitCommand]) -> PassDescriptor {
+@@ -39,7 +39,7 @@ use mtld3d_core::{
+     render_scale::RenderScale,
+     sampler_state,
+     scratch::ScratchArena,
+-    shader_cache::{self, CachedKind},
++    shader_cache::{self, CachedKind, CompiledShaders},
+     shader_compile_stats::{self, BurstTracker, CompileBucket},
+     storage_policy::{buffer_storage_mode, gpu_written_buffer_storage_mode},
+     stretch_rect::StretchRegion,
+@@ -1044,18 +1044,13 @@ pub struct FrameEncoder {
+     /// declared sampler the game left unbound. Only PS programs get an entry;
+     /// VS programs (no samplers) fall through to the empty default.
+     prog_sampler_decls: FxHashMap<ProgramId, PsSamplerDecls>,
+-    /// Compiled `MTLLibrary` handles keyed by content hash (`disk_key`).
+-    ///
+-    /// One entry per unique shader source; a single shader compiled
+-    /// for multiple `VsKey` / `PsKey` variants shares the same entry
+-    /// because variants either don't change MSL (VS) or do change it
+-    /// (PS) — and either way the `disk_key` derivation matches the MSL
+-    /// the shader will produce. Pre-warm ingest and live miss-compile
+-    /// both populate it; lookups happen by `disk_key`. No longer the
+-    /// per-draw lookup path — that goes through the source-keyed indices
+-    /// below; `lib_cache` is now the warm-load landing zone + disk-write
+-    /// index, consulted only on an index miss (≈ once per shader).
+-    lib_cache: FxHashMap<u64, StageLibHandles>,
++    /// Compiled libraries indexed by state key and exact emitted source.
++    ///
++    /// State keys can differ only in state the emitter ignores. Source equality, with
++    /// the generated entry name removed, shares their functions and pipeline-cache hits.
++    /// Consulted only on a miss in the per-draw indices below. Owns each handle once.
++    lib_cache: CompiledShaders<StageLibHandles>,
++    shader_reuse_reported: usize,
+     /// Per-draw shader-library lookup, keyed on the shader-identity struct.
+     ///
+     /// `FxHash` + exact `Eq`, probed by borrow — no per-draw content hash,
+@@ -1513,7 +1508,8 @@ impl FrameEncoder {
+             last_pipeline_memo: None,
+             program_cache: FxHashMap::default(),
+             prog_sampler_decls: FxHashMap::default(),
+-            lib_cache: FxHashMap::default(),
++            lib_cache: CompiledShaders::default(),
++            shader_reuse_reported: 0,
+             ff_vs_libs: FxHashMap::default(),
+             prog_vs_libs: FxHashMap::default(),
+             ff_ps_libs: FxHashMap::default(),
+@@ -5052,12 +5048,11 @@ impl FrameEncoder {
+     /// the rest of the session skips the open/append entirely.
+     pub fn ingest_warm_cache(
+         &mut self,
+-        entries: Vec<(u64, StageLibHandles)>,
++        entries: CompiledShaders<StageLibHandles>,
+         writes_disabled: bool,
+     ) {
+-        for (key, handles) in entries {
+-            self.lib_cache.insert(key, handles);
+-        }
++        self.shader_reuse_reported = entries.reused();
++        self.lib_cache = entries;
+         self.flags.insert(FrameEncoderFlags::CACHE_READY);
+         if writes_disabled {
+             self.flags.insert(FrameEncoderFlags::CACHE_DISABLED);
+@@ -5080,6 +5075,12 @@ impl FrameEncoder {
+     /// poll cost stays in the few-cycle range — no `Instant::now()`
+     /// syscall.
+     pub fn maybe_emit_compile_summary(&mut self) {
++        // Report reuse in batches; no per-draw log or clock read on the cache-hit path.
++        let reused = self.lib_cache.reused();
++        if reused.saturating_sub(self.shader_reuse_reported) >= 32 {
++            log::info!(target: LOG_TARGET, "shaders: {reused} state variants reused identical compiled source ({} unique libraries)", self.lib_cache.len());
++            self.shader_reuse_reported = reused;
++        }
+         let counts = shader_compile_stats::current_counts();
+         let idle = secs_to_cycles(1);
+         if !self.compile_burst.poll(counts, rdtsc(), idle) {
+@@ -5261,15 +5262,16 @@ impl FrameEncoder {
+             let tag = shader_source_tag_vs(source);
+             trace!(target: MSL_TRACE_TARGET, "── VS MSL {tag} ──\n{msl}\n── /VS MSL {tag} ──");
+         }
+-        let handles =
+-            compile_stage_library(self.device_handle, StageTag::Vertex, &msl, &entry_name)?;
+-        if let Some(b) = bucket {
++        let device = self.device_handle;
++        let (&handles, compiled) = self.lib_cache.resolve(disk_key, &msl, &entry_name, || {
++            compile_stage_library(device, StageTag::Vertex, &msl, &entry_name)
++        })?;
++        if compiled && let Some(b) = bucket {
+             shader_compile_stats::record(b, started.elapsed());
+         }
+-        if let Some(kind) = kind {
++        if compiled && let Some(kind) = kind {
+             self.cache_write_record(kind, disk_key, &msl);
+         }
+-        self.lib_cache.insert(disk_key, handles);
+         Some(handles)
+     }
+ 
+@@ -5359,15 +5361,16 @@ impl FrameEncoder {
+             let tag = shader_source_tag_ps(source, variant);
+             trace!(target: MSL_TRACE_TARGET, "── PS MSL {tag} ──\n{msl}\n── /PS MSL {tag} ──");
+         }
+-        let handles =
+-            compile_stage_library(self.device_handle, StageTag::Fragment, &msl, &entry_name)?;
+-        if let Some(b) = bucket {
++        let device = self.device_handle;
++        let (&handles, compiled) = self.lib_cache.resolve(disk_key, &msl, &entry_name, || {
++            compile_stage_library(device, StageTag::Fragment, &msl, &entry_name)
++        })?;
++        if compiled && let Some(b) = bucket {
+             shader_compile_stats::record(b, started.elapsed());
+         }
+-        if let Some(kind) = kind {
++        if compiled && let Some(kind) = kind {
+             self.cache_write_record(kind, disk_key, &msl);
+         }
+-        self.lib_cache.insert(disk_key, handles);
+         Some(handles)
+     }
+ 
+@@ -8479,7 +8482,7 @@ pub struct EncoderThread {
+ /// causing the encoder to compile a shader from scratch that the
+ /// prewarm is concurrently compiling from disk.
+ struct PrewarmPayload {
+-    entries: Vec<(u64, StageLibHandles)>,
++    entries: CompiledShaders<StageLibHandles>,
+     writes_disabled: bool,
+ }
+ 
+@@ -8492,9 +8495,9 @@ pub struct PrewarmSender(mpsc::SyncSender<PrewarmPayload>);
+ impl PrewarmSender {
+     /// Normal completion.
+     ///
+-    /// Ship pre-warmed handles (empty vec for a cold start) and let the
++    /// Ship the pre-warmed cache (empty for a cold start) and let the
+     /// encoder open the cache for append.
+-    pub fn send(self, entries: Vec<(u64, StageLibHandles)>) {
++    pub fn send(self, entries: CompiledShaders<StageLibHandles>) {
+         let _ = self.0.send(PrewarmPayload {
+             entries,
+             writes_disabled: false,
+@@ -8510,7 +8513,7 @@ impl PrewarmSender {
+     /// stay off for the rest of the session.
+     pub fn send_disabled(self) {
+         let _ = self.0.send(PrewarmPayload {
+-            entries: Vec::new(),
++            entries: CompiledShaders::default(),
+             writes_disabled: true,
+         });
+     }
+@@ -8810,7 +8813,7 @@ fn encoder_thread_main(
+             target: LOG_TARGET,
+             "shader_cache: pre-warm channel closed without payload → starting cold"
+         );
+-        enc.ingest_warm_cache(Vec::new(), false);
++        enc.ingest_warm_cache(CompiledShaders::default(), false);
+     }
+ 
+     loop {
+@@ -9466,6 +9469,9 @@ fn trailing_blit_descriptor(trailing_blits: &[BlitCommand]) -> PassDescriptor {
  /// Rule G so the cull picks up the strip.
  fn apply_pass_rules(enc: &mut FrameEncoder, frame_continues: bool) {
      enc.pass_state.coalesce_clear_only_passes();
@@ -899,6 +1412,100 @@ index 4cb867a..1e12fc6 100644
      D3D_OK
  }
  
+diff --git a/windows/d3d9/src/shader_prewarm.rs b/windows/d3d9/src/shader_prewarm.rs
+index 8729c1a..64ac1d1 100644
+--- a/windows/d3d9/src/shader_prewarm.rs
++++ b/windows/d3d9/src/shader_prewarm.rs
+@@ -21,7 +21,7 @@ use std::{
+ 
+ use log::info;
+ use mtld3d_core::{
+-    shader_cache::{self, CacheEntry, CachedKind, SHADER_CACHE_SCHEMA_VERSION},
++    shader_cache::{self, CacheEntry, CachedKind, CompiledShaders, SHADER_CACHE_SCHEMA_VERSION},
+     shader_compile_stats::{CompileBucket, Snapshot, format_summary},
+ };
+ use mtld3d_shared::{MetalHandle, mtl::StageTag, mtl_handle::MTLDeviceKind};
+@@ -96,12 +96,12 @@ fn run(device_handle: MetalHandle<MTLDeviceKind>, sender: PrewarmSender, stop: &
+             target: LOG_TARGET,
+             "shader_cache: shaderCache.enable = false, skipping pre-warm"
+         );
+-        sender.send(Vec::new());
++        sender.send(CompiledShaders::default());
+         return;
+     }
+ 
+     let Some(path) = shader_cache_path() else {
+-        sender.send(Vec::new());
++        sender.send(CompiledShaders::default());
+         return;
+     };
+ 
+@@ -109,7 +109,7 @@ fn run(device_handle: MetalHandle<MTLDeviceKind>, sender: PrewarmSender, stop: &
+         Ok(b) => b,
+         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+             // Cold start — no file yet.
+-            sender.send(Vec::new());
++            sender.send(CompiledShaders::default());
+             return;
+         }
+         Err(e) => {
+@@ -137,7 +137,7 @@ fn run(device_handle: MetalHandle<MTLDeviceKind>, sender: PrewarmSender, stop: &
+                 target: LOG_TARGET,
+                 "shader_cache: schema {other} != current {SHADER_CACHE_SCHEMA_VERSION}, wiped mtld3d_shaders.bin"
+             );
+-            sender.send(Vec::new());
++            sender.send(CompiledShaders::default());
+             return;
+         }
+         Err(_) => {
+@@ -150,7 +150,7 @@ fn run(device_handle: MetalHandle<MTLDeviceKind>, sender: PrewarmSender, stop: &
+                 target: LOG_TARGET,
+                 "shader_cache: wrong magic in mtld3d_shaders.bin, wiped"
+             );
+-            sender.send(Vec::new());
++            sender.send(CompiledShaders::default());
+             return;
+         }
+     }
+@@ -178,7 +178,7 @@ fn run(device_handle: MetalHandle<MTLDeviceKind>, sender: PrewarmSender, stop: &
+         rewrite_as_bundle(&path, &deduped);
+     }
+ 
+-    let mut warm: Vec<(u64, StageLibHandles)> = Vec::with_capacity(deduped.len());
++    let mut warm = CompiledShaders::<StageLibHandles>::default();
+     let mut counts = [0u32; 4];
+     let mut duration_ns = [0u64; 4];
+ 
+@@ -189,20 +189,26 @@ fn run(device_handle: MetalHandle<MTLDeviceKind>, sender: PrewarmSender, stop: &
+         let stage = stage_for_kind(entry.kind);
+         let entry_name = entry.kind.entry_name(entry.key);
+         let started = Instant::now();
+-        let Some(handles) = compile_stage_library(device_handle, stage, &entry.msl, &entry_name)
+-        else {
++        let Some((_, compiled)) = warm.resolve(entry.key, &entry.msl, &entry_name, || {
++            compile_stage_library(device_handle, stage, &entry.msl, &entry_name)
++        }) else {
+             continue;
+         };
++        if !compiled {
++            continue;
++        }
+         let elapsed = started.elapsed();
+         let idx = bucket_index(entry.kind.compile_bucket());
+         counts[idx] += 1;
+         // u128 nanos → u64: saturates at ~584 years; pre-warm batch fits easily.
+         duration_ns[idx] += u64::try_from(elapsed.as_nanos()).unwrap_or(u64::MAX);
+-        warm.push((entry.key, handles));
+     }
+ 
+     let total: u32 = counts.iter().sum();
+     let cached = u32::try_from(warm.len()).unwrap_or(u32::MAX);
++    if warm.reused() > 0 {
++        info!(target: LOG_TARGET, "shaders: prewarm reused {} identical state variants ({cached} unique libraries)", warm.reused());
++    }
+     sender.send(warm);
+     if total > 0 {
+         let snap = Snapshot {
 diff --git a/windows/d3d9/src/surface.rs b/windows/d3d9/src/surface.rs
 index 8215f2c..280d657 100644
 --- a/windows/d3d9/src/surface.rs
@@ -1245,7 +1852,7 @@ index 405966b..89e0d82 100644
  fn assert_rgb_close(got: u32, expected: u32, tolerance: i32, context: &str) {
      let channel = |c: u32, shift: u32| i32::try_from((c >> shift) & 0xff).unwrap_or(0);
 diff --git a/windows/tests/tests/transforms_ff.rs b/windows/tests/tests/transforms_ff.rs
-index 3455b4a..9f52709 100644
+index 3455b4a..94bd415 100644
 --- a/windows/tests/tests/transforms_ff.rs
 +++ b/windows/tests/tests/transforms_ff.rs
 @@ -2,12 +2,16 @@
@@ -1271,10 +1878,48 @@ index 3455b4a..9f52709 100644
  };
  
  #[rustfmt::skip]
-@@ -20,6 +24,133 @@ const IDENTITY: [f32; 16] = [
+@@ -20,6 +24,171 @@ const IDENTITY: [f32; 16] = [
  
  const BLUE: u32 = 0xFF00_00FF;
  
++#[test]
++fn shader_aliases_preserve_active_texture_arguments_across_devices() {
++    use mtld3d_types::{
++        D3DRS_TEXTUREFACTOR, D3DTA_CURRENT, D3DTA_TFACTOR, D3DTOP_SELECTARG1, D3DTOP_SELECTARG2,
++        D3DTSS_COLORARG2, D3DTSS_COLOROP,
++    };
++
++    // ARG2 is ignored by SELECTARG1. Change it to create distinct state keys with identical
++    // MSL, then make it active and check that genuinely different code is still compiled.
++    // Keep both windows alive: destroying a harness posts WM_QUIT to the thread. Each device
++    // must own its own libraries, and shutdown must release each shared handle only once.
++    let devices = [Harness::new(), Harness::new()];
++    for h in &devices {
++        assert_eq!(h.set_render_state(D3DRS_LIGHTING, 0), 0);
++        assert_eq!(h.set_render_state(D3DRS_TEXTUREFACTOR, 0xFFFF_0000), 0);
++        assert_eq!(h.set_fvf(D3DFVF_XYZ | D3DFVF_DIFFUSE), 0);
++        h.select_diffuse_stage(0);
++        let tri = solid_triangle(0xFF00_FF00);
++        for ignored in [D3DTA_DIFFUSE, D3DTA_CURRENT, D3DTA_TFACTOR] {
++            assert_eq!(h.set_texture_stage_state(0, D3DTSS_COLORARG2, ignored), 0);
++            h.render_once(BLUE, |d| {
++                assert_eq!(d.draw_primitive_up(D3DPT_TRIANGLELIST, 1, &tri), 0);
++            });
++            assert_eq!(h.read_pixel(320, 280), 0xFF00_FF00);
++        }
++        for (op, expected) in [
++            (D3DTOP_SELECTARG2, 0xFFFF_0000),
++            (D3DTOP_SELECTARG1, 0xFF00_FF00),
++        ] {
++            assert_eq!(h.set_texture_stage_state(0, D3DTSS_COLOROP, op), 0);
++            h.render_once(BLUE, |d| {
++                assert_eq!(d.draw_primitive_up(D3DPT_TRIANGLELIST, 1, &tri), 0);
++            });
++            assert_eq!(h.read_pixel(320, 280), expected);
++        }
++    }
++}
++
 +fn lit_color_declaration(h: &Harness, declare_colors: bool) {
 +    let mut elements = vec![
 +        D3DVERTEXELEMENT9 {

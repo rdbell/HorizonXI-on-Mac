@@ -24,7 +24,9 @@ the build tree exactly.
 ## mtld3d
 
 The production build includes the FFXI material fallback and unaligned buffer-lock fixes,
-diagnostic probes, and optional independent render-pass merging. It is a modified upstream
+diagnostic probes, optional independent render-pass merging, and reuse of identical generated
+shader code across rendering states. The shader reuse change preserves schema 68 and existing
+warmed caches. It is a modified upstream
 build. `mtld3d/build.json` records the base commit and every runtime file's SHA-256;
 `mtld3d/source.patch` records the complete source diff used to build it. The renderer selector
 enables pass merging and keeps early submission disabled. The Wine shim, Unix library and

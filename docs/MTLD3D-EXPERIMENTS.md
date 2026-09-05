@@ -358,3 +358,78 @@ The downloaded dgVoodoo 2.79.3 and 2.81.3 archives are retained locally for a fu
 smoke test. They came from the
 [masterotaku preservation mirror](https://github.com/masterotaku/dgVoodoo-binaries), with
 URLs and archive hashes recorded. They have not been executed or adopted as a game renderer.
+
+## Stutters when characters appear: repeated compilation of identical shaders
+
+The build 22 play-session log contained 214 prewarmed shaders followed by 290 live
+compilations, reporting 6,125 ms of aggregate live compilation. The largest logged burst
+was 38 shaders and 736 ms. These are compiler totals across a burst, not measured frame
+durations. The encoder performs those live compiles synchronously.
+
+An exact audit of the 504 recorded shaders found only 105 distinct generated sources after
+normalizing their generated entry-point names. The 214 warm records represent 59 sources;
+only 46 of the 290 subsequent records add a source. The other 244 live records could reuse
+compiled code. A preliminary regex audit overcounted unique sources because some generated
+hash names were shorter; the Rust replay uses the actual cache implementation.
+
+`patches/mtld3d-0.8.0-shader-dedup.patch` adds a per-device source index alongside the existing
+state-key index. Only a new state miss performs the source comparison. It normalizes exactly
+one generated entry declaration and otherwise preserves the complete source and entry name.
+Full string equality prevents a source-hash collision from sharing different instructions.
+Failed compiles remain retryable. One owner holds each library/function pair, including when
+the prewarm cache moves to the encoder. Equivalent functions also share pipeline-cache keys.
+
+The change keeps shader-cache schema 68 and existing warmed caches. It writes a disk record
+only when compiling new source. A state alias encountered after relaunch can resolve against
+the prewarmed source without another Metal compilation. Genuinely new source still compiles
+synchronously; this fix does not eliminate every possible loading or asset-upload stall.
+
+### Recorded Metal compilation replay
+
+Two sequential pairs replayed the same captured sources, first baseline then deduplication,
+then in reverse order. Each run used fresh entry-point names to avoid reusing an earlier
+driver source-cache result, the renderer's Metal language and math options, and a 150-second
+parent timeout. No build, rendering suite, or game ran concurrently. The internal replay
+limit is 120 seconds, checked between compilations.
+
+| Work | Build 22 behavior | Source reuse |
+| --- | ---: | ---: |
+| Warm compilation calls | 214 | 59 |
+| Live compilation calls | 290 | 46 |
+| Live compilation time, first pair | 5,587.895 ms | 900.283 ms |
+| Live compilation time, reversed pair | 4,939.885 ms | 892.563 ms |
+
+Live compiler work fell 83.9% and 81.9%. This measures library compilation and entry lookup,
+not game FPS, frame-time percentiles, or render-pipeline creation. The longest individual
+live compile remained 33.8–40.3 ms with reuse, because new shader code still needs compiling.
+
+The replay lives in the renderer's `windows/core/examples/shader_cache_audit.rs`, included
+in both the cumulative and incremental patches. After applying one appropriate patch:
+
+```sh
+cd windows
+cargo +1.97.1 build -p mtld3d-core --target aarch64-apple-darwin --example shader_cache_audit
+target/aarch64-apple-darwin/debug/examples/shader_cache_audit CACHE_FILE 214
+target/aarch64-apple-darwin/debug/examples/shader_cache_audit CACHE_FILE 214 baseline UNIQUE_SALT
+target/aarch64-apple-darwin/debug/examples/shader_cache_audit CACHE_FILE 214 dedup ANOTHER_SALT
+```
+
+Use alphanumeric salts and bound each timed command externally to 150 seconds. Keep recorded
+game caches and logs private; the published evidence contains aggregate measurements only.
+
+### Validation
+
+Formatting, clippy, source audit and documentation checks passed. All 1,043 core/types and
+203 native/shared tests passed, as did all 447 rendering tests on each Wine architecture.
+The new pixel regression changes ignored texture arguments, then makes them active, checking
+colors across two devices. The initial 32-bit fixture posted WM_QUIT by destroying one window
+before creating the next. Keeping both windows alive corrected that fixture; the affected
+tests and the tests skipped by fail-fast then passed. Each architecture reported one passing
+test with Wine stdio still open, which nextest calls a leak. No assertions remain failing.
+
+The renderer harness now snapshots and restores the user's shader cache among its
+44 saved file states. `--shader-cache FILE` seeds paired tests with identical cache contents and
+records the seed hash. It captures the result before restoring the original cache. The
+snapshot regression verifies that restoration, and all six harness tests pass. The report
+also records compiler bursts separately from frame times, carries the cache-seed hash, and
+labels the batched reuse counter as a lower bound. All eight report tests pass.

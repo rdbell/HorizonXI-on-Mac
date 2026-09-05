@@ -1,4 +1,21 @@
-# DXVK patch
+# Renderer patches
+
+## mtld3d
+
+`../vendor/mtld3d/source.patch` is the complete patch for the bundled mtld3d renderer,
+applied to upstream commit `ea1b1ca3e584917a460c79aac8916d8084099fb4`. Use it alone
+to reproduce the bundled source. `../vendor/mtld3d/build.json` records artifact hashes
+and the build configuration.
+
+`mtld3d-0.8.0-shader-dedup.patch` is the incremental shader-stutter fix relative to
+the build 22 source, after the earlier material, lock, diagnostic, submission and
+pass-merging patches. It shares compiled libraries when generated MSL differs only
+in its entry-point name. It includes cache-ownership and rendering regressions, plus
+a bounded Metal compilation replay tool. Do not apply it after the cumulative
+`source.patch`, which already includes it. See `../docs/MTLD3D-EXPERIMENTS.md` for
+measurements and limits.
+
+## DXVK
 
 `dxvk-1.10.3-horizonxi.patch` is the whole of this project's DXVK work as one patch against a
 clean `v1.10.3` checkout. Apply it alone; the three earlier patches it replaces are in

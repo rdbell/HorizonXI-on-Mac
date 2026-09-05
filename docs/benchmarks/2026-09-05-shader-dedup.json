@@ -1,0 +1,85 @@
+{
+  "description": "Recorded shader-cache audit and bounded Metal compilation replay for the character-arrival stutter fix.",
+  "observed": {
+    "total_entries": 504,
+    "warm_entries": 214,
+    "live_entries": 290,
+    "live_compile_log_ms": 6125,
+    "largest_burst_compiles": 38,
+    "largest_burst_compile_ms": 736
+  },
+  "audit": {
+    "entries": 504,
+    "unique_sources": 105,
+    "duplicates": 399,
+    "warm_entries": 214,
+    "warm_unique": 59,
+    "live_entries": 290,
+    "live_unique": 46
+  },
+  "metal_replay": [
+    {
+      "dedup": false,
+      "warm_compiles": 214,
+      "live_compiles": 290,
+      "warm_compile_ms": 4241.109,
+      "live_compile_ms": 5587.895,
+      "max_live_compile_ms": 37.127,
+      "wall_ms": 9836.862,
+      "salt": "run86f38c6519a44f9cbb0c200b70fbd8f9"
+    },
+    {
+      "dedup": true,
+      "warm_compiles": 59,
+      "live_compiles": 46,
+      "warm_compile_ms": 961.167,
+      "live_compile_ms": 900.283,
+      "max_live_compile_ms": 33.762,
+      "wall_ms": 1875.775,
+      "salt": "runa58a0fa8442d4b78931771f0e7b84e2b"
+    },
+    {
+      "dedup": true,
+      "warm_compiles": 59,
+      "live_compiles": 46,
+      "warm_compile_ms": 979.118,
+      "live_compile_ms": 892.563,
+      "max_live_compile_ms": 40.345,
+      "wall_ms": 1886.958,
+      "salt": "rund991aeedfda84be988db96873ef97b22"
+    },
+    {
+      "dedup": false,
+      "warm_compiles": 214,
+      "live_compiles": 290,
+      "warm_compile_ms": 3637.991,
+      "live_compile_ms": 4939.885,
+      "max_live_compile_ms": 33.301,
+      "wall_ms": 8585.008,
+      "salt": "run80a566b7a14849f4a3694f6c1c6c1393"
+    }
+  ],
+  "method": {
+    "warm_records": 214,
+    "salted_entry_names": true,
+    "order": [
+      "baseline",
+      "dedup",
+      "dedup",
+      "baseline"
+    ],
+    "internal_limit_seconds": 120,
+    "parent_limit_seconds": 150,
+    "concurrent_build_or_game": false,
+    "measurement": "Metal library compilation plus function lookup; not FPS or pipeline creation"
+  },
+  "tests": {
+    "core_and_types": 1043,
+    "native_and_shared": 203,
+    "rendering_i686_unique_passed": 447,
+    "rendering_x86_64_passed": 447,
+    "renderer_run": 6,
+    "note": "The corrected i686 window fixture and fail-fast skipped tail passed on retry. Each architecture had one passing test with a Wine stdio leak report.",
+    "renderer_report": 8
+  }
+}

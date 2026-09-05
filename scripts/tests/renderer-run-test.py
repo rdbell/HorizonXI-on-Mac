@@ -57,6 +57,9 @@ class RendererRunTests(unittest.TestCase):
             (game / "scripts").mkdir()
             original = game / "scripts/default.txt"
             original.write_text("/load Addons\n")
+            (game / "bootloader").mkdir()
+            shader_cache = game / "bootloader/mtld3d_shaders.bin"
+            shader_cache.write_bytes(b"saved shaders")
             (game / "d3d8.dll").symlink_to("original.dll")
             prefix = root / "prefix"
             prefix.mkdir()
@@ -85,6 +88,7 @@ class RendererRunTests(unittest.TestCase):
                 boot.write_text("changed")
                 boot.chmod(0o600)
                 original.write_text("changed")
+                shader_cache.write_bytes(b"test shaders")
                 (game / "d3d8.dll").unlink()
                 (game / "d3d8.dll").write_text("candidate")
                 (game / "d3d9.dll").write_text("new file")
@@ -93,6 +97,7 @@ class RendererRunTests(unittest.TestCase):
             self.assertEqual(boot.read_text(), "private boot fixture\n")
             self.assertEqual(boot.stat().st_mode & 0o777, 0o640)
             self.assertEqual(original.read_text(), "/load Addons\n")
+            self.assertEqual(shader_cache.read_bytes(), b"saved shaders")
             self.assertEqual(str((game / "d3d8.dll").readlink()), "original.dll")
             self.assertFalse((game / "d3d9.dll").exists())
             self.assertEqual(system_dll.read_bytes(), b"original system renderer")

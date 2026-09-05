@@ -11,12 +11,47 @@ import csv
 import json
 import math
 from pathlib import Path
+import re
 import statistics
 
 
 SETTLED_ZONES = {"city settled": 235, "mines settled": 234, "field settled": 106,
                  "weather settled": 106, "crowd settled": 106, "city after crowd": 235,
                  "mines plaza settled": 234}
+
+
+def shader_compile_summary(logs: list[str]) -> dict | None:
+    """Read mtld3d compiler bursts separately from frame-time measurements."""
+    result = {"prewarm_compiles": 0, "prewarm_compile_ms": 0, "live_compiles": 0,
+              "live_compile_ms": 0, "largest_live_burst_compiles": 0,
+              "largest_live_burst_ms": 0, "prewarm_reused_variants": 0,
+              "minimum_total_reused_variants": 0}
+    found = False
+    for line in "\n".join(logs).splitlines():
+        match = re.search(r"shaders:\s+(\d+)\s+(pre-warmed|compiled)\s+in\s+(\d+)ms\b", line)
+        if match:
+            found = True
+            count, phase, milliseconds = int(match[1]), match[2], int(match[3])
+            prefix = "prewarm" if phase == "pre-warmed" else "live"
+            result[prefix + "_compiles"] += count
+            result[prefix + "_compile_ms"] += milliseconds
+            if prefix == "live":
+                result["largest_live_burst_compiles"] = max(result["largest_live_burst_compiles"], count)
+                result["largest_live_burst_ms"] = max(result["largest_live_burst_ms"], milliseconds)
+        warm = re.search(r"shaders: prewarm reused (\d+) identical state variants", line)
+        reused = re.search(r"shaders: (\d+) state variants reused identical compiled source", line)
+        if warm or reused:
+            found = True
+            if warm:
+                result["prewarm_reused_variants"] = int(warm[1])
+            result["minimum_total_reused_variants"] = max(
+                result["minimum_total_reused_variants"], int((warm or reused)[1]))
+    if not found:
+        return None
+    result["minimum_live_reused_variants"] = max(0,
+        result["minimum_total_reused_variants"] - result["prewarm_reused_variants"])
+    result["note"] = "Logged compiler aggregates, not frame times. Reuse is a lower bound because live reports are batched."
+    return result
 
 
 def world_scene_problem(marker: dict, distance: float | None,
@@ -92,11 +127,15 @@ def report(output: Path) -> dict:
     record = json.loads((session / "menu-run.json").read_text())
     result = {"run": output.name, "session": session.name, "problems": [], "scenes": [],
               "boot_sha256": record.get("boot_sha256"),
+              "shader_cache_seed_sha256": record.get("shader_cache_seed_sha256"),
               "renderer_sha256": record.get("renderer_verified"),
               "graphics": record.get("graphics_at_launch"),
               "renderer_config": record.get("renderer_config"),
               "draw_distance_requested": record.get("draw_distance_requested"),
               "rendering_review_required": True}
+    result["shader_compilation"] = shader_compile_summary([
+        (session / name).read_text() for name in record.get("renderer_logs", [])
+        if Path(name).name == name and (session / name).is_file()])
     for name, key, value in [("result.json", "exit_code", 0),
                              ("restoration.json", "docker_unchanged", True),
                              ("restoration.json", "preferences_restored", True)]:
