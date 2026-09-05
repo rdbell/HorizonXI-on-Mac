@@ -103,6 +103,9 @@ struct ContentView: View {
     @State private var showGraphics = false
     @State private var graphics = GraphicsSettings.load(world: nil)
     @State private var showAddons = false
+    @State private var locating = false
+    @State private var locateHits: [Locator.Hit] = []
+    @State private var locateFor: Server? = nil
     @State private var addonItems: [AddonSuite.Item] = []
     @State private var installingExtra = ""
     @State private var addonWarning = ""
@@ -330,6 +333,8 @@ struct ContentView: View {
         .sheet(isPresented: $newServer) { addServerSheet }
         .sheet(isPresented: $showGraphics) { graphicsSheet }
         .sheet(isPresented: $showAddons) { addonsSheet }
+        .sheet(isPresented: Binding(get: { locateFor != nil },
+                                    set: { if !$0 { locateFor = nil } })) { locateSheet }
         .sheet(isPresented: $showSetup) { SetupSheet { refresh() } }
     }
 
@@ -662,6 +667,12 @@ struct ContentView: View {
                                + "addon you have would be switched off. Nothing was written."
                         showAddons = false
                         return
+                    }
+                    // Belt and braces: a hidden row cannot be toggled on, but the list on disk
+                    // may already have named something this server forbids, and pressing Apply
+                    // must not write it back out.
+                    for i in addonItems.indices where !addonPolicy.allows(addonItems[i].name) {
+                        addonItems[i].enabled = false
                     }
                     // What is enabled here is what gets written, including anything from the
                     // unlisted section. Force-disabling those behind the player's back is what
@@ -1406,6 +1417,9 @@ struct ContentView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 HStack(spacing: 8) {
+                Button(locating ? "Looking…" : "Locate…") { locate(s) }
+                    .disabled(locating)
+                    .help("Search this Mac for a \(s.name) client instead of hunting for the folder yourself.")
                 Button("Choose folder…") { chooseGameData(for: s) }
                 if !s.local {
                     Button("Run installer…") { runLocalInstaller(for: s, install: i) }
@@ -1424,6 +1438,62 @@ struct ContentView: View {
 
     /// Ask where this world's files are (or should go). Defaults to ~/Games/FFXI/<world>, and
     /// the user can pick any drive. The choice is stored on the server entry.
+    /// What "Locate…" found, with the reason it thinks so. The reason is shown because a
+    /// wrong guess here is not cosmetic: pointing a world at another world's client launches
+    /// and plays *that* world's data (Install.clientAmbiguity), so the player gets to judge.
+    private var locateSheet: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Clients found for \(locateFor?.name ?? "this world")").font(.headline)
+            if locateHits.isEmpty {
+                Text("Nothing on this Mac looks like an FFXI client for that world. If it is on "
+                     + "a drive that is not plugged in, plug it in and try again; otherwise use "
+                     + "Choose folder… and point at it yourself.")
+                    .font(.caption).foregroundStyle(Vana.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text("Pick the one that is that world's client. The launcher will look inside it "
+                     + "for Ashita and the game data.")
+                    .font(.caption).foregroundStyle(Vana.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                List(locateHits) { hit in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Button(hit.dataPath.path) { use(hit) }
+                            .buttonStyle(.plain).font(.caption).lineLimit(2)
+                        Text(hit.why).font(.caption2).foregroundStyle(Vana.muted)
+                    }
+                    .padding(.vertical, 2)
+                }
+                .frame(height: 240)
+            }
+            HStack {
+                Spacer()
+                Button("Cancel") { locateFor = nil }.keyboardShortcut(.cancelAction)
+            }
+        }
+        .padding(20).frame(width: 520)
+    }
+
+    private func locate(_ s: Server) {
+        locating = true
+        Task.detached(priority: .userInitiated) {
+            let hits = Locator.candidates(for: s)
+            await MainActor.run {
+                locating = false
+                locateHits = hits
+                locateFor = s
+                runner.appendLine("==> locate \(s.name): \(hits.count) candidate(s)")
+            }
+        }
+    }
+
+    private func use(_ hit: Locator.Hit) {
+        guard let s = locateFor else { return }
+        var c = s; c.dataPath = hit.dataPath.path; store.update(c)
+        locateFor = nil
+        notice = "\(s.name) now points at \(hit.dataPath.path)."
+        recheck()
+    }
+
     private func chooseGameData(for s: Server) {
         let panel = NSOpenPanel()
         panel.title = "Game data for \(s.name)"

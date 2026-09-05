@@ -98,3 +98,81 @@ process-level:
 ## Security
 The HorizonXI password is plaintext in `config/boot/horizonxi.ini` and appears in `ps`
 output. Worth changing how it's passed.
+
+## 2026-08-22: the cursor went missing again, and why
+
+Daniel pressed Update and Restart and came back with no cursor at all. Nothing regressed in
+the code — **the launcher's own Apply removed the fix.**
+
+The chain: the cursor fix lives in `mousediag`; Apply rewrites everything between
+`# --HORIZON_ADDONS_START/STOP--` in `scripts/default.txt` from the addon screen's checkboxes;
+that screen filters by the server's published allowlist; `mousediag` is on no server's list
+because it is ours. So Apply wrote a managed block without it, and the ShowCursor loop stopped
+running.
+
+Two changes, so it cannot happen again:
+
+* **`addons/winecursor/`** — the cursor fix on its own, with none of `mousediag`'s
+  diagnostics, injection or `cmd.txt` channel. That separation matters for the allowlist
+  argument: this addon only makes the pointer visible.
+* **`AddonPolicy.infrastructure`** now contains `winecursor`, next to `winefix`, so an
+  allowlist can never filter it out, and the load line goes **outside** the managed markers in
+  `default.txt` so an Apply cannot rewrite it away.
+
+## SOLVED 2026-08-23: clicking works, and no message is posted anywhere
+
+The previous section's experiment was run, and it did nothing — as its own last paragraph
+predicted. The fix is a different mechanism entirely, and it is now on by default.
+
+**Ashita's ImGui build exposes ImGui's own input event API.** `imgui.GetIO()` answers with a
+userdata carrying `AddMousePosEvent`, `AddMouseButtonEvent`, `AddMouseWheelEvent` and
+`AddFocusEvent` (probed in game, all present, all callable). Feeding the pointer through those
+hands it straight to ImGui and **posts nothing to the game at all** — so the camera-spin
+failure mode of 2026-08-21 is not merely avoided, it is unreachable: FFXI's message queue is
+never touched.
+
+Three measurements were needed, and each had been a dead end on its own:
+
+1. **Nothing feeds `io.MousePos` any more.** The 2026-08-17 note that it "tracked perfectly"
+   does not hold on this build — it sat frozen at whatever a probe had last written to it. So
+   position has to be fed too. Buttons alone can never work, because ImGui has no idea where
+   the pointer is and `WantCaptureMouse` is meaningless.
+2. **ImGui lays out in a 640x480 space while the wine client rect is 1564x848.** Client
+   coordinates must be scaled by `DisplaySize / clientRect` or every hit test misses by a
+   factor of two and a half. This is also why addon windows here look enormous.
+3. **`GetAsyncKeyState` reports the mouse button only while `FFXiClass` is genuinely the
+   foreground window.** A stray wine popup — class `#32769` — was holding focus, and from the
+   inside that is indistinguishable from "wine never sees the mouse". Activating the game
+   window through the macOS app, not just clicking in it, made the button read `-32768`
+   immediately. A good part of the original "zero mouse messages" finding was this.
+
+### What `winecursor` does now, per frame
+
+```
+io:AddMousePosEvent(clientX * DisplaySize.x / clientRect.right,
+                    clientY * DisplaySize.y / clientRect.bottom)   -- or -FLT_MAX when outside
+io:AddMouseButtonEvent(0|1|2, GetAsyncKeyState(VK_L|R|MBUTTON) & 0x8000 ~= 0)
+```
+
+Buttons are forced released whenever `FFXiClass` is not foreground, so nothing can stick down
+across a Cmd-Tab. `PostMessageA` is gone from the click path.
+
+### Verified
+
+Against the local LandSandBoat world, with the Vanagear panel as the target: hovering reported
+`IsAnyItemHovered() == true` over a button, clicking one ran its handler (a set was created on
+disk), and clicking a row in a list selected it. Screenshots in the Vanagear repo's
+`docs/img/`.
+
+`/winecursor clicks off` turns it off; `/winecursor` reports the injected count and what ImGui
+currently thinks.
+
+### Still open
+
+- Mouse **wheel** is not fed. `AddMouseWheelEvent` exists; nothing calls it yet.
+- Whether the game *also* acts on a click that ImGui consumed. Nothing suppresses the real
+  click, so a click through an addon window probably still reaches the world underneath.
+  `io.WantCaptureMouse` is the signal that would drive a suppression, if one turns out to be
+  wanted.
+- The old `WM_`-posting code is deleted, not disabled. If it is ever wanted back, it is in the
+  git history and in the section above.
