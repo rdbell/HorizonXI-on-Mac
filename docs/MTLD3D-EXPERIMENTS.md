@@ -1,5 +1,9 @@
 # mtld3d performance experiments
 
+The later battle-effect investigation and installed build 24 are documented in
+[BATTLE-EFFECTS-2026-09-05.md](BATTLE-EFFECTS-2026-09-05.md). It removes the reproduced
+Chainspell freezes by restoring normal data-page execution protection under Wine.
+
 The September 5 investigation uses mtld3d v0.8.0, commit
 `ea1b1ca3e584917a460c79aac8916d8084099fb4`, with crosire's D3D8-to-D3D9 converter.
 Tests run on an Apple M2 Max with macOS 26.5. Game experiments use only the local

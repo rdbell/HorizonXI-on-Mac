@@ -1,0 +1,2070 @@
+[
+  {
+    "run": "full-04",
+    "renderer": {
+      "run": "full-04",
+      "session": "20260905-163013-standard",
+      "problems": [],
+      "scenes": [
+        {
+          "name": "effects idle settled",
+          "zone": 234,
+          "start": 1788647604.332,
+          "end": 1788647622.354,
+          "position": {
+            "x": 39.0,
+            "y": -49.0,
+            "z": 0.0,
+            "yaw": -3.1414
+          },
+          "draw_distance": {
+            "world_distance": 20.0,
+            "entity_distance": 20.0
+          },
+          "clock": {
+            "vana_hour": 12,
+            "vana_minute": 18
+          },
+          "valid": true,
+          "windows": 17,
+          "seconds": 17.296,
+          "fps": 24.803,
+          "median_window_fps": 24.964,
+          "minimum_window_fps": 22.73,
+          "percent_time_below_120": 100.0,
+          "worst_window_p99_ms": 76.675,
+          "maximum_frame_ms": 76.675,
+          "jit_enabled": [
+            0
+          ],
+          "unaccounted_seconds": 0.0,
+          "reason": null
+        }
+      ],
+      "boot_sha256": "62153a4fdfdcef80d7777012a3ca7dc2cf180460489eb01e130d10442c37bb96",
+      "shader_cache_seed_sha256": "bf78d522da85d0cfbf33b21caad6b071512d2a30d7778cf2c8290fd55fc93502",
+      "renderer_sha256": {
+        "d3d8.dll": "ab6bf7a9a9f4b3e66a75ca038d8d10289c88acbfe8d52c3b5a8a9a259cb26cd5",
+        "d3d9.dll": "10bb9153f2edc2ff5f6628e6ce7062581dfd2de5db2c7f948e53b80682c2deb6",
+        "mtld3d.dll": "6618f35ca777b8c16d76e01e3261d2f17040b86ed7e88f34f6975d3ec6ac3701",
+        "mtld3d.so": "b9b48faed4923fe6110a6105e4d882622be3b459ae9c908f3f8877319f0c88d6"
+      },
+      "graphics": {
+        "0000": 2,
+        "0001": 1882,
+        "0002": 1058,
+        "0003": 4096,
+        "0004": 4096,
+        "0007": 1,
+        "0011": 2,
+        "0017": 0,
+        "0018": 2,
+        "0019": 1,
+        "0020": 1,
+        "0021": 1,
+        "0022": 0,
+        "0023": 0,
+        "0024": 0,
+        "0028": 0,
+        "0029": 20,
+        "0030": 0,
+        "0031": 1002740646,
+        "0032": 0,
+        "0033": 0,
+        "0034": 1,
+        "0035": 1,
+        "0036": 1,
+        "0037": 1882,
+        "0038": 1058,
+        "0039": 1,
+        "0040": 0,
+        "0041": 0,
+        "0043": 0,
+        "0044": 1,
+        "0045": 0
+      },
+      "renderer_config": "color.hdr.enable=false;render.scale=1;present.maxFps=0;render.mergePasses=true;render.submitDraws=0",
+      "draw_distance_requested": 20,
+      "rendering_review_required": true,
+      "shader_compilation": {
+        "prewarm_compiles": 133,
+        "prewarm_compile_ms": 120,
+        "live_compiles": 1,
+        "live_compile_ms": 1,
+        "largest_live_burst_compiles": 1,
+        "largest_live_burst_ms": 1,
+        "prewarm_reused_variants": 399,
+        "minimum_total_reused_variants": 432,
+        "minimum_live_reused_variants": 33,
+        "note": "Logged compiler aggregates, not frame times. Reuse is a lower bound because live reports are batched."
+      }
+    },
+    "phases": [
+      {
+        "name": "idle",
+        "start": 1788647602.332,
+        "end": 1788647622.354,
+        "count": 497,
+        "p50_ms": 39.492,
+        "p95_ms": 47.284,
+        "p99_ms": 61.177,
+        "max_ms": 76.675,
+        "valid": true,
+        "fps": 24.77,
+        "measured_seconds": 20.065,
+        "frames_over_50ms": 15,
+        "frames_over_100ms": 0,
+        "frames_over_500ms": 0,
+        "renderer_timings": {
+          "flush_ms": {
+            "count": 1735,
+            "p50_ms": 1.41,
+            "p95_ms": 4.381,
+            "p99_ms": 8.241,
+            "max_ms": 14.622
+          },
+          "read_ms": {
+            "count": 1735,
+            "p50_ms": 1.84,
+            "p95_ms": 3.015,
+            "p99_ms": 3.454,
+            "max_ms": 5.882
+          },
+          "wait_ms": {
+            "count": 1736,
+            "p50_ms": 1.56,
+            "p95_ms": 2.721,
+            "p99_ms": 3.105,
+            "max_ms": 3.542
+          },
+          "gpu_ms": {
+            "count": 36,
+            "p50_ms": 1.029,
+            "p95_ms": 2.514,
+            "p99_ms": 3.003,
+            "max_ms": 3.003
+          }
+        }
+      },
+      {
+        "name": "round 1",
+        "start": 1788647632.44,
+        "end": 1788647665.938,
+        "count": 648,
+        "p50_ms": 41.544,
+        "p95_ms": 52.923,
+        "p99_ms": 86.518,
+        "max_ms": 1268.254,
+        "valid": true,
+        "fps": 19.32,
+        "measured_seconds": 33.54,
+        "frames_over_50ms": 50,
+        "frames_over_100ms": 5,
+        "frames_over_500ms": 5,
+        "casts": {
+          "chainspell_applied": true,
+          "all_six_spells_completed": true,
+          "all_six_buffs_applied": true,
+          "spells": [
+            {
+              "name": "Blaze Spikes",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                249
+              ]
+            },
+            {
+              "name": "Ice Spikes",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                250
+              ]
+            },
+            {
+              "name": "Shock Spikes",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                251
+              ]
+            },
+            {
+              "name": "Stoneskin",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                54
+              ]
+            },
+            {
+              "name": "Blink",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                53
+              ]
+            },
+            {
+              "name": "Aquaveil",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                55
+              ]
+            }
+          ],
+          "ability_responses": [
+            {
+              "category": 6,
+              "action_id": 20,
+              "animation": 37,
+              "message": 100
+            }
+          ]
+        },
+        "renderer_timings": {
+          "flush_ms": {
+            "count": 2220,
+            "p50_ms": 1.42,
+            "p95_ms": 4.447,
+            "p99_ms": 7.822,
+            "max_ms": 13.62
+          },
+          "read_ms": {
+            "count": 2220,
+            "p50_ms": 1.855,
+            "p95_ms": 3.004,
+            "p99_ms": 3.72,
+            "max_ms": 11.333
+          },
+          "wait_ms": {
+            "count": 2220,
+            "p50_ms": 1.588,
+            "p95_ms": 2.736,
+            "p99_ms": 3.238,
+            "max_ms": 11.051
+          },
+          "gpu_ms": {
+            "count": 44,
+            "p50_ms": 0.987,
+            "p95_ms": 1.853,
+            "p99_ms": 2.167,
+            "max_ms": 2.167
+          }
+        }
+      },
+      {
+        "name": "round 2",
+        "start": 1788647676.009,
+        "end": 1788647708.704,
+        "count": 621,
+        "p50_ms": 42.266,
+        "p95_ms": 51.662,
+        "p99_ms": 80.177,
+        "max_ms": 1260.115,
+        "valid": true,
+        "fps": 18.97,
+        "measured_seconds": 32.736,
+        "frames_over_50ms": 40,
+        "frames_over_100ms": 5,
+        "frames_over_500ms": 5,
+        "casts": {
+          "chainspell_applied": true,
+          "all_six_spells_completed": true,
+          "all_six_buffs_applied": true,
+          "spells": [
+            {
+              "name": "Blaze Spikes",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                249
+              ]
+            },
+            {
+              "name": "Ice Spikes",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                250
+              ]
+            },
+            {
+              "name": "Shock Spikes",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                251
+              ]
+            },
+            {
+              "name": "Stoneskin",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                54
+              ]
+            },
+            {
+              "name": "Blink",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                53
+              ]
+            },
+            {
+              "name": "Aquaveil",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                55
+              ]
+            }
+          ],
+          "ability_responses": [
+            {
+              "category": 6,
+              "action_id": 20,
+              "animation": 37,
+              "message": 100
+            }
+          ]
+        },
+        "renderer_timings": {
+          "flush_ms": {
+            "count": 2137,
+            "p50_ms": 1.448,
+            "p95_ms": 4.481,
+            "p99_ms": 5.591,
+            "max_ms": 22.249
+          },
+          "read_ms": {
+            "count": 2137,
+            "p50_ms": 1.857,
+            "p95_ms": 3.058,
+            "p99_ms": 3.666,
+            "max_ms": 12.004
+          },
+          "wait_ms": {
+            "count": 2137,
+            "p50_ms": 1.597,
+            "p95_ms": 2.791,
+            "p99_ms": 3.247,
+            "max_ms": 11.73
+          },
+          "gpu_ms": {
+            "count": 44,
+            "p50_ms": 1.069,
+            "p95_ms": 2.162,
+            "p99_ms": 2.474,
+            "max_ms": 2.474
+          }
+        }
+      },
+      {
+        "name": "round 3",
+        "start": 1788647718.803,
+        "end": 1788647752.622,
+        "count": 629,
+        "p50_ms": 43.593,
+        "p95_ms": 57.492,
+        "p99_ms": 86.047,
+        "max_ms": 1258.568,
+        "valid": true,
+        "fps": 18.576,
+        "measured_seconds": 33.861,
+        "frames_over_50ms": 67,
+        "frames_over_100ms": 5,
+        "frames_over_500ms": 5,
+        "casts": {
+          "chainspell_applied": true,
+          "all_six_spells_completed": true,
+          "all_six_buffs_applied": true,
+          "spells": [
+            {
+              "name": "Blaze Spikes",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                249
+              ]
+            },
+            {
+              "name": "Ice Spikes",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                250
+              ]
+            },
+            {
+              "name": "Shock Spikes",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                251
+              ]
+            },
+            {
+              "name": "Stoneskin",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                54
+              ]
+            },
+            {
+              "name": "Blink",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                53
+              ]
+            },
+            {
+              "name": "Aquaveil",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                55
+              ]
+            }
+          ],
+          "ability_responses": [
+            {
+              "category": 6,
+              "action_id": 20,
+              "animation": 37,
+              "message": 100
+            }
+          ]
+        },
+        "renderer_timings": {
+          "flush_ms": {
+            "count": 2303,
+            "p50_ms": 1.508,
+            "p95_ms": 4.577,
+            "p99_ms": 7.026,
+            "max_ms": 14.613
+          },
+          "read_ms": {
+            "count": 2303,
+            "p50_ms": 1.839,
+            "p95_ms": 3.142,
+            "p99_ms": 3.855,
+            "max_ms": 12.408
+          },
+          "wait_ms": {
+            "count": 2303,
+            "p50_ms": 1.561,
+            "p95_ms": 2.832,
+            "p99_ms": 3.539,
+            "max_ms": 11.016
+          },
+          "gpu_ms": {
+            "count": 46,
+            "p50_ms": 1.058,
+            "p95_ms": 2.158,
+            "p99_ms": 3.146,
+            "max_ms": 3.146
+          }
+        }
+      }
+    ],
+    "frame_boundary_note": "Whole frames overlapping each phase are included.",
+    "timing_boundary_note": "Renderer log timestamps have one-second resolution.",
+    "notes": [
+      "Clean full-addon baseline. Sampler followed the window thread and is unusable for CPU attribution."
+    ]
+  },
+  {
+    "run": "full-05",
+    "renderer": {
+      "run": "full-05",
+      "session": "20260905-163838-standard",
+      "problems": [],
+      "scenes": [
+        {
+          "name": "effects idle settled",
+          "zone": 234,
+          "start": 1788648118.29,
+          "end": 1788648136.304,
+          "position": {
+            "x": 39.0,
+            "y": -49.0,
+            "z": 0.0,
+            "yaw": -3.1414
+          },
+          "draw_distance": {
+            "world_distance": 20.0,
+            "entity_distance": 20.0
+          },
+          "clock": {
+            "vana_hour": 12,
+            "vana_minute": 18
+          },
+          "valid": true,
+          "windows": 16,
+          "seconds": 16.345,
+          "fps": 24.778,
+          "median_window_fps": 24.853,
+          "minimum_window_fps": 22.152,
+          "percent_time_below_120": 100.0,
+          "worst_window_p99_ms": 68.298,
+          "maximum_frame_ms": 68.298,
+          "jit_enabled": [
+            0
+          ],
+          "unaccounted_seconds": 0.0,
+          "reason": null
+        }
+      ],
+      "boot_sha256": "62153a4fdfdcef80d7777012a3ca7dc2cf180460489eb01e130d10442c37bb96",
+      "shader_cache_seed_sha256": "bf78d522da85d0cfbf33b21caad6b071512d2a30d7778cf2c8290fd55fc93502",
+      "renderer_sha256": {
+        "d3d8.dll": "ab6bf7a9a9f4b3e66a75ca038d8d10289c88acbfe8d52c3b5a8a9a259cb26cd5",
+        "d3d9.dll": "10bb9153f2edc2ff5f6628e6ce7062581dfd2de5db2c7f948e53b80682c2deb6",
+        "mtld3d.dll": "6618f35ca777b8c16d76e01e3261d2f17040b86ed7e88f34f6975d3ec6ac3701",
+        "mtld3d.so": "b9b48faed4923fe6110a6105e4d882622be3b459ae9c908f3f8877319f0c88d6"
+      },
+      "graphics": {
+        "0000": 2,
+        "0001": 1882,
+        "0002": 1058,
+        "0003": 4096,
+        "0004": 4096,
+        "0007": 1,
+        "0011": 2,
+        "0017": 0,
+        "0018": 2,
+        "0019": 1,
+        "0020": 1,
+        "0021": 1,
+        "0022": 0,
+        "0023": 0,
+        "0024": 0,
+        "0028": 0,
+        "0029": 20,
+        "0030": 0,
+        "0031": 1002740646,
+        "0032": 0,
+        "0033": 0,
+        "0034": 1,
+        "0035": 1,
+        "0036": 1,
+        "0037": 1882,
+        "0038": 1058,
+        "0039": 1,
+        "0040": 0,
+        "0041": 0,
+        "0043": 0,
+        "0044": 1,
+        "0045": 0
+      },
+      "renderer_config": "color.hdr.enable=false;render.scale=1;present.maxFps=0;render.mergePasses=true;render.submitDraws=0",
+      "draw_distance_requested": 20,
+      "rendering_review_required": true,
+      "shader_compilation": {
+        "prewarm_compiles": 133,
+        "prewarm_compile_ms": 114,
+        "live_compiles": 1,
+        "live_compile_ms": 2,
+        "largest_live_burst_compiles": 1,
+        "largest_live_burst_ms": 2,
+        "prewarm_reused_variants": 399,
+        "minimum_total_reused_variants": 431,
+        "minimum_live_reused_variants": 32,
+        "note": "Logged compiler aggregates, not frame times. Reuse is a lower bound because live reports are batched."
+      }
+    },
+    "phases": [
+      {
+        "name": "idle",
+        "start": 1788648116.29,
+        "end": 1788648136.304,
+        "count": 494,
+        "p50_ms": 40.222,
+        "p95_ms": 47.093,
+        "p99_ms": 53.817,
+        "max_ms": 68.298,
+        "valid": true,
+        "fps": 24.634,
+        "measured_seconds": 20.054,
+        "frames_over_50ms": 15,
+        "frames_over_100ms": 0,
+        "frames_over_500ms": 0,
+        "renderer_timings": {
+          "flush_ms": {
+            "count": 1734,
+            "p50_ms": 1.347,
+            "p95_ms": 4.372,
+            "p99_ms": 5.584,
+            "max_ms": 11.964
+          },
+          "read_ms": {
+            "count": 1734,
+            "p50_ms": 1.435,
+            "p95_ms": 2.667,
+            "p99_ms": 3.167,
+            "max_ms": 4.438
+          },
+          "wait_ms": {
+            "count": 1734,
+            "p50_ms": 1.175,
+            "p95_ms": 2.4,
+            "p99_ms": 2.849,
+            "max_ms": 4.113
+          },
+          "gpu_ms": {
+            "count": 34,
+            "p50_ms": 0.007,
+            "p95_ms": 1.15,
+            "p99_ms": 1.263,
+            "max_ms": 1.263
+          }
+        }
+      },
+      {
+        "name": "round 1",
+        "start": 1788648146.437,
+        "end": 1788648180.376,
+        "count": 591,
+        "p50_ms": 46.292,
+        "p95_ms": 61.423,
+        "p99_ms": 113.358,
+        "max_ms": 1260.867,
+        "valid": true,
+        "fps": 17.392,
+        "measured_seconds": 33.982,
+        "frames_over_50ms": 136,
+        "frames_over_100ms": 9,
+        "frames_over_500ms": 5,
+        "casts": {
+          "chainspell_applied": true,
+          "all_six_spells_completed": true,
+          "all_six_buffs_applied": true,
+          "spells": [
+            {
+              "name": "Blaze Spikes",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                249
+              ]
+            },
+            {
+              "name": "Ice Spikes",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                250
+              ]
+            },
+            {
+              "name": "Shock Spikes",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                251
+              ]
+            },
+            {
+              "name": "Stoneskin",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                54
+              ]
+            },
+            {
+              "name": "Blink",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                53
+              ]
+            },
+            {
+              "name": "Aquaveil",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                55
+              ]
+            }
+          ],
+          "ability_responses": [
+            {
+              "category": 6,
+              "action_id": 20,
+              "animation": 37,
+              "message": 100
+            }
+          ]
+        },
+        "renderer_timings": {
+          "flush_ms": {
+            "count": 2160,
+            "p50_ms": 1.6,
+            "p95_ms": 4.894,
+            "p99_ms": 8.643,
+            "max_ms": 47.301
+          },
+          "read_ms": {
+            "count": 2160,
+            "p50_ms": 1.413,
+            "p95_ms": 2.754,
+            "p99_ms": 3.467,
+            "max_ms": 13.351
+          },
+          "wait_ms": {
+            "count": 2160,
+            "p50_ms": 1.15,
+            "p95_ms": 2.474,
+            "p99_ms": 3.032,
+            "max_ms": 13.047
+          },
+          "gpu_ms": {
+            "count": 42,
+            "p50_ms": 0.007,
+            "p95_ms": 1.2,
+            "p99_ms": 1.428,
+            "max_ms": 1.428
+          }
+        }
+      },
+      {
+        "name": "round 2",
+        "start": 1788648190.415,
+        "end": 1788648224.711,
+        "count": 588,
+        "p50_ms": 45.097,
+        "p95_ms": 61.504,
+        "p99_ms": 1159.591,
+        "max_ms": 1263.467,
+        "valid": true,
+        "fps": 17.124,
+        "measured_seconds": 34.338,
+        "frames_over_50ms": 126,
+        "frames_over_100ms": 6,
+        "frames_over_500ms": 6,
+        "casts": {
+          "chainspell_applied": true,
+          "all_six_spells_completed": true,
+          "all_six_buffs_applied": true,
+          "spells": [
+            {
+              "name": "Blaze Spikes",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                249
+              ]
+            },
+            {
+              "name": "Ice Spikes",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                250
+              ]
+            },
+            {
+              "name": "Shock Spikes",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                251
+              ]
+            },
+            {
+              "name": "Stoneskin",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                54
+              ]
+            },
+            {
+              "name": "Blink",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                53
+              ]
+            },
+            {
+              "name": "Aquaveil",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                55
+              ]
+            }
+          ],
+          "ability_responses": [
+            {
+              "category": 6,
+              "action_id": 20,
+              "animation": 37,
+              "message": 100
+            }
+          ]
+        },
+        "renderer_timings": {
+          "flush_ms": {
+            "count": 2028,
+            "p50_ms": 1.547,
+            "p95_ms": 4.841,
+            "p99_ms": 10.504,
+            "max_ms": 17.17
+          },
+          "read_ms": {
+            "count": 2028,
+            "p50_ms": 1.445,
+            "p95_ms": 2.678,
+            "p99_ms": 3.363,
+            "max_ms": 10.968
+          },
+          "wait_ms": {
+            "count": 2028,
+            "p50_ms": 1.178,
+            "p95_ms": 2.393,
+            "p99_ms": 3.028,
+            "max_ms": 10.58
+          },
+          "gpu_ms": {
+            "count": 40,
+            "p50_ms": 0.007,
+            "p95_ms": 1.308,
+            "p99_ms": 1.354,
+            "max_ms": 1.354
+          }
+        }
+      },
+      {
+        "name": "round 3",
+        "start": 1788648234.811,
+        "end": 1788648267.984,
+        "count": 631,
+        "p50_ms": 42.764,
+        "p95_ms": 54.402,
+        "p99_ms": 81.317,
+        "max_ms": 1263.241,
+        "valid": true,
+        "fps": 18.995,
+        "measured_seconds": 33.22,
+        "frames_over_50ms": 55,
+        "frames_over_100ms": 5,
+        "frames_over_500ms": 5,
+        "casts": {
+          "chainspell_applied": true,
+          "all_six_spells_completed": true,
+          "all_six_buffs_applied": true,
+          "spells": [
+            {
+              "name": "Blaze Spikes",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                249
+              ]
+            },
+            {
+              "name": "Ice Spikes",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                250
+              ]
+            },
+            {
+              "name": "Shock Spikes",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                251
+              ]
+            },
+            {
+              "name": "Stoneskin",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                54
+              ]
+            },
+            {
+              "name": "Blink",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                53
+              ]
+            },
+            {
+              "name": "Aquaveil",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                55
+              ]
+            }
+          ],
+          "ability_responses": [
+            {
+              "category": 6,
+              "action_id": 20,
+              "animation": 37,
+              "message": 100
+            }
+          ]
+        },
+        "renderer_timings": {
+          "flush_ms": {
+            "count": 2192,
+            "p50_ms": 1.383,
+            "p95_ms": 4.455,
+            "p99_ms": 6.229,
+            "max_ms": 22.759
+          },
+          "read_ms": {
+            "count": 2192,
+            "p50_ms": 1.441,
+            "p95_ms": 2.666,
+            "p99_ms": 3.347,
+            "max_ms": 13.592
+          },
+          "wait_ms": {
+            "count": 2192,
+            "p50_ms": 1.189,
+            "p95_ms": 2.379,
+            "p99_ms": 2.961,
+            "max_ms": 13.35
+          },
+          "gpu_ms": {
+            "count": 44,
+            "p50_ms": 0.007,
+            "p95_ms": 1.263,
+            "p99_ms": 1.475,
+            "max_ms": 1.475
+          }
+        }
+      }
+    ],
+    "frame_boundary_note": "Whole frames overlapping each phase are included.",
+    "timing_boundary_note": "Renderer log timestamps have one-second resolution.",
+    "notes": [
+      "Two GPU failures occurred before measurement; used for profiling rather than the clean FPS comparison."
+    ]
+  },
+  {
+    "run": "nx-06",
+    "renderer": {
+      "run": "nx-06",
+      "session": "20260905-164950-standard",
+      "problems": [],
+      "scenes": [
+        {
+          "name": "effects idle settled",
+          "zone": 234,
+          "start": 1788648776.015,
+          "end": 1788648794.038,
+          "position": {
+            "x": 39.0,
+            "y": -49.0,
+            "z": 0.0,
+            "yaw": -3.1414
+          },
+          "draw_distance": {
+            "world_distance": 20.0,
+            "entity_distance": 20.0
+          },
+          "clock": {
+            "vana_hour": 12,
+            "vana_minute": 18
+          },
+          "valid": true,
+          "windows": 17,
+          "seconds": 17.328,
+          "fps": 24.584,
+          "median_window_fps": 24.582,
+          "minimum_window_fps": 23.197,
+          "percent_time_below_120": 100.0,
+          "worst_window_p99_ms": 56.522,
+          "maximum_frame_ms": 56.522,
+          "jit_enabled": [
+            0
+          ],
+          "unaccounted_seconds": 0.0,
+          "reason": null
+        }
+      ],
+      "boot_sha256": "62153a4fdfdcef80d7777012a3ca7dc2cf180460489eb01e130d10442c37bb96",
+      "shader_cache_seed_sha256": "bf78d522da85d0cfbf33b21caad6b071512d2a30d7778cf2c8290fd55fc93502",
+      "renderer_sha256": {
+        "d3d8.dll": "ab6bf7a9a9f4b3e66a75ca038d8d10289c88acbfe8d52c3b5a8a9a259cb26cd5",
+        "d3d9.dll": "10bb9153f2edc2ff5f6628e6ce7062581dfd2de5db2c7f948e53b80682c2deb6",
+        "mtld3d.dll": "6618f35ca777b8c16d76e01e3261d2f17040b86ed7e88f34f6975d3ec6ac3701",
+        "mtld3d.so": "b9b48faed4923fe6110a6105e4d882622be3b459ae9c908f3f8877319f0c88d6"
+      },
+      "graphics": {
+        "0000": 2,
+        "0001": 1882,
+        "0002": 1058,
+        "0003": 4096,
+        "0004": 4096,
+        "0007": 1,
+        "0011": 2,
+        "0017": 0,
+        "0018": 2,
+        "0019": 1,
+        "0020": 1,
+        "0021": 1,
+        "0022": 0,
+        "0023": 0,
+        "0024": 0,
+        "0028": 0,
+        "0029": 20,
+        "0030": 0,
+        "0031": 1002740646,
+        "0032": 0,
+        "0033": 0,
+        "0034": 1,
+        "0035": 1,
+        "0036": 1,
+        "0037": 1882,
+        "0038": 1058,
+        "0039": 1,
+        "0040": 0,
+        "0041": 0,
+        "0043": 0,
+        "0044": 1,
+        "0045": 0
+      },
+      "renderer_config": "color.hdr.enable=false;render.scale=1;present.maxFps=0;render.mergePasses=true;render.submitDraws=0",
+      "draw_distance_requested": 20,
+      "rendering_review_required": true,
+      "shader_compilation": {
+        "prewarm_compiles": 133,
+        "prewarm_compile_ms": 122,
+        "live_compiles": 1,
+        "live_compile_ms": 0,
+        "largest_live_burst_compiles": 1,
+        "largest_live_burst_ms": 0,
+        "prewarm_reused_variants": 399,
+        "minimum_total_reused_variants": 432,
+        "minimum_live_reused_variants": 33,
+        "note": "Logged compiler aggregates, not frame times. Reuse is a lower bound because live reports are batched."
+      }
+    },
+    "phases": [
+      {
+        "name": "idle",
+        "start": 1788648774.015,
+        "end": 1788648794.038,
+        "count": 490,
+        "p50_ms": 40.517,
+        "p95_ms": 46.741,
+        "p99_ms": 54.678,
+        "max_ms": 97.629,
+        "valid": true,
+        "fps": 24.417,
+        "measured_seconds": 20.068,
+        "frames_over_50ms": 13,
+        "frames_over_100ms": 0,
+        "frames_over_500ms": 0,
+        "renderer_timings": {
+          "flush_ms": {
+            "count": 1718,
+            "p50_ms": 1.348,
+            "p95_ms": 4.046,
+            "p99_ms": 5.022,
+            "max_ms": 13.77
+          },
+          "read_ms": {
+            "count": 1718,
+            "p50_ms": 1.742,
+            "p95_ms": 2.967,
+            "p99_ms": 3.469,
+            "max_ms": 5.096
+          },
+          "wait_ms": {
+            "count": 1718,
+            "p50_ms": 1.486,
+            "p95_ms": 2.729,
+            "p99_ms": 3.133,
+            "max_ms": 3.484
+          },
+          "gpu_ms": {
+            "count": 36,
+            "p50_ms": 0.852,
+            "p95_ms": 2.151,
+            "p99_ms": 2.795,
+            "max_ms": 2.795
+          }
+        }
+      },
+      {
+        "name": "round 1",
+        "start": 1788648804.125,
+        "end": 1788648834.763,
+        "count": 679,
+        "p50_ms": 44.054,
+        "p95_ms": 55.495,
+        "p99_ms": 77.87,
+        "max_ms": 98.844,
+        "valid": true,
+        "fps": 22.129,
+        "measured_seconds": 30.683,
+        "frames_over_50ms": 76,
+        "frames_over_100ms": 0,
+        "frames_over_500ms": 0,
+        "casts": {
+          "chainspell_applied": true,
+          "all_six_spells_completed": true,
+          "all_six_buffs_applied": true,
+          "spells": [
+            {
+              "name": "Blaze Spikes",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                249
+              ]
+            },
+            {
+              "name": "Ice Spikes",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                250
+              ]
+            },
+            {
+              "name": "Shock Spikes",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                251
+              ]
+            },
+            {
+              "name": "Stoneskin",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                54
+              ]
+            },
+            {
+              "name": "Blink",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                53
+              ]
+            },
+            {
+              "name": "Aquaveil",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                55
+              ]
+            }
+          ],
+          "ability_responses": [
+            {
+              "category": 6,
+              "action_id": 20,
+              "animation": 37,
+              "message": 100
+            }
+          ]
+        },
+        "renderer_timings": {
+          "flush_ms": {
+            "count": 2318,
+            "p50_ms": 1.39,
+            "p95_ms": 4.329,
+            "p99_ms": 8.202,
+            "max_ms": 15.328
+          },
+          "read_ms": {
+            "count": 2318,
+            "p50_ms": 1.745,
+            "p95_ms": 2.988,
+            "p99_ms": 3.487,
+            "max_ms": 6.09
+          },
+          "wait_ms": {
+            "count": 2318,
+            "p50_ms": 1.472,
+            "p95_ms": 2.718,
+            "p99_ms": 3.12,
+            "max_ms": 3.737
+          },
+          "gpu_ms": {
+            "count": 48,
+            "p50_ms": 0.856,
+            "p95_ms": 2.159,
+            "p99_ms": 3.011,
+            "max_ms": 3.011
+          }
+        }
+      },
+      {
+        "name": "round 2",
+        "start": 1788648844.886,
+        "end": 1788648875.432,
+        "count": 688,
+        "p50_ms": 44.006,
+        "p95_ms": 52.6,
+        "p99_ms": 67.713,
+        "max_ms": 85.725,
+        "valid": true,
+        "fps": 22.483,
+        "measured_seconds": 30.601,
+        "frames_over_50ms": 65,
+        "frames_over_100ms": 0,
+        "frames_over_500ms": 0,
+        "casts": {
+          "chainspell_applied": true,
+          "all_six_spells_completed": true,
+          "all_six_buffs_applied": true,
+          "spells": [
+            {
+              "name": "Blaze Spikes",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                249
+              ]
+            },
+            {
+              "name": "Ice Spikes",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                250
+              ]
+            },
+            {
+              "name": "Shock Spikes",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                251
+              ]
+            },
+            {
+              "name": "Stoneskin",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                54
+              ]
+            },
+            {
+              "name": "Blink",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                53
+              ]
+            },
+            {
+              "name": "Aquaveil",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                55
+              ]
+            }
+          ],
+          "ability_responses": [
+            {
+              "category": 6,
+              "action_id": 20,
+              "animation": 37,
+              "message": 100
+            }
+          ]
+        },
+        "renderer_timings": {
+          "flush_ms": {
+            "count": 2573,
+            "p50_ms": 1.349,
+            "p95_ms": 3.997,
+            "p99_ms": 5.401,
+            "max_ms": 14.575
+          },
+          "read_ms": {
+            "count": 2573,
+            "p50_ms": 1.712,
+            "p95_ms": 3.247,
+            "p99_ms": 3.805,
+            "max_ms": 5.328
+          },
+          "wait_ms": {
+            "count": 2573,
+            "p50_ms": 1.458,
+            "p95_ms": 2.939,
+            "p99_ms": 3.496,
+            "max_ms": 4.082
+          },
+          "gpu_ms": {
+            "count": 50,
+            "p50_ms": 0.947,
+            "p95_ms": 2.479,
+            "p99_ms": 3.834,
+            "max_ms": 3.834
+          }
+        }
+      },
+      {
+        "name": "round 3",
+        "start": 1788648885.557,
+        "end": 1788648915.958,
+        "count": 691,
+        "p50_ms": 43.305,
+        "p95_ms": 51.751,
+        "p99_ms": 72.613,
+        "max_ms": 86.773,
+        "valid": true,
+        "fps": 22.696,
+        "measured_seconds": 30.446,
+        "frames_over_50ms": 54,
+        "frames_over_100ms": 0,
+        "frames_over_500ms": 0,
+        "casts": {
+          "chainspell_applied": true,
+          "all_six_spells_completed": true,
+          "all_six_buffs_applied": true,
+          "spells": [
+            {
+              "name": "Blaze Spikes",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                249
+              ]
+            },
+            {
+              "name": "Ice Spikes",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                250
+              ]
+            },
+            {
+              "name": "Shock Spikes",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                251
+              ]
+            },
+            {
+              "name": "Stoneskin",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                54
+              ]
+            },
+            {
+              "name": "Blink",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                53
+              ]
+            },
+            {
+              "name": "Aquaveil",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                55
+              ]
+            }
+          ],
+          "ability_responses": [
+            {
+              "category": 6,
+              "action_id": 20,
+              "animation": 37,
+              "message": 100
+            }
+          ]
+        },
+        "renderer_timings": {
+          "flush_ms": {
+            "count": 2392,
+            "p50_ms": 1.335,
+            "p95_ms": 4.173,
+            "p99_ms": 5.44,
+            "max_ms": 16.31
+          },
+          "read_ms": {
+            "count": 2392,
+            "p50_ms": 1.79,
+            "p95_ms": 2.994,
+            "p99_ms": 3.588,
+            "max_ms": 6.63
+          },
+          "wait_ms": {
+            "count": 2392,
+            "p50_ms": 1.521,
+            "p95_ms": 2.748,
+            "p99_ms": 3.146,
+            "max_ms": 6.336
+          },
+          "gpu_ms": {
+            "count": 48,
+            "p50_ms": 0.984,
+            "p95_ms": 2.15,
+            "p99_ms": 4.809,
+            "max_ms": 4.809
+          }
+        }
+      }
+    ],
+    "frame_boundary_note": "Whole frames overlapping each phase are included.",
+    "timing_boundary_note": "Renderer log timestamps have one-second resolution.",
+    "notes": [
+      "Temporary PERFSCENE_ENFORCE_NX=1 diagnostic. Original renderer, matched graphics and addons."
+    ]
+  },
+  {
+    "run": "baked-07",
+    "renderer": {
+      "run": "baked-07",
+      "session": "20260905-170926-standard",
+      "problems": [],
+      "scenes": [
+        {
+          "name": "effects idle settled",
+          "zone": 234,
+          "start": 1788649964.587,
+          "end": 1788649982.595,
+          "position": {
+            "x": 39.0,
+            "y": -49.0,
+            "z": 0.0,
+            "yaw": -3.1414
+          },
+          "draw_distance": {
+            "world_distance": 20.0,
+            "entity_distance": 20.0
+          },
+          "clock": {
+            "vana_hour": 12,
+            "vana_minute": 18
+          },
+          "valid": true,
+          "windows": 16,
+          "seconds": 16.353,
+          "fps": 23.91,
+          "median_window_fps": 24.026,
+          "minimum_window_fps": 22.18,
+          "percent_time_below_120": 100.0,
+          "worst_window_p99_ms": 60.188,
+          "maximum_frame_ms": 60.188,
+          "jit_enabled": [
+            0
+          ],
+          "unaccounted_seconds": 0.0,
+          "reason": null
+        }
+      ],
+      "boot_sha256": "62153a4fdfdcef80d7777012a3ca7dc2cf180460489eb01e130d10442c37bb96",
+      "shader_cache_seed_sha256": "bf78d522da85d0cfbf33b21caad6b071512d2a30d7778cf2c8290fd55fc93502",
+      "renderer_sha256": {
+        "d3d8.dll": "ab6bf7a9a9f4b3e66a75ca038d8d10289c88acbfe8d52c3b5a8a9a259cb26cd5",
+        "d3d9.dll": "d015eebb37c4aa30f641659693d899be715e30c23cb527bffdaf89548a383e5d",
+        "mtld3d.dll": "6618f35ca777b8c16d76e01e3261d2f17040b86ed7e88f34f6975d3ec6ac3701",
+        "mtld3d.so": "b9b48faed4923fe6110a6105e4d882622be3b459ae9c908f3f8877319f0c88d6"
+      },
+      "graphics": {
+        "0000": 2,
+        "0001": 1882,
+        "0002": 1058,
+        "0003": 4096,
+        "0004": 4096,
+        "0007": 1,
+        "0011": 2,
+        "0017": 0,
+        "0018": 2,
+        "0019": 1,
+        "0020": 1,
+        "0021": 1,
+        "0022": 0,
+        "0023": 0,
+        "0024": 0,
+        "0028": 0,
+        "0029": 20,
+        "0030": 0,
+        "0031": 1002740646,
+        "0032": 0,
+        "0033": 0,
+        "0034": 1,
+        "0035": 1,
+        "0036": 1,
+        "0037": 1882,
+        "0038": 1058,
+        "0039": 1,
+        "0040": 0,
+        "0041": 0,
+        "0043": 0,
+        "0044": 1,
+        "0045": 0
+      },
+      "renderer_config": "color.hdr.enable=false;render.scale=1;present.maxFps=0;render.mergePasses=true;render.submitDraws=0",
+      "draw_distance_requested": 20,
+      "rendering_review_required": true,
+      "shader_compilation": {
+        "prewarm_compiles": 133,
+        "prewarm_compile_ms": 98,
+        "live_compiles": 1,
+        "live_compile_ms": 0,
+        "largest_live_burst_compiles": 1,
+        "largest_live_burst_ms": 0,
+        "prewarm_reused_variants": 399,
+        "minimum_total_reused_variants": 431,
+        "minimum_live_reused_variants": 32,
+        "note": "Logged compiler aggregates, not frame times. Reuse is a lower bound because live reports are batched."
+      }
+    },
+    "phases": [
+      {
+        "name": "idle",
+        "start": 1788649962.587,
+        "end": 1788649982.595,
+        "count": 476,
+        "p50_ms": 41.279,
+        "p95_ms": 50.374,
+        "p99_ms": 56.79,
+        "max_ms": 80.917,
+        "valid": true,
+        "fps": 23.741,
+        "measured_seconds": 20.05,
+        "frames_over_50ms": 25,
+        "frames_over_100ms": 0,
+        "frames_over_500ms": 0,
+        "renderer_timings": {
+          "flush_ms": {
+            "count": 1662,
+            "p50_ms": 1.411,
+            "p95_ms": 4.502,
+            "p99_ms": 7.518,
+            "max_ms": 14.737
+          },
+          "read_ms": {
+            "count": 1662,
+            "p50_ms": 1.712,
+            "p95_ms": 2.913,
+            "p99_ms": 3.272,
+            "max_ms": 4.896
+          },
+          "wait_ms": {
+            "count": 1662,
+            "p50_ms": 1.458,
+            "p95_ms": 2.625,
+            "p99_ms": 2.977,
+            "max_ms": 3.477
+          },
+          "gpu_ms": {
+            "count": 34,
+            "p50_ms": 0.853,
+            "p95_ms": 2.011,
+            "p99_ms": 2.205,
+            "max_ms": 2.205
+          }
+        }
+      },
+      {
+        "name": "round 1",
+        "start": 1788649992.676,
+        "end": 1788650023.58,
+        "count": 663,
+        "p50_ms": 45.558,
+        "p95_ms": 58.524,
+        "p99_ms": 76.569,
+        "max_ms": 96.626,
+        "valid": true,
+        "fps": 21.421,
+        "measured_seconds": 30.951,
+        "frames_over_50ms": 139,
+        "frames_over_100ms": 0,
+        "frames_over_500ms": 0,
+        "casts": {
+          "chainspell_applied": true,
+          "all_six_spells_completed": true,
+          "all_six_buffs_applied": true,
+          "spells": [
+            {
+              "name": "Blaze Spikes",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                249
+              ]
+            },
+            {
+              "name": "Ice Spikes",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                250
+              ]
+            },
+            {
+              "name": "Shock Spikes",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                251
+              ]
+            },
+            {
+              "name": "Stoneskin",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                54
+              ]
+            },
+            {
+              "name": "Blink",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                53
+              ]
+            },
+            {
+              "name": "Aquaveil",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                55
+              ]
+            }
+          ],
+          "ability_responses": [
+            {
+              "category": 6,
+              "action_id": 20,
+              "animation": 37,
+              "message": 100
+            }
+          ]
+        },
+        "renderer_timings": {
+          "flush_ms": {
+            "count": 2450,
+            "p50_ms": 1.586,
+            "p95_ms": 4.694,
+            "p99_ms": 8.374,
+            "max_ms": 16.895
+          },
+          "read_ms": {
+            "count": 2450,
+            "p50_ms": 1.641,
+            "p95_ms": 3.077,
+            "p99_ms": 3.583,
+            "max_ms": 5.622
+          },
+          "wait_ms": {
+            "count": 2450,
+            "p50_ms": 1.405,
+            "p95_ms": 2.814,
+            "p99_ms": 3.263,
+            "max_ms": 3.832
+          },
+          "gpu_ms": {
+            "count": 50,
+            "p50_ms": 0.832,
+            "p95_ms": 2.272,
+            "p99_ms": 2.522,
+            "max_ms": 2.522
+          }
+        }
+      },
+      {
+        "name": "round 2",
+        "start": 1788650033.674,
+        "end": 1788650064.343,
+        "count": 708,
+        "p50_ms": 42.469,
+        "p95_ms": 53.252,
+        "p99_ms": 66.954,
+        "max_ms": 79.529,
+        "valid": true,
+        "fps": 23.052,
+        "measured_seconds": 30.713,
+        "frames_over_50ms": 61,
+        "frames_over_100ms": 0,
+        "frames_over_500ms": 0,
+        "casts": {
+          "chainspell_applied": true,
+          "all_six_spells_completed": true,
+          "all_six_buffs_applied": true,
+          "spells": [
+            {
+              "name": "Blaze Spikes",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                249
+              ]
+            },
+            {
+              "name": "Ice Spikes",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                250
+              ]
+            },
+            {
+              "name": "Shock Spikes",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                251
+              ]
+            },
+            {
+              "name": "Stoneskin",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                54
+              ]
+            },
+            {
+              "name": "Blink",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                53
+              ]
+            },
+            {
+              "name": "Aquaveil",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                55
+              ]
+            }
+          ],
+          "ability_responses": [
+            {
+              "category": 6,
+              "action_id": 20,
+              "animation": 37,
+              "message": 100
+            }
+          ]
+        },
+        "renderer_timings": {
+          "flush_ms": {
+            "count": 2512,
+            "p50_ms": 1.376,
+            "p95_ms": 4.289,
+            "p99_ms": 6.394,
+            "max_ms": 14.939
+          },
+          "read_ms": {
+            "count": 2512,
+            "p50_ms": 1.67,
+            "p95_ms": 2.964,
+            "p99_ms": 3.462,
+            "max_ms": 6.579
+          },
+          "wait_ms": {
+            "count": 2512,
+            "p50_ms": 1.43,
+            "p95_ms": 2.722,
+            "p99_ms": 3.134,
+            "max_ms": 4.753
+          },
+          "gpu_ms": {
+            "count": 50,
+            "p50_ms": 0.837,
+            "p95_ms": 2.168,
+            "p99_ms": 4.396,
+            "max_ms": 4.396
+          }
+        }
+      },
+      {
+        "name": "round 3",
+        "start": 1788650074.396,
+        "end": 1788650105.181,
+        "count": 727,
+        "p50_ms": 41.426,
+        "p95_ms": 50.913,
+        "p99_ms": 68.231,
+        "max_ms": 93.033,
+        "valid": true,
+        "fps": 23.581,
+        "measured_seconds": 30.83,
+        "frames_over_50ms": 47,
+        "frames_over_100ms": 0,
+        "frames_over_500ms": 0,
+        "casts": {
+          "chainspell_applied": true,
+          "all_six_spells_completed": true,
+          "all_six_buffs_applied": true,
+          "spells": [
+            {
+              "name": "Blaze Spikes",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                249
+              ]
+            },
+            {
+              "name": "Ice Spikes",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                250
+              ]
+            },
+            {
+              "name": "Shock Spikes",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                251
+              ]
+            },
+            {
+              "name": "Stoneskin",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                54
+              ]
+            },
+            {
+              "name": "Blink",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                53
+              ]
+            },
+            {
+              "name": "Aquaveil",
+              "completions": 1,
+              "messages": [
+                230
+              ],
+              "animations": [
+                55
+              ]
+            }
+          ],
+          "ability_responses": [
+            {
+              "category": 6,
+              "action_id": 20,
+              "animation": 37,
+              "message": 100
+            }
+          ]
+        },
+        "renderer_timings": {
+          "flush_ms": {
+            "count": 2559,
+            "p50_ms": 1.31,
+            "p95_ms": 3.947,
+            "p99_ms": 5.79,
+            "max_ms": 17.014
+          },
+          "read_ms": {
+            "count": 2559,
+            "p50_ms": 1.749,
+            "p95_ms": 2.956,
+            "p99_ms": 3.477,
+            "max_ms": 7.744
+          },
+          "wait_ms": {
+            "count": 2559,
+            "p50_ms": 1.496,
+            "p95_ms": 2.707,
+            "p99_ms": 3.11,
+            "max_ms": 3.721
+          },
+          "gpu_ms": {
+            "count": 50,
+            "p50_ms": 0.888,
+            "p95_ms": 2.582,
+            "p99_ms": 4.879,
+            "max_ms": 4.879
+          }
+        }
+      }
+    ],
+    "frame_boundary_note": "Whole frames overlapping each phase are included.",
+    "timing_boundary_note": "Renderer log timestamps have one-second resolution.",
+    "notes": [
+      "Renderer applies NX automatically; temporary PERFSCENE_ENFORCE_NX switch absent. No GPU errors. Screenshots reviewed."
+    ]
+  }
+]

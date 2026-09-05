@@ -3,9 +3,9 @@ index 8180614..e7f0987 100644
 --- a/mtld3d.conf
 +++ b/mtld3d.conf
 @@ -191,6 +191,16 @@
- 
+
  # query.flushImmediate = false
- 
+
 +# Experimental early submission for games that read a render target every frame.
 +# Send work after this many draws while the game continues collecting the next
 +# chunk. Zero keeps whole-frame batching. Colour, depth and readback ordering are
@@ -16,7 +16,7 @@ index 8180614..e7f0987 100644
 +# Copies, clears, resolves, and visibility queries retain their ordering.
 +# render.mergePasses = false
 +
- 
+
  #########
  # Depth #
 diff --git a/unix/shared/src/ffi_boundary.rs b/unix/shared/src/ffi_boundary.rs
@@ -24,14 +24,14 @@ index ee5bd6b..4e6b6f6 100644
 --- a/unix/shared/src/ffi_boundary.rs
 +++ b/unix/shared/src/ffi_boundary.rs
 @@ -174,7 +174,7 @@ impl<T: Copy> ValueIn<'_, T> {
- 
+
  /// Null-guarded FFI out-param. `write` consumes `self`.
  ///
 -/// Construction is `unsafe` (the caller asserts writeability and alignment);
 +/// Construction is `unsafe` (the caller asserts writeability and lifetime);
  /// `write` is safe because the invariant is type-encoded.
  pub struct OutPtr<'a, T>(NonNull<T>, PhantomData<&'a mut T>);
- 
+
 @@ -183,8 +183,8 @@ impl<T> OutPtr<'_, T> {
      ///
      /// # Safety
@@ -50,7 +50,7 @@ index ee5bd6b..4e6b6f6 100644
 -        unsafe { self.0.as_ptr().write(val) };
 +        unsafe { self.0.as_ptr().write_unaligned(val) };
      }
- 
+
      /// One-shot null-guarded write. Convenience for the `opt + write` pair.
 diff --git a/unix/shared/src/ffi_boundary/tests.rs b/unix/shared/src/ffi_boundary/tests.rs
 index 09f99c6..0afdcb8 100644
@@ -59,7 +59,7 @@ index 09f99c6..0afdcb8 100644
 @@ -67,6 +67,20 @@ fn out_ptr_opt_filters_null() {
      assert!(opt.is_none());
  }
- 
+
 +#[test]
 +fn out_ptr_writes_unaligned_storage_without_touching_neighbors() {
 +    let mut storage = [u64::MAX; 3];
@@ -115,7 +115,7 @@ index 18e1be0..6eb9ee4 100644
                  // both stores are `Release`, so a PE-side `Acquire` load of
                  // `coherent_seq` that observes this seq observes the failure
 @@ -644,6 +656,12 @@ pub fn submit_frame(params: &mut SubmitFrameParams) -> bool {
- 
+
      mtld3d_shared::crumb!("submit:commit");
      cmd_buf.commit();
 +    if let Some(start) = timer {
@@ -130,7 +130,7 @@ index 18e1be0..6eb9ee4 100644
 @@ -2862,6 +2880,9 @@ fn encode_readback_resolve(
  pub fn blit_texture_to_buffer(args: &BlitArgs) -> bool {
      use core::{ffi::c_void, ptr::NonNull};
- 
+
 +    let timer = log::log_enabled!(target: "mtld3d::readback", log::Level::Trace)
 +        .then(std::time::Instant::now);
 +
@@ -139,7 +139,7 @@ index 18e1be0..6eb9ee4 100644
      let BlitArgs {
 @@ -3024,8 +3045,15 @@ pub fn blit_texture_to_buffer(args: &BlitArgs) -> bool {
      }
- 
+
      blit.endEncoding();
 +    let encode_elapsed = timer.map(|start| start.elapsed());
      cmd_buf.commit();
@@ -345,7 +345,7 @@ index e2fa46b..f9913f0 100644
 @@ -193,6 +194,12 @@ fn buffer_ignore_lock_bounds_defaults_off_and_round_trips() {
      assert!(!cfg.buffer_ignore_lock_bounds);
  }
- 
+
 +#[test]
 +fn merge_passes_defaults_off_and_accepts_an_explicit_override() {
 +    assert!(!parse(None, "", None).render_merge_passes);
@@ -415,7 +415,7 @@ index 35fca49..3f8e90c 100644
 +    let layout = ff_vs_layout_from_elements(&elements);
      assert_eq!(layout.tex_coord_count, 8);
  }
- 
+
 @@ -828,13 +828,13 @@ fn ff_vs_layout_in_spec_usage_index_7_yields_8() {
              usage_index: 7,
          },
@@ -424,14 +424,14 @@ index 35fca49..3f8e90c 100644
 +    let layout = ff_vs_layout_from_elements(&elements);
      assert_eq!(layout.tex_coord_count, 8);
  }
- 
+
  #[test]
  fn ff_vs_layout_single_tex0_yields_1() {
 -    let layout = ff_vs_layout_from_elements(&[pos3(), tex0(12)], false);
 +    let layout = ff_vs_layout_from_elements(&[pos3(), tex0(12)]);
      assert_eq!(layout.tex_coord_count, 1);
  }
- 
+
 diff --git a/windows/core/src/dxso/ff.rs b/windows/core/src/dxso/ff.rs
 index 00692df..9182d68 100644
 --- a/windows/core/src/dxso/ff.rs
@@ -480,7 +480,7 @@ index 00692df..9182d68 100644
 -        const USES_DECL = 1 << 3;
      }
  }
- 
+
 @@ -1378,6 +1361,8 @@ bitflags::bitflags! {
  /// The field (0 = `MCS_MATERIAL`, 1 = `MCS_COLOR1`, 2 = `MCS_COLOR2`) selects
  /// the expression that feeds the FF lighting math. When `D3DRS_COLORVERTEX` is
@@ -520,7 +520,7 @@ index e41b60d..94cad74 100644
 --- a/windows/core/src/passes.rs
 +++ b/windows/core/src/passes.rs
 @@ -5555,3 +5555,5 @@ impl LastBoundCache {
- 
+
  #[cfg(test)]
  mod tests;
 +
@@ -695,7 +695,7 @@ index c450bab..15edd06 100644
 @@ -153,6 +153,115 @@ fn dummy_draw() -> Command {
      Command::draw_primitives(mtld3d_shared::mtl::PrimitiveType::Triangle, 0, 3)
  }
- 
+
 +fn independent_pass_sequence() -> PassState {
 +    let mut state = fresh();
 +    state.clear_color(0, 0, 0, 1.0f32.to_bits());
@@ -813,9 +813,9 @@ index dd195b7..ca91c8e 100644
 --- a/windows/core/src/shader_cache.rs
 +++ b/windows/core/src/shader_cache.rs
 @@ -49,6 +49,9 @@ use xxhash_rust::xxh3::Xxh3;
- 
+
  use crate::shader_compile_stats::CompileBucket;
- 
+
 +mod libraries;
 +pub use libraries::CompiledShaders;
 +
@@ -831,7 +831,7 @@ index dd195b7..ca91c8e 100644
 +/// `68` falls back to material constants for omitted vertex colour semantics
 +/// in fixed-function lighting and removes the declaration-origin key bit.
 +pub const SHADER_CACHE_SCHEMA_VERSION: u32 = 68;
- 
+
  /// File magic.
  ///
 diff --git a/windows/core/src/shader_cache/libraries.rs b/windows/core/src/shader_cache/libraries.rs
@@ -1097,7 +1097,7 @@ index 9f0ab21..043a64b 100644
 +            }
 +        }
      }
- 
+
      /// Queue an eager `MTLTexture` create on the current frame.
 @@ -2644,6 +2659,8 @@ impl Direct3DDevice9 {
              encoder: info.encoder,
@@ -1143,7 +1143,7 @@ index 77dd655..27a6bab 100644
 --- a/windows/d3d9/src/device/frame_dump.rs
 +++ b/windows/d3d9/src/device/frame_dump.rs
 @@ -20,9 +20,9 @@ use core::ffi::c_void;
- 
+
  use log::info;
  use mtld3d_types::{
 -    D3DRS_ALPHABLENDENABLE, D3DRS_ALPHAFUNC, D3DRS_ALPHAREF, D3DRS_ALPHATESTENABLE, D3DRS_BLENDOP,
@@ -1286,7 +1286,7 @@ index 4441efb..0668514 100644
 -        self.lib_cache.insert(disk_key, handles);
          Some(handles)
      }
- 
+
 @@ -5359,15 +5361,16 @@ impl FrameEncoder {
              let tag = shader_source_tag_ps(source, variant);
              trace!(target: MSL_TRACE_TARGET, "── PS MSL {tag} ──\n{msl}\n── /PS MSL {tag} ──");
@@ -1308,7 +1308,7 @@ index 4441efb..0668514 100644
 -        self.lib_cache.insert(disk_key, handles);
          Some(handles)
      }
- 
+
 @@ -8479,7 +8482,7 @@ pub struct EncoderThread {
  /// causing the encoder to compile a shader from scratch that the
  /// prewarm is concurrently compiling from disk.
@@ -1317,7 +1317,7 @@ index 4441efb..0668514 100644
 +    entries: CompiledShaders<StageLibHandles>,
      writes_disabled: bool,
  }
- 
+
 @@ -8492,9 +8495,9 @@ pub struct PrewarmSender(mpsc::SyncSender<PrewarmPayload>);
  impl PrewarmSender {
      /// Normal completion.
@@ -1346,7 +1346,7 @@ index 4441efb..0668514 100644
 -        enc.ingest_warm_cache(Vec::new(), false);
 +        enc.ingest_warm_cache(CompiledShaders::default(), false);
      }
- 
+
      loop {
 @@ -9466,6 +9469,9 @@ fn trailing_blit_descriptor(trailing_blits: &[BlitCommand]) -> PassDescriptor {
  /// Rule G so the cull picks up the strip.
@@ -1358,6 +1358,83 @@ index 4441efb..0668514 100644
      enc.pass_state.finalize_load_actions();
      enc.pass_state.finalize_store_actions(frame_continues);
      enc.pass_state.strip_dead_color_in_clear_only_passes();
+diff --git a/windows/d3d9/src/execute_policy.rs b/windows/d3d9/src/execute_policy.rs
+new file mode 100644
+index 0000000..611461c
+--- /dev/null
++++ b/windows/d3d9/src/execute_policy.rs
+@@ -0,0 +1,71 @@
++//! Keep ordinary 32-bit data pages non-executable under Wine.
++//!
++//! Loading a legacy DLL without `NX_COMPAT` makes Wine enable execute on every page.
++//! Rosetta then routes writes to fresh renderer buffers through its exception server.
++//! FFXI's Chainspell effect reproduced five roughly 1.26-second frames on every use;
++//! restoring DEP removed those stalls in a matched local diagnostic. Explicitly
++//! executable code pages are unaffected. This mirrors the fork's DXVK correction.
++
++#[cfg(target_pointer_width = "32")]
++pub fn enforce() {
++    use core::ffi::c_void;
++    use std::sync::Once;
++
++    #[link(name = "ntdll")]
++    unsafe extern "system" {
++        fn NtQueryInformationProcess(
++            process: *mut c_void,
++            class: u32,
++            data: *mut u32,
++            size: u32,
++            returned: *mut u32,
++        ) -> i32;
++        fn NtSetInformationProcess(
++            process: *mut c_void,
++            class: u32,
++            data: *const u32,
++            size: u32,
++        ) -> i32;
++    }
++
++    static ONCE: Once = Once::new();
++    ONCE.call_once(|| {
++        if std::env::var_os("MTLD3D_ENFORCE_NX").as_deref() == Some(std::ffi::OsStr::new("0")) {
++            return;
++        }
++        let process = usize::MAX as *mut c_void;
++        let mut before = 0;
++        // SAFETY: current-process pseudo-handle, ProcessExecuteFlags, and a writable ULONG.
++        let queried = unsafe {
++            NtQueryInformationProcess(process, 0x22, &raw mut before, 4, core::ptr::null_mut())
++        };
++        if queried != 0 {
++            log::warn!(target: crate::LOG_TARGET, "NX policy query failed: {queried:#x}");
++            return;
++        }
++        // MEM_EXECUTE_OPTION_DISABLE | MEM_EXECUTE_OPTION_PERMANENT. The permanent bit
++        // keeps later legacy DLL loads from reverting the policy during gameplay.
++        let flags = 0x9;
++        if before & flags == flags {
++            log::info!(target: crate::LOG_TARGET, "NX already enforced: {before:#x}");
++            return;
++        }
++        // SAFETY: same current process and information class, with a readable ULONG.
++        let status = unsafe { NtSetInformationProcess(process, 0x22, &raw const flags, 4) };
++        let mut after = before;
++        // SAFETY: current-process policy query into a writable ULONG.
++        let verified = unsafe {
++            NtQueryInformationProcess(process, 0x22, &raw mut after, 4, core::ptr::null_mut())
++        };
++        if status == 0 && verified == 0 && after & flags == flags {
++            log::info!(target: crate::LOG_TARGET, "NX enforced: {before:#x} -> {after:#x}");
++        } else {
++            log::warn!(target: crate::LOG_TARGET,
++                "NX enforcement unconfirmed: {before:#x} -> {after:#x}, set={status:#x}, query={verified:#x}");
++        }
++    });
++}
++
++// 64-bit Windows processes already enforce DEP and cannot change this policy.
++#[cfg(target_pointer_width = "64")]
++pub const fn enforce() {}
 diff --git a/windows/d3d9/src/index_buffer.rs b/windows/d3d9/src/index_buffer.rs
 index 4cb867a..1e12fc6 100644
 --- a/windows/d3d9/src/index_buffer.rs
@@ -1411,13 +1488,33 @@ index 4cb867a..1e12fc6 100644
 +    out.write(ptr.cast::<c_void>());
      D3D_OK
  }
- 
+
+diff --git a/windows/d3d9/src/lib.rs b/windows/d3d9/src/lib.rs
+index e716393..a9794bc 100644
+--- a/windows/d3d9/src/lib.rs
++++ b/windows/d3d9/src/lib.rs
+@@ -11,6 +11,7 @@ mod device;
+ mod direct3d9;
+ mod draw;
+ mod encoder;
++mod execute_policy;
+ mod fullscreen;
+ mod index_buffer;
+ mod log_sink;
+@@ -152,6 +153,7 @@ pub extern "system" fn direct3d_create9(_sdk_version: u32) -> *mut c_void {
+     // The first entry point outside `DllMain`: the logging thread can start
+     // here (DllMain runs under the loader lock and must not spawn threads).
+     log_sink::start();
++    execute_policy::enforce();
+     Box::into_raw(Box::new(Direct3D9::new())).cast::<c_void>()
+ }
+
 diff --git a/windows/d3d9/src/shader_prewarm.rs b/windows/d3d9/src/shader_prewarm.rs
 index 8729c1a..64ac1d1 100644
 --- a/windows/d3d9/src/shader_prewarm.rs
 +++ b/windows/d3d9/src/shader_prewarm.rs
 @@ -21,7 +21,7 @@ use std::{
- 
+
  use log::info;
  use mtld3d_core::{
 -    shader_cache::{self, CacheEntry, CachedKind, SHADER_CACHE_SCHEMA_VERSION},
@@ -1433,13 +1530,13 @@ index 8729c1a..64ac1d1 100644
 +        sender.send(CompiledShaders::default());
          return;
      }
- 
+
      let Some(path) = shader_cache_path() else {
 -        sender.send(Vec::new());
 +        sender.send(CompiledShaders::default());
          return;
      };
- 
+
 @@ -109,7 +109,7 @@ fn run(device_handle: MetalHandle<MTLDeviceKind>, sender: PrewarmSender, stop: &
          Ok(b) => b,
          Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
@@ -1470,12 +1567,12 @@ index 8729c1a..64ac1d1 100644
 @@ -178,7 +178,7 @@ fn run(device_handle: MetalHandle<MTLDeviceKind>, sender: PrewarmSender, stop: &
          rewrite_as_bundle(&path, &deduped);
      }
- 
+
 -    let mut warm: Vec<(u64, StageLibHandles)> = Vec::with_capacity(deduped.len());
 +    let mut warm = CompiledShaders::<StageLibHandles>::default();
      let mut counts = [0u32; 4];
      let mut duration_ns = [0u64; 4];
- 
+
 @@ -189,20 +189,26 @@ fn run(device_handle: MetalHandle<MTLDeviceKind>, sender: PrewarmSender, stop: &
          let stage = stage_for_kind(entry.kind);
          let entry_name = entry.kind.entry_name(entry.key);
@@ -1497,7 +1594,7 @@ index 8729c1a..64ac1d1 100644
          duration_ns[idx] += u64::try_from(elapsed.as_nanos()).unwrap_or(u64::MAX);
 -        warm.push((entry.key, handles));
      }
- 
+
      let total: u32 = counts.iter().sum();
      let cached = u32::try_from(warm.len()).unwrap_or(u32::MAX);
 +    if warm.reused() > 0 {
@@ -1593,7 +1690,7 @@ index a7b22d9..c3d6ca8 100644
 +    out.write(ptr.cast::<c_void>());
      D3D_OK
  }
- 
+
 diff --git a/windows/tests/COVERAGE.md b/windows/tests/COVERAGE.md
 index 54ec575..63b6dbc 100644
 --- a/windows/tests/COVERAGE.md
@@ -1622,7 +1719,7 @@ index 89bac19..6928d81 100644
 +++ b/windows/tests/src/resource.rs
 @@ -975,6 +975,42 @@ pub struct VertexBuffer<'h> {
  }
- 
+
  impl VertexBuffer<'_> {
 +    /// Probe `Lock` with an output slot two bytes past a pointer-aligned address.
 +    ///
@@ -1665,7 +1762,7 @@ index 89bac19..6928d81 100644
              ptr,
 @@ -1152,6 +1188,42 @@ pub struct IndexBuffer<'h> {
  }
- 
+
  impl IndexBuffer<'_> {
 +    /// Probe `Lock` with an output slot two bytes past a pointer-aligned address.
 +    ///
@@ -1713,7 +1810,7 @@ index a0791d9..52de382 100644
 @@ -51,6 +51,25 @@ fn arm_diffuse(h: &Harness) {
      assert_eq!(h.set_fvf(FVF), 0, "SetFVF");
  }
- 
+
 +#[test]
 +fn vertex_buffer_lock_accepts_unaligned_output() {
 +    let h = Harness::new();
@@ -1743,7 +1840,7 @@ index 405966b..89e0d82 100644
 @@ -226,6 +226,61 @@ fn render_to_texture_then_sample() {
      assert_eq!(h.clear_texture(0), 0, "unbind RT texture");
  }
- 
+
 +#[test]
 +fn alternating_independent_targets_preserve_draw_order_and_depth() {
 +    let h = Harness::new();
@@ -1805,7 +1902,7 @@ index 405966b..89e0d82 100644
 @@ -3727,6 +3782,48 @@ fn depth_survives_a_mid_frame_readback_flush() {
      );
  }
- 
+
 +#[test]
 +fn early_submission_preserves_depth_and_changing_draw_snapshots() {
 +    let merged = format!(
@@ -1856,7 +1953,7 @@ index 3455b4a..94bd415 100644
 --- a/windows/tests/tests/transforms_ff.rs
 +++ b/windows/tests/tests/transforms_ff.rs
 @@ -2,12 +2,16 @@
- 
+
  use mtld3d_tests::{Harness, LitVertex, PosVertex, SpecularVertex, Vertex};
  use mtld3d_types::{
 -    D3DCMP_GREATER, D3DCOLORVALUE, D3DFVF_DIFFUSE, D3DFVF_NORMAL, D3DFVF_SPECULAR, D3DFVF_XYZ,
@@ -1876,12 +1973,12 @@ index 3455b4a..94bd415 100644
 +    D3DTS_PROJECTION, D3DTS_TEXTURE0, D3DTS_VIEW, D3DTS_WORLD, D3DTSS_COLORARG1, D3DVECTOR,
 +    D3DVERTEXELEMENT9,
  };
- 
+
  #[rustfmt::skip]
 @@ -20,6 +24,171 @@ const IDENTITY: [f32; 16] = [
- 
+
  const BLUE: u32 = 0xFF00_00FF;
- 
+
 +#[test]
 +fn shader_aliases_preserve_active_texture_arguments_across_devices() {
 +    use mtld3d_types::{

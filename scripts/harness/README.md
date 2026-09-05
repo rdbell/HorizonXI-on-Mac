@@ -164,6 +164,11 @@ applied once. Check the renderer problems and screenshots as well as the phase v
 The entire game configuration tree is backed up and restored, including addon settings
 created during a test. Private backups and boot scripts must stay outside Git.
 
+`--env PERFSCENE_ENFORCE_NX=1` performs the temporary execution-policy experiment on an
+older renderer and records the before/after flags. Build 24 applies that correction in
+mtld3d itself. Use `--env MTLD3D_ENFORCE_NX=0` with the rebuilt renderer for a local control;
+do not enable both switches when comparing the renderer correction.
+
 For profiling, use `--level standard` with a launcher containing the guest-range correction.
 The old full-address-space default could follow AppKit's window event thread while missing
 the game thread. Discovery now excludes 64-bit addresses; `X87_GUEST_RANGE` can narrow it
