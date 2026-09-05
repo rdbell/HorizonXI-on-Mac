@@ -14,6 +14,17 @@ SPEC.loader.exec_module(renderer)
 
 
 class RendererRunTests(unittest.TestCase):
+    def test_background_override_preserves_other_settings_and_sections(self):
+        original = ("[boot]\r\ncommand = private fixture\r\n0003 = 12\r\n"
+                    "[ffxi.registry]\r\n0003 = 4096 ; width\r\n0004 = 4096\r\n"
+                    "0018 = 2\r\n;0004 = 1\r\n[next]\r\n0004 = 7\r\n")
+        changed = renderer.set_background(original, 2048)
+        self.assertEqual(renderer.graphics_values(changed), {"0003": 2048, "0004": 2048, "0018": 2})
+        self.assertEqual(changed, original.replace("4096", "2048"))
+        for missing in ("[boot]\n0003=4096\n0004=4096\n", "[ffxi.registry]\n0003=4096\n"):
+            with self.assertRaisesRegex(RuntimeError, "missing background"):
+                renderer.set_background(missing, 2048)
+
     def test_frozen_window_cannot_satisfy_scene_detection(self):
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "fps.csv"

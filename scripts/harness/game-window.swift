@@ -21,7 +21,7 @@ struct GameWindow {
 }
 
 func usage() -> Never {
-    FileHandle.standardError.write("usage: game-window find|activate|return|f12 PID\n".data(using: .utf8)!)
+    FileHandle.standardError.write("usage: game-window find|activate|return|f12|home PID\n".data(using: .utf8)!)
     exit(64)
 }
 
@@ -95,12 +95,12 @@ case "activate":
         exit(1)
     }
     print("game pid \(pid) is frontmost")
-case "return", "f12":
+case "return", "f12", "home":
     guard activate(pid: pid, window: window) else {
         FileHandle.standardError.write("refusing key: game pid \(pid) is not frontmost, frontmost pid is \(frontmostPid())\n".data(using: .utf8)!)
         exit(1)
     }
-    let key: CGKeyCode = command == "return" ? 36 : 111
+    let key: CGKeyCode = command == "return" ? 36 : command == "home" ? 115 : 111
     guard let down = CGEvent(keyboardEventSource: nil, virtualKey: key, keyDown: true),
           let up = CGEvent(keyboardEventSource: nil, virtualKey: key, keyDown: false) else { exit(1) }
     down.post(tap: .cghidEventTap)

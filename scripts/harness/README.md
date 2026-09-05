@@ -67,6 +67,16 @@ for a frozen copy of the full boot configuration. The user's default script is p
 The launcher's existing LuaJIT crash guard still applies; the counter records `jit_enabled`
 so a JIT assumption cannot silently change the comparison.
 
+`--background 2048` temporarily changes both background dimensions in the local profile,
+keeping the window, UI and other quality settings. The runner records numeric graphics keys
+before and after launch, and restores the original profile afterwards. Omit it to use the
+saved dimensions. Resolution probes should be labeled separately from renderer improvements.
+`--menu-sample 0` skips menu measurement waits while retaining OCR, screenshots and DLL checks.
+
+World scenarios use server-supplied position and rotation, followed by Home to reset the
+camera. Client-only heading writes can be overwritten by the next update. Review the actual
+coordinates, heading and screenshots when adding a scene.
+
 The runner snapshots renderer files, boot scripts, registry hives, local account storage,
 and the selected account preferences. Its `private/` directory has mode 0700 and must never
 be published. On normal completion it restores the saved file states and preferences and

@@ -49,8 +49,11 @@ def intervals(record: dict, markers: list[dict]) -> list[dict]:
         if event["label"] == "menu sample start":
             starts[event["scene"]] = event["epoch"]
         elif event["label"] == "menu sample end" and event["scene"] in starts:
+            start = starts.pop(event["scene"])
+            if event["epoch"] - start < 1:
+                continue
             result.append({"name": event["scene"], "zone": 0,
-                           "start": starts.pop(event["scene"]), "end": event["epoch"]})
+                           "start": start, "end": event["epoch"]})
     for index, marker in enumerate(markers[:-1]):
         if marker["label"] in SETTLED_ZONES:
             result.append({"name": marker["label"], "zone": SETTLED_ZONES[marker["label"]],
@@ -65,6 +68,7 @@ def report(output: Path) -> dict:
     result = {"run": output.name, "session": session.name, "problems": [], "scenes": [],
               "boot_sha256": record.get("boot_sha256"),
               "renderer_sha256": record.get("renderer_verified"),
+              "graphics": record.get("graphics_at_launch"),
               "rendering_review_required": True}
     for name, key, value in [("result.json", "exit_code", 0),
                              ("restoration.json", "docker_unchanged", True),
@@ -76,6 +80,8 @@ def report(output: Path) -> dict:
             result["problems"].append(f"{name}: missing or invalid")
     if not record.get("renderer_verified") or record.get("leftover_processes") != []:
         result["problems"].append("renderer identity or process cleanup is unconfirmed")
+    if record.get("graphics_requested") != record.get("graphics_at_launch"):
+        result["problems"].append("graphics settings changed between preparation and launch")
     with (session / "common-fps.csv").open() as handle:
         rows = [{key: float(value) for key, value in row.items()} for row in csv.DictReader(handle)]
     if any(not math.isfinite(v) for row in rows for v in row.values()):

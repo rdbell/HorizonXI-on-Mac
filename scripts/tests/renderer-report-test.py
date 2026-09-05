@@ -15,6 +15,11 @@ def window(end, seconds=1, fps=120, zone=235):
 
 
 class RendererReportTests(unittest.TestCase):
+    def test_disabled_menu_samples_do_not_create_invalid_intervals(self):
+        events = [{"label": "menu sample start", "scene": "rules", "epoch": 1},
+                  {"label": "menu sample end", "scene": "rules", "epoch": 1.001}]
+        self.assertEqual(report.intervals({"events": events}, []), [])
+
     def test_duration_weights_rate_and_excludes_boundary_and_other_zone(self):
         rows = [window(i) for i in range(1, 11)] + [window(12, 2, 60),
                 window(12, 1, 9999, 0), window(13, 2, 9999)]

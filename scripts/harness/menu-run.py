@@ -4,8 +4,8 @@
 The run arms `capture-performance.py`, launches the installed app the same way the Play button
 does, waits for the rules screen by watching the DXVK frame log, takes a screenshot of the game
 window, sends one Return, waits for the main menu, and stops. With `--characters` it sends one
-more Return to open the character list, which is the furthest an unattended run may go. The
-number of Returns is capped per mode, so a run can never log a character in.
+more Return to open the character list. Only an explicit --scenario on a local test world
+allows login. The number of Returns is capped per mode.
 
 Cleanup is two-phase. The game process is terminated first and the run waits for its x87sidecar
 to observe the exit and append the block-profile counter section. Only then are the remaining
@@ -372,6 +372,12 @@ class MenuRun:
                 log(f"marker: {marker.get('label')}" + (
                     f" zone={marker['zone']}" if "zone" in marker else ""))
                 marker_label = marker.get("label", "")
+                if marker_label == "camera reset requested":
+                    reset = run([str(self.window_tool), "home", str(self.game_pid)], timeout=10)
+                    if reset.returncode:
+                        self.event("camera reset failed")
+                        return False
+                    self.event("camera reset", epoch=time.time())
                 if marker_label.endswith("settled") or marker_label == "city after crowd":
                     self.screenshot(marker_label.replace(" ", "-"))
                 if marker.get("label") == label:
@@ -716,8 +722,8 @@ def main() -> int:
     parser.add_argument("--no-return", action="store_true",
                         help="stop at the rules screen without sending any key")
     parser.add_argument("--characters", action="store_true",
-                        help="after the main menu, send one more Return to open the character "
-                             "list and measure that transition too; never logs in")
+                        help="after the main menu, open the character list; login also requires "
+                             "an explicit local --scenario")
     parser.add_argument("--scenario", default="",
                         help="local test world only: log the test character in and run this "
                              "perfscene scenario (city, field); implies --characters")

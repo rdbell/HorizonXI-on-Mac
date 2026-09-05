@@ -78,3 +78,26 @@ camera must be fixed before comparing renderers. Neither scene established stabl
 
 The patch remains experimental. The identical visual-conformance failures establish that
 this fix did not introduce those failures; they do not establish complete D3D9 conformance.
+
+## First comparison with fixed camera positions
+
+Server-authoritative `setPos` rotation followed by the Home camera reset now preserves the
+same headings in both renderers. Screenshots match the Markets bridge view and the Mines
+entrance tunnel. The tunnel is a light scene, not a substitute for the open part of town.
+
+These short samples use the same minimal addon boot script, crosire converter, 1024 x 742
+window and UI, and `/fps 0`. Each contains 17 complete one-second frame-counter windows
+after loading settles. Other saved quality settings are unchanged; this is not a max-quality
+profile. All runs verified the loaded renderer hashes and restored the saved installation.
+
+| Renderer | Background | Markets FPS | Mines tunnel FPS | Mines minimum one-second FPS |
+| --- | --- | ---: | ---: | ---: |
+| DXVK 1.10.3, existing patched build | 4096 x 4096 | 32.330 | 66.025 | 58.652 |
+| mtld3d, material fix | 4096 x 4096 | 40.003 | 126.236 | 103.727 |
+| mtld3d, material fix | 2048 x 2048 | 43.484 | 141.479 | 105.750 |
+
+The matched 4096 runs favor mtld3d by 23.7 percent in Markets and 91.2 percent in the tunnel.
+These are single runs and need repeats. The 2048 result is a resolution-sensitivity probe;
+its modest Markets gain suggests CPU work remains a better lead than reducing pixel count.
+No sample establishes stable 120 FPS. Even the faster 2048 tunnel run spent 5.87 percent of
+measured time below 120 FPS.

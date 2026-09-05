@@ -56,6 +56,35 @@ def counter_is_advancing(path: Path, now: float) -> bool:
         return False
 
 
+def graphics_values(text: str) -> dict[str, int]:
+    """Read numeric graphics keys without retaining the boot command or credentials."""
+    values = {}
+    section = False
+    for line in text.splitlines():
+        clean = line.strip()
+        if clean.startswith("["):
+            section = clean.lower() == "[ffxi.registry]"
+        match = re.fullmatch(r"(\d{4})\s*=\s*(\d+)\s*(?:;.*)?", clean) if section else None
+        if match:
+            values[match[1]] = int(match[2])
+    return values
+
+
+def set_background(text: str, size: int) -> str:
+    """Change both background dimensions in the existing graphics section."""
+    if not {"0003", "0004"} <= graphics_values(text).keys():
+        raise RuntimeError("Local boot profile is missing background dimensions")
+    lines = []
+    section = False
+    for line in text.splitlines(keepends=True):
+        if line.strip().startswith("["):
+            section = line.strip().lower() == "[ffxi.registry]"
+        if section:
+            line = re.sub(r"^(\s*000[34]\s*=\s*)\d+", lambda m: m[1] + str(size), line)
+        lines.append(line)
+    return "".join(lines)
+
+
 def docker_state() -> list[dict]:
     ids = checked(["docker", "ps", "--filter", "name=lsb-local-", "-q"]).split()
     if len(ids) != 5:
@@ -189,6 +218,8 @@ def main() -> int:
     parser.add_argument("--boot-file", type=Path, help="frozen full boot script; otherwise minimal")
     parser.add_argument("--load-plugin", action="append", default=[])
     parser.add_argument("--load-addon", action="append", default=[])
+    parser.add_argument("--background", type=int, choices=(512, 1024, 2048, 4096),
+                        help="temporary square background dimensions; keeps other quality settings")
     parser.add_argument("--menu-sample", type=float, default=15)
     parser.add_argument("--dump", action="store_true", help="F12 dump at character selection")
     options, forwarded = parser.parse_known_args()
@@ -221,6 +252,10 @@ def main() -> int:
             if self.args.world != WORLD or self.args.game_dir != menu.DEFAULT_GAME or self.args.profile != "lsb-docker.ini":
                 raise RuntimeError("Renderer runs are restricted to the installed local Hxitest profile")
             pin_local_account(self.game_dir)
+            profile = self.game_dir / "config/boot/lsb-docker.ini"
+            if options.background:
+                profile.write_text(set_background(profile.read_text(), options.background))
+            self.record["graphics_requested"] = graphics_values(profile.read_text())
             if not super().preflight():
                 return False
             if not self.args.scenario and not self.install_addon():
@@ -252,6 +287,8 @@ def main() -> int:
 
         def launch(self) -> bool:
             ok = super().launch()
+            self.record["graphics_at_launch"] = graphics_values(
+                (self.game_dir / "config/boot/lsb-docker.ini").read_text())
             (options.output / "active.json").write_text(json.dumps({"session": str(self.session_dir), "pid": self.game_pid}) + "\n")
             return ok
 
@@ -284,16 +321,17 @@ def main() -> int:
             super().screenshot(label)
             if label not in ("rules", "main-menu", "characters"):
                 return
-            time.sleep(5)
-            self.event("menu sample start", scene=label, epoch=time.time())
-            until = time.monotonic() + options.menu_sample
-            while time.monotonic() < until and menu.process_exists(self.game_pid):
-                menu.read_available(self.recorder, self.recorder_lines)
-                time.sleep(0.5)
-            self.event("menu sample end", scene=label, epoch=time.time())
+            if options.menu_sample > 0:
+                time.sleep(5)
+                self.event("menu sample start", scene=label, epoch=time.time())
+                until = time.monotonic() + options.menu_sample
+                while time.monotonic() < until and menu.process_exists(self.game_pid):
+                    menu.read_available(self.recorder, self.recorder_lines)
+                    time.sleep(0.5)
+                self.event("menu sample end", scene=label, epoch=time.time())
+                super().screenshot("measured-" + label)
             if not counter_is_advancing(self.session_dir / "common-fps.csv", time.time()):
                 raise RuntimeError("Frame counter stopped during the menu sample")
-            super().screenshot("measured-" + label)
             if label == "characters":
                 loaded = checked(["lsof", "-p", str(self.game_pid), "-Fn"])
                 paths = sorted({line[1:] for line in loaded.splitlines() if line.startswith("n")

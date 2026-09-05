@@ -46,16 +46,12 @@ local started = clock_s();
 local epoch_started = tonumber(filetime[0]) / 10000000 - 11644473600;
 local function epoch_s(now) return epoch_started + now - started; end
 
--- Each step is { delay_seconds, command_or_function, label }. Commands starting with '!' are
--- LandSandBoat GM commands sent as chat; '/' commands go to Ashita. Zone ids: North Gustaberg
--- 106, Bastok Markets 235, Batallia Downs 105, Rolanberry Fields 110. Weather ids follow
--- xi.weather (6 rain, 7 squall, 12 snow, 13 blizzards, 15 thunderstorms).
 -- Each step is { delay_seconds, command, label }. Commands starting with '!' are LandSandBoat
--- GM commands sent as chat; '/' commands go to Ashita. 'pin H' sets the player's heading in
--- radians through Ashita so the camera looks the same way every run. Zone ids: North Gustaberg
--- 106, Bastok Markets 235, Bastok Mines 234. Weather ids follow xi.weather (6 rain, 12 snow,
--- 15 thunderstorms). Positions are zone-line arrival points from LandSandBoat's zone.yaml, so
--- the vantage is fixed rather than wherever !zone happened to drop the character.
+-- GM commands sent as chat; '/' commands go to Ashita. setPos supplies position and byte
+-- rotation through the server. 'home' asks the desktop driver to reset the camera after the
+-- heading arrives. Zone ids: North Gustaberg 106, Bastok Markets 235, Bastok Mines 234.
+-- Weather ids follow xi.weather (6 rain, 12 snow, 15 thunderstorms). Positions are fixed
+-- zone-line arrival points from LandSandBoat's zone.yaml.
 local scenarios = {
     -- The settled-city baseline: two fixed vantages in Bastok at uncapped FPS.
     city = {
@@ -64,11 +60,11 @@ local scenarios = {
         { 2,  '/fps 0',                          'fps uncapped' },
         { 2,  '/drawdistance setworld 20',       'draw distance max' },
         { 2,  '/drawdistance setmob 20',         'entity draw max' },
-        { 3,  '!pos -201.904 1.928 -194.828 235',  'zone bastok markets' },
-        { 6,  'pin 4.7124',                      'heading pinned' },
+        { 3,  '!exec player:setPos(-201.904,1.928,-194.828,192,235)', 'zone bastok markets' },
+        { 6,  'home',                            'camera reset requested' },
         { 20, 'settle',                          'city settled' },
-        { 20, '!pos -104.018 9.359 81.411 234','zone bastok mines' },
-        { 6,  'pin 1.5708',                      'heading pinned' },
+        { 20, '!exec player:setPos(-104.018,9.359,81.411,64,234)', 'zone bastok mines' },
+        { 6,  'home',                            'camera reset requested' },
         { 20, 'settle',                          'mines settled' },
         { 20, 'done',                            'done' },
     },
@@ -79,15 +75,15 @@ local scenarios = {
         { 2,  '/fps 0',                          'fps uncapped' },
         { 2,  '/drawdistance setworld 20',       'draw distance max' },
         { 2,  '/drawdistance setmob 20',         'entity draw max' },
-        { 3,  '!pos 0.840 -5.027 76.838 106',    'zone north gustaberg' },
-        { 6,  'pin 1.5708',                      'heading pinned' },
+        { 3,  '!exec player:setPos(0.840,-5.027,76.838,64,106)', 'zone north gustaberg' },
+        { 6,  'home',                            'camera reset requested' },
         { 20, 'settle',                          'field settled' },
         { 3,  '!setweather 15',                  'thunderstorms' },
         { 15, 'settle',                          'weather settled' },
         { 3,  'spawn 40',                        'spawn 40 mobs' },
         { 30, 'settle',                          'crowd settled' },
-        { 3,  '!pos -201.904 1.928 -194.828 235',  'zone bastok markets' },
-        { 6,  'pin 4.7124',                      'heading pinned' },
+        { 3,  '!exec player:setPos(-201.904,1.928,-194.828,192,235)', 'zone bastok markets' },
+        { 6,  'home',                            'camera reset requested' },
         { 20, 'settle',                          'city after crowd' },
         { 10, 'done',                            'done' },
     },
@@ -161,15 +157,9 @@ local function step()
     elseif (cmd:sub(1, 6) == 'spawn ') then
         spawn_crowd(tonumber(cmd:sub(7)) or 20);
         mark(label);
-    elseif (cmd:sub(1, 4) == 'pin ') then
-        -- Face a fixed direction so the camera frames the same geometry every run.
-        local heading = tonumber(cmd:sub(5)) or 0;
-        local entity = AshitaCore:GetMemoryManager():GetEntity();
-        local index = AshitaCore:GetMemoryManager():GetParty():GetMemberTargetIndex(0);
-        if (index ~= nil and index > 0) then
-            entity:SetLocalPositionYaw(index, heading);
-        end
-        mark(label, string.format(', "heading": %.4f', heading));
+    elseif (cmd == 'home') then
+        -- The desktop driver sends Home after the server-supplied heading arrives.
+        mark(label);
     else
         send(cmd);
         mark(label, string.format(', "command": "%s"', (cmd:gsub('"', "'"))));
