@@ -1,33 +1,53 @@
-# Recipe for the disposable `development` integration branch.
+# Recipe for the `development` integration branch -- our fork's mainline.
 #
 # One branch name per line, merged top-to-bottom onto a fresh copy of master by
 # scripts/build-development.sh. Blank lines and lines starting with `#` are ignored.
 #
 # This file is the manifest of everything our fork adds beyond upstream master: it is
-# the single source of truth for "what is ours." `development` is rebuilt from it and is
-# never committed to by hand. See docs/FORK-STRATEGY.md.
+# the single source of truth for "what is ours." `development` is rebuilt from it (never
+# committed to by hand) so master can stay a clean mirror of upstream. See
+# docs/FORK-STRATEGY.md.
+#
+# STATUS: Scenario B is in effect -- `development` is our permanent mainline. We no longer
+# gate the build on upstream review; new work becomes a feature branch (rebased on master)
+# and a line here. master stays a clean upstream mirror so we can still upstream cleanly.
 #
 # Maintenance:
-#   * Scenario A (a PR lands upstream): re-sync master, then delete that branch's line
-#     here -- its changes now arrive through master.
-#   * Scenario B (permanent fork): this list becomes the integration manifest for
-#     fork-main. Add a line to pull a branch into the build; keep them rebased on master.
+#   * A branch lands upstream: re-sync master (ff-only), then delete that line here -- its
+#     changes now arrive through master.
+#   * New fork work: add its branch name and rebuild.
 #
-# Left out for now (add a line when you want them in the build):
-#   competing cursor/mouse -> pick ONE of: cursor-visible-as-dylib, winecursor-imgui-mouse,
-#                             wine-mouse-wndproc  (they conflict with each other)
-#   addon suites          -> vanagear, vanaguide (vanaguide arrives via winecursor-imgui-mouse)
-#   others               -> addons-sheet-per-world, ashita-signature-repair,
-#                            release-cadence-check, docs-findings-cleanup
+# Deliberately parked (NOT in the mainline):
+#   cursor-visible-as-dylib, wine-mouse-wndproc -- the two cursor/mouse approaches we did
+#     NOT pick (winecursor-imgui-mouse won; all three conflict).
+#   addons-sheet-per-world -- rode in only via cursor-visible-as-dylib, which is parked.
 
 # Our fork's own control plane (this file, the build script, the strategy doc).
 fork-tooling
 
 # Runtime stack tip: contains wine-runtime-installer -> loading-stall-nx-fix ->
-# performance-harness -> the launch/shutdown beach-ball fix, in one lane.
+# performance-harness -> the launch/shutdown beach-ball fix + era-label fix, in one lane.
 launch-shutdown-responsiveness
 
-# Install / download fixes, each an open PR upstream.
+# Install / download fixes.
 fix-horizonxi-download-url
 fix-aria2-metadata-stalls
 fix-horizon-install-readiness
+
+# Input/cursor: clickable addon windows + restored mouse pointer; also brings the
+# Vanaguide guided-walkthrough addon suite. (Chosen over cursor-visible-as-dylib and
+# wine-mouse-wndproc; needs a live in-game A/B before we fully trust the input path.)
+winecursor-imgui-mouse
+
+# Addon input: repair the FFXiMain signature so addons can send input again.
+# Same input domain as winecursor -- merged after it so collisions reconcile there.
+ashita-signature-repair
+
+# Addon suite: macro-driven gear swapper.
+vanagear
+
+# Tooling: one-command release-status check.
+release-cadence-check
+
+# Docs: NOWAIT-vs-FENCE A/B record + upstream-filing note corrections.
+docs-findings-cleanup

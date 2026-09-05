@@ -11,13 +11,18 @@ We maintain a fork (`rdbell/HorizonXI-on-Mac`, remote `origin`) of the canonical
 We do not yet know whether upstream will accept our PRs. This document sets up one
 foundation that serves **both** possible futures, and defers the choice between them.
 
+> **Status (2026-09-04): Scenario B is in effect.** We have stopped gating our build on
+> upstream review and adopted `development` as our permanent mainline. The recipe below is
+> now our integration manifest. `master` remains a clean mirror of upstream so we can keep
+> upstreaming individual branches cleanly. The mechanics did not change -- only the posture.
+
 ## The three branches
 
 | Branch | Role | Rule |
 |---|---|---|
 | `master` | Clean mirror of `upstream/master` | **Never** carries an original commit. Only ever fast-forwarded from upstream. |
 | feature branches | One change each, based on `master` | The unit we open PRs from. Kept rebased on master so they stay both PR-able and merge-able. |
-| `development` | Disposable build integration | Rebuilt by a script from `master` + a recipe. Never PR'd, never merged into master. Delete and rebuild at will. |
+| `development` | **Our mainline** (Scenario B, in effect) | Rebuilt by a script from `master` + a recipe, so it holds every fork change at once. Never PR'd, never merged into master; master stays a clean upstream mirror. Reproducible from the recipe, so a bad rebuild costs nothing. |
 
 Everything our fork adds beyond upstream is captured as a list of feature-branch names in
 [`scripts/development-branches.txt`](../scripts/development-branches.txt) -- the recipe.
@@ -62,8 +67,12 @@ from upstream shrinks toward zero as PRs land. Nothing special to undo.
 
 ### Scenario B -- upstream declines; we go independent (permanent fork)
 
-At a moment we choose, promote the integration line into our own mainline. `development`
-already is master + everything ours, so:
+**We took this path on 2026-09-04**, keeping the name `development` (rather than minting a
+separate `fork-main`). `development` already is master + everything ours, and the recipe is
+its manifest, so there was nothing to branch -- we simply adopted it as the mainline and
+folded in the remaining important work (the winecursor input bundle, ashita-signature-repair,
+vanagear, release-cadence-check, docs-findings-cleanup). New work lands as a feature branch
++ a recipe line, exactly as before:
 
 ```sh
 scripts/build-development.sh             # get a clean, current integration

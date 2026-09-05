@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# build-development.sh -- (re)build the disposable `development` integration branch.
+# build-development.sh -- (re)build the `development` mainline integration branch.
 #
-# `development` is not real history. It is a fresh copy of master with every branch in
-# development-branches.txt merged on top, so we can produce a build that contains all of
-# our fork's changes at once. It is never opened as a PR and never merged into master
-# (master stays a clean mirror of upstream). Delete and rebuild it whenever it drifts.
-# See docs/FORK-STRATEGY.md.
+# `development` is our fork's mainline (Scenario B), but it is not hand-edited history: it
+# is a fresh copy of master with every branch in development-branches.txt merged on top, so
+# it holds all of our fork's changes at once and stays fully reproducible from the recipe.
+# It is never opened as a PR and never merged into master (master stays a clean mirror of
+# upstream). Rebuild it whenever the recipe changes or master advances. See
+# docs/FORK-STRATEGY.md.
 #
 # Usage:
 #   scripts/build-development.sh [worktree-path]
