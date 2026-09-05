@@ -45,6 +45,9 @@ ffi.C.GetSystemTimeAsFileTime(filetime);
 local started = clock_s();
 local epoch_started = tonumber(filetime[0]) / 10000000 - 11644473600;
 local function epoch_s(now) return epoch_started + now - started; end
+local requested_distance = tonumber(os.getenv('PERFSCENE_DRAW_DISTANCE') or '20');
+local world_distance_command = '/drawdistance setworld ' .. tostring(requested_distance);
+local entity_distance_command = '/drawdistance setmob ' .. tostring(requested_distance);
 
 -- Each step is { delay_seconds, command, label }. Commands starting with '!' are LandSandBoat
 -- GM commands sent as chat; '/' commands go to Ashita. setPos supplies position and byte
@@ -58,8 +61,8 @@ local scenarios = {
         { 1,  '!addtime 0',                      'clock offset reset' },
         { 1,  '!perftime 12',                    'clock pinned to noon' },
         { 2,  '/fps 0',                          'fps uncapped' },
-        { 2,  '/drawdistance setworld 20',       'draw distance max' },
-        { 2,  '/drawdistance setmob 20',         'entity draw max' },
+        { 2,  world_distance_command,            'world draw distance set' },
+        { 2,  entity_distance_command,           'entity draw distance set' },
         { 3,  '!exec player:setPos(-201.904,1.928,-194.828,192,235)', 'zone bastok markets' },
         { 6,  'home',                            'camera reset requested' },
         { 20, 'settle',                          'city settled' },
@@ -73,8 +76,8 @@ local scenarios = {
         { 1,  '!addtime 0',                      'clock offset reset' },
         { 1,  '!perftime 12',                    'clock pinned to noon' },
         { 2,  '/fps 0',                          'fps uncapped' },
-        { 2,  '/drawdistance setworld 20',       'draw distance max' },
-        { 2,  '/drawdistance setmob 20',         'entity draw max' },
+        { 2,  world_distance_command,            'world draw distance set' },
+        { 2,  entity_distance_command,           'entity draw distance set' },
         { 3,  '!exec player:setPos(0.840,-5.027,76.838,64,106)', 'zone north gustaberg' },
         { 6,  'home',                            'camera reset requested' },
         { 20, 'settle',                          'field settled' },
@@ -115,6 +118,7 @@ local state = {
     file      = nil,
 };
 
+local draw_distance_code = nil;
 local function mark(label, extra)
     local mem = AshitaCore:GetMemoryManager();
     local zone = mem:GetParty():GetMemberZone(0);
@@ -125,6 +129,18 @@ local function mark(label, extra)
         position = string.format(', "x": %.3f, "y": %.3f, "z": %.3f, "yaw": %.4f',
             entity:GetLocalPositionX(index), entity:GetLocalPositionY(index),
             entity:GetLocalPositionZ(index), entity:GetLocalPositionYaw(index));
+        -- Reuse the loaded drawdistance addon's signature and read both effective values.
+        if not draw_distance_code then
+            draw_distance_code = ashita.memory.find(0, 0, '8BC1487408D80D', 0, 0);
+        end
+        if draw_distance_code and draw_distance_code ~= 0 then
+            local world = ashita.memory.read_uint32(draw_distance_code + 0x07);
+            local entities = ashita.memory.read_uint32(draw_distance_code + 0x0F);
+            if world ~= 0 and entities ~= 0 then
+                position = position .. string.format(', "world_distance": %.4f, "entity_distance": %.4f',
+                    ashita.memory.read_float(world), ashita.memory.read_float(entities));
+            end
+        end
     end
     local line = string.format('{"epoch": %.3f, "label": "%s", "zone": %d%s%s}',
         epoch_s(clock_s()), (label:gsub('"', "'")), zone, position, extra or '');

@@ -59,7 +59,9 @@ def intervals(record: dict, markers: list[dict]) -> list[dict]:
         if marker["label"] in SETTLED_ZONES:
             result.append({"name": marker["label"], "zone": SETTLED_ZONES[marker["label"]],
                            "start": marker["epoch"] + 2, "end": markers[index + 1]["epoch"],
-                           "position": {key: marker.get(key) for key in ("x", "y", "z", "yaw")}})
+                           "position": {key: marker.get(key) for key in ("x", "y", "z", "yaw")},
+                           "draw_distance": {key: marker.get(key) for key in
+                                             ("world_distance", "entity_distance")}})
     return result
 
 
@@ -71,6 +73,7 @@ def report(output: Path) -> dict:
               "renderer_sha256": record.get("renderer_verified"),
               "graphics": record.get("graphics_at_launch"),
               "renderer_config": record.get("renderer_config"),
+              "draw_distance_requested": record.get("draw_distance_requested"),
               "rendering_review_required": True}
     for name, key, value in [("result.json", "exit_code", 0),
                              ("restoration.json", "docker_unchanged", True),
@@ -84,7 +87,11 @@ def report(output: Path) -> dict:
         result["problems"].append("renderer identity or process cleanup is unconfirmed")
     if record.get("graphics_requested") != record.get("graphics_at_launch"):
         result["problems"].append("graphics settings changed between preparation and launch")
-    with (session / "common-fps.csv").open() as handle:
+    counters = session / "common-fps.csv"
+    if not counters.is_file():
+        result["problems"].append("common-fps.csv: no frame-counter data was captured")
+        return result
+    with counters.open() as handle:
         rows = [{key: float(value) for key, value in row.items()} for row in csv.DictReader(handle)]
     if any(not math.isfinite(v) for row in rows for v in row.values()):
         raise ValueError("frame counters contain non-finite values")
@@ -94,6 +101,11 @@ def report(output: Path) -> dict:
     markers = [json.loads(line) for line in markers_path.read_text().splitlines()] if markers_path.exists() else []
     for phase in intervals(record, markers):
         summary = summarize(rows, phase["start"], phase["end"], phase["zone"])
+        requested = record.get("draw_distance_requested")
+        if phase["zone"] and requested is not None:
+            if any(value is None or abs(value - requested) > 0.001
+                   for value in phase["draw_distance"].values()):
+                summary.update(valid=False, reason="effective draw distance differs from the request")
         result["scenes"].append({**phase, **summary})
     return result
 

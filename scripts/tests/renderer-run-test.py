@@ -49,6 +49,9 @@ class RendererRunTests(unittest.TestCase):
             (game / "d3d8.dll").symlink_to("original.dll")
             prefix = root / "prefix"
             prefix.mkdir()
+            system_dll = prefix / "drive_c/windows/syswow64/d3d9.dll"
+            system_dll.parent.mkdir(parents=True)
+            system_dll.write_bytes(b"original system renderer")
             output = root / "output"
             prefs = {"server.selected": "Example world", "account.remember": False}
             changes = []
@@ -73,12 +76,14 @@ class RendererRunTests(unittest.TestCase):
                 (game / "d3d8.dll").unlink()
                 (game / "d3d8.dll").write_text("candidate")
                 (game / "d3d9.dll").write_text("new file")
+                system_dll.write_bytes(b"candidate system renderer")
                 snapshot.restore()
             self.assertEqual(boot.read_text(), "private boot fixture\n")
             self.assertEqual(boot.stat().st_mode & 0o777, 0o640)
             self.assertEqual(original.read_text(), "/load Addons\n")
             self.assertEqual(str((game / "d3d8.dll").readlink()), "original.dll")
             self.assertFalse((game / "d3d9.dll").exists())
+            self.assertEqual(system_dll.read_bytes(), b"original system renderer")
             self.assertTrue(json.loads((output / "restoration.json").read_text())["docker_unchanged"])
             self.assertEqual(snapshot.private.stat().st_mode & 0o777, 0o700)
             self.assertTrue(any(row[-2:] == ["-bool", "false"] for row in changes))

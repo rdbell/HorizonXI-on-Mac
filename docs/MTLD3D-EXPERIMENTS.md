@@ -154,3 +154,33 @@ The longer `town` scenario now places Hxitest near Valeri in Mines at 39, 0, -49
 128. The earlier 0, 0, -18 placement put the camera inside geometry and is excluded. The
 replacement's screenshot shows a clear player and ground, with a large town structure ahead;
 it is a fixed vantage, not a representative average of the zone.
+
+## Draw distance and renderer restoration
+
+`renderer-run.py --draw-distance N` sets world and entity distance, then records the effective
+client values in each scene marker. Reports reject a scene when either value is absent or
+differs from the request. The default remains 20 for continuity with the stress comparisons
+above. The minimal boot starts with client defaults of 1.0; the user's normal script uses 10.
+Compare renderer changes at the same verified distance. Reducing it is a workload and visual
+quality change, not evidence of a faster renderer.
+
+The launcher also replaces `syswow64/d3d8.dll` and `syswow64/d3d9.dll`. Earlier benchmark
+snapshots omitted these paths; their 26-file restoration reports did not cover the two system
+DLLs. Both were recovered from verified pre-session backups. The runner now snapshots them,
+with a regression that overwrites and restores the system D3D9 DLL. It also covers the files
+used by the optional D3D11 experiment. The first run with this coverage restored all 43 file
+states and preferences, and verified unchanged Docker identities and start times.
+
+## dgVoodoo2 and DXMT loading experiment
+
+The runner accepts `--dxmt-bundle`, `--converter`, and `--dgvoodoo-config` for a bounded
+dgVoodoo2-to-D3D11-to-Metal trial. This path is experimental and has no game FPS result yet.
+The first attempt with official dgVoodoo2 2.87.4 and DXMT 0.80 stopped at a white game window
+and the 100-second rules-screen timeout. It never verified loaded renderer identities or
+captured frame counters. Reports now describe absent counters without crashing.
+
+Separate 32-bit and 64-bit D3D11 smoke tests successfully created a feature-level 11.0
+hardware device after installing DXMT into a task-owned Wine SDK and prefix. This establishes
+device creation on the machine, not compatibility with the game's launcher or bridge.
+The game trial uses the documented `dxgi.forceSDR=True` and
+`d3d11.preferredMaxFrameRate=0` configuration keys for subsequent attempts.

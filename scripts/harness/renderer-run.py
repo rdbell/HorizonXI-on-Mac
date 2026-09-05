@@ -107,12 +107,16 @@ class Snapshot:
                  game / "scripts/default.txt", game / "addons/perfscene/perfscene.lua",
                  Path.home() / "Library/Application Support/HorizonXI-on-Mac/accounts.json"]
         directories = (game, game / "bootloader", game / "SquareEnix/PlayOnlineViewer",
-                       game / "SquareEnix/FINAL FANTASY XI")
+                       game / "SquareEnix/FINAL FANTASY XI",
+                       menu.PREFIX / "drive_c/windows/syswow64")
         paths += [directory / name for directory in directories
-                  for name in ("d3d8.dll", "d3d9.dll", "d3d8.ini", "dxvk.conf")]
+                  for name in ("d3d8.dll", "d3d9.dll", "d3d8.ini", "dxvk.conf", "dgVoodoo.conf")]
         paths += [menu.PREFIX / name for name in ("user.reg", "system.reg", "userdef.reg")]
         paths += [menu.PREFIX / "drive_c/windows" / bits / "mtld3d.dll"
                   for bits in ("syswow64", "system32")]
+        paths += [menu.PREFIX / "drive_c/windows" / bits / name
+                  for bits in ("syswow64", "system32")
+                  for name in ("d3d11.dll", "d3d10core.dll", "dxgi.dll", "winemetal.dll")]
         entries = []
         for index, path in enumerate(paths):
             entry = {"path": str(path)}
@@ -214,6 +218,8 @@ def main() -> int:
     parser.add_argument("--output", type=Path)
     parser.add_argument("--restore", type=Path)
     parser.add_argument("--renderer-bundle", type=Path)
+    parser.add_argument("--dxmt-bundle", type=Path, help="DXMT release directory containing i386-windows and x86_64-unix")
+    parser.add_argument("--dgvoodoo-config", type=Path, help="dgVoodoo configuration for the supplied D3D8 converter")
     parser.add_argument("--renderer-config", default="color.hdr.enable=false;render.scale=1;present.maxFps=0",
                         help="mtld3d configuration overrides for this run")
     parser.add_argument("--renderer-log", default="mtld3d=info",
@@ -224,10 +230,16 @@ def main() -> int:
     parser.add_argument("--load-addon", action="append", default=[])
     parser.add_argument("--background", type=int, choices=(512, 1024, 2048, 4096),
                         help="temporary square background dimensions; keeps other quality settings")
+    parser.add_argument("--draw-distance", type=float, default=20,
+                        help="world and entity distance for the scenario, default stress setting 20")
     parser.add_argument("--menu-sample", type=float, default=15)
     parser.add_argument("--dump", action="store_true", help="F12 dump at character selection")
     parser.add_argument("--dump-scene", help="F12 dump at a named scene screenshot, such as city-settled")
     options, forwarded = parser.parse_known_args()
+    if not 0 < options.draw_distance <= 20:
+        parser.error("--draw-distance must be greater than 0 and at most 20")
+    if options.dxmt_bundle and (options.renderer_bundle or not options.converter or not options.dgvoodoo_config):
+        parser.error("DXMT requires --converter and --dgvoodoo-config and excludes --renderer-bundle")
     if options.restore:
         Snapshot(options.restore.resolve()).restore()
         return 0
@@ -247,7 +259,7 @@ def main() -> int:
     OCR_TOOL.parent.mkdir(parents=True, exist_ok=True)
     if not OCR_TOOL.is_file() or OCR_TOOL.stat().st_mtime < (HERE / "scene-ocr.swift").stat().st_mtime:
         checked(["xcrun", "swiftc", "-O", "-o", str(OCR_TOOL), str(HERE / "scene-ocr.swift")], timeout=120)
-    menu.OVERRIDE_PREFIXES += ("MTLD3D_", "WINEDLLPATH", "RUST_LOG")
+    menu.OVERRIDE_PREFIXES += ("MTLD3D_", "DXMT_", "WINEDLLPATH", "WINEDLLOVERRIDES", "RUST_LOG")
     original_class = menu.MenuRun
 
     class RendererRun(original_class):
@@ -269,6 +281,15 @@ def main() -> int:
                 for bits in ("syswow64", "system32"):
                     shutil.copy2(options.renderer_bundle / "prefix-markers" / bits / "mtld3d.dll",
                                  menu.PREFIX / "drive_c/windows" / bits / "mtld3d.dll")
+            if options.dxmt_bundle:
+                for arch, bits in (("i386-windows", "syswow64"), ("x86_64-windows", "system32")):
+                    for name in ("d3d11.dll", "d3d10core.dll", "dxgi.dll", "winemetal.dll"):
+                        shutil.copy2(options.dxmt_bundle / arch / name,
+                                     menu.PREFIX / "drive_c/windows" / bits / name)
+                for directory in (self.game_dir, self.game_dir / "bootloader",
+                                  self.game_dir / "SquareEnix/PlayOnlineViewer",
+                                  self.game_dir / "SquareEnix/FINAL FANTASY XI"):
+                    shutil.copy2(options.dgvoodoo_config, directory / "dgVoodoo.conf")
             return True
 
         def install_addon(self) -> bool:
@@ -352,7 +373,8 @@ def main() -> int:
                 loaded = checked(["lsof", "-p", str(self.game_pid), "-Fn"])
                 paths = sorted({line[1:] for line in loaded.splitlines() if line.startswith("n")
                                 and Path(line[1:]).name.lower() in
-                                ("d3d8.dll", "d3d9.dll", "mtld3d.dll", "mtld3d.so", "libmoltenvk.dylib")})
+                                ("d3d8.dll", "d3d9.dll", "mtld3d.dll", "mtld3d.so", "libmoltenvk.dylib",
+                                 "d3d11.dll", "dxgi.dll", "winemetal.dll", "winemetal.so")})
                 identities = [{"path": path, "sha256": digest(Path(path)) if Path(path).is_file() else None}
                               for path in paths]
                 (self.session_dir / "renderer-loaded-files.json").write_text(json.dumps(identities, indent=2) + "\n")
@@ -362,6 +384,11 @@ def main() -> int:
                 if options.renderer_bundle:
                     expected.update({"mtld3d.dll": digest(options.renderer_bundle / "wine/i386-windows/mtld3d.dll"),
                                      "mtld3d.so": digest(options.renderer_bundle / "wine/x86_64-unix/mtld3d.so")})
+                if options.dxmt_bundle:
+                    expected.pop("d3d9.dll")
+                    expected.update({name: digest(options.dxmt_bundle / "i386-windows" / name)
+                                     for name in ("d3d11.dll", "dxgi.dll", "winemetal.dll")})
+                    expected["winemetal.so"] = digest(options.dxmt_bundle / "x86_64-unix/winemetal.so")
                 for name, expected_hash in expected.items():
                     if not any(Path(row["path"]).name == name and row["sha256"] == expected_hash
                                for row in identities):
@@ -369,6 +396,9 @@ def main() -> int:
                 self.record["renderer_verified"] = expected
                 self.record["renderer_config"] = options.renderer_config if options.renderer_bundle else None
                 self.record["renderer_log"] = options.renderer_log if options.renderer_bundle else None
+                self.record["draw_distance_requested"] = options.draw_distance
+                if options.dxmt_bundle:
+                    self.record["dgvoodoo_config_sha256"] = digest(options.dgvoodoo_config)
                 if options.dump:
                     checked([str(self.window_tool), "f12", str(self.game_pid)])
                     self.event("renderer F12 dump requested")
@@ -382,11 +412,17 @@ def main() -> int:
                     "--capture-seconds", "280", "--hold", "5",
                     "--env", "PERFSCENE_FPS={session}\\common-fps.csv",
                     "--env", "PERFSCENE_MARKERS={session}\\perfscene-markers.jsonl",
-                    "--env", "PERFSCENE_MENU_UNCAP=1", *forwarded]
+                    "--env", "PERFSCENE_MENU_UNCAP=1",
+                    "--env", "PERFSCENE_DRAW_DISTANCE=" + str(options.draw_distance), *forwarded]
         if options.renderer_bundle:
             sys.argv += ["--env", "WINEDLLPATH=" + str(options.renderer_bundle.resolve() / "wine"),
                          "--env", "MTLD3D_CONFIG=" + options.renderer_config,
                          "--env", "RUST_LOG=" + options.renderer_log]
+        if options.dxmt_bundle:
+            sys.argv += ["--env", "WINEDLLPATH=" + str(options.dxmt_bundle.resolve()),
+                         "--env", "WINEDLLOVERRIDES=d3d11,dxgi,d3d10core,winemetal=b",
+                         "--env", "DXMT_LOG_PATH={session}",
+                         "--env", "DXMT_CONFIG=dxgi.forceSDR=True;d3d11.preferredMaxFrameRate=0"]
         result = menu.main()
         (options.output / "result.json").write_text(json.dumps({"exit_code": result}) + "\n")
         return result
