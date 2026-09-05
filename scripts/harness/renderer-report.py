@@ -15,7 +15,8 @@ import statistics
 
 
 SETTLED_ZONES = {"city settled": 235, "mines settled": 234, "field settled": 106,
-                 "weather settled": 106, "crowd settled": 106, "city after crowd": 235}
+                 "weather settled": 106, "crowd settled": 106, "city after crowd": 235,
+                 "mines plaza settled": 234}
 
 
 def summarize(rows: list[dict], start: float, end: float, zone: int) -> dict:
@@ -69,6 +70,7 @@ def report(output: Path) -> dict:
               "boot_sha256": record.get("boot_sha256"),
               "renderer_sha256": record.get("renderer_verified"),
               "graphics": record.get("graphics_at_launch"),
+              "renderer_config": record.get("renderer_config"),
               "rendering_review_required": True}
     for name, key, value in [("result.json", "exit_code", 0),
                              ("restoration.json", "docker_unchanged", True),

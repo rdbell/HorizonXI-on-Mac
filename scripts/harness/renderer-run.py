@@ -214,6 +214,10 @@ def main() -> int:
     parser.add_argument("--output", type=Path)
     parser.add_argument("--restore", type=Path)
     parser.add_argument("--renderer-bundle", type=Path)
+    parser.add_argument("--renderer-config", default="color.hdr.enable=false;render.scale=1;present.maxFps=0",
+                        help="mtld3d configuration overrides for this run")
+    parser.add_argument("--renderer-log", default="mtld3d=info",
+                        help="mtld3d RUST_LOG filter, recorded with the run")
     parser.add_argument("--converter", type=Path)
     parser.add_argument("--boot-file", type=Path, help="frozen full boot script; otherwise minimal")
     parser.add_argument("--load-plugin", action="append", default=[])
@@ -222,6 +226,7 @@ def main() -> int:
                         help="temporary square background dimensions; keeps other quality settings")
     parser.add_argument("--menu-sample", type=float, default=15)
     parser.add_argument("--dump", action="store_true", help="F12 dump at character selection")
+    parser.add_argument("--dump-scene", help="F12 dump at a named scene screenshot, such as city-settled")
     options, forwarded = parser.parse_known_args()
     if options.restore:
         Snapshot(options.restore.resolve()).restore()
@@ -292,6 +297,14 @@ def main() -> int:
             (options.output / "active.json").write_text(json.dumps({"session": str(self.session_dir), "pid": self.game_pid}) + "\n")
             return ok
 
+        def collect_profile(self) -> None:
+            if self.session_dir and self.game_pid:
+                paths = sorted((self.game_dir / "bootloader/mtld3d-logs").glob(f"*-{self.game_pid}.log"))
+                for path in paths:
+                    shutil.copy2(path, self.session_dir / path.name)
+                self.record["renderer_logs"] = [path.name for path in paths]
+            super().collect_profile()
+
         def wait_for_scene(self, scene, timeout):
             label = scene[0]
             expected = {"rules": ("accept", "decline", "rules of conduct"),
@@ -319,6 +332,9 @@ def main() -> int:
 
         def screenshot(self, label):
             super().screenshot(label)
+            if label == options.dump_scene:
+                checked([str(self.window_tool), "f12", str(self.game_pid)])
+                self.event("renderer F12 dump requested", scene=label)
             if label not in ("rules", "main-menu", "characters"):
                 return
             if options.menu_sample > 0:
@@ -335,18 +351,24 @@ def main() -> int:
             if label == "characters":
                 loaded = checked(["lsof", "-p", str(self.game_pid), "-Fn"])
                 paths = sorted({line[1:] for line in loaded.splitlines() if line.startswith("n")
-                                and any(name in line.lower() for name in ("d3d8", "d3d9", "mtld3d", "moltenvk"))})
+                                and Path(line[1:]).name.lower() in
+                                ("d3d8.dll", "d3d9.dll", "mtld3d.dll", "mtld3d.so", "libmoltenvk.dylib")})
                 identities = [{"path": path, "sha256": digest(Path(path)) if Path(path).is_file() else None}
                               for path in paths]
                 (self.session_dir / "renderer-loaded-files.json").write_text(json.dumps(identities, indent=2) + "\n")
                 resources = menu.APP / "Contents/Resources"
                 expected = {"d3d8.dll": digest(resources / "d3d8to9.dll"),
                             "d3d9.dll": digest(resources / "dxvk-1.10.3-x32-d3d9-horizonxi.dll")}
+                if options.renderer_bundle:
+                    expected.update({"mtld3d.dll": digest(options.renderer_bundle / "wine/i386-windows/mtld3d.dll"),
+                                     "mtld3d.so": digest(options.renderer_bundle / "wine/x86_64-unix/mtld3d.so")})
                 for name, expected_hash in expected.items():
                     if not any(Path(row["path"]).name == name and row["sha256"] == expected_hash
                                for row in identities):
                         raise RuntimeError(f"Loaded {name} does not match the staged renderer")
                 self.record["renderer_verified"] = expected
+                self.record["renderer_config"] = options.renderer_config if options.renderer_bundle else None
+                self.record["renderer_log"] = options.renderer_log if options.renderer_bundle else None
                 if options.dump:
                     checked([str(self.window_tool), "f12", str(self.game_pid)])
                     self.event("renderer F12 dump requested")
@@ -363,8 +385,8 @@ def main() -> int:
                     "--env", "PERFSCENE_MENU_UNCAP=1", *forwarded]
         if options.renderer_bundle:
             sys.argv += ["--env", "WINEDLLPATH=" + str(options.renderer_bundle.resolve() / "wine"),
-                         "--env", "MTLD3D_CONFIG=color.hdr.enable=false;render.scale=1;present.maxFps=0",
-                         "--env", "RUST_LOG=mtld3d=info"]
+                         "--env", "MTLD3D_CONFIG=" + options.renderer_config,
+                         "--env", "RUST_LOG=" + options.renderer_log]
         result = menu.main()
         (options.output / "result.json").write_text(json.dumps({"exit_code": result}) + "\n")
         return result

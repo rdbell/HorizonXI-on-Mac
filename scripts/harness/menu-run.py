@@ -726,7 +726,7 @@ def main() -> int:
                              "an explicit local --scenario")
     parser.add_argument("--scenario", default="",
                         help="local test world only: log the test character in and run this "
-                             "perfscene scenario (city, field); implies --characters")
+                             "perfscene scenario (city, city_long, town, field); implies --characters")
     parser.add_argument("--sample-at", default="",
                         help="native /usr/bin/sample start offsets in seconds after the game "
                              "process appears, comma-separated; passed to the recorder")

@@ -77,6 +77,10 @@ World scenarios use server-supplied position and rotation, followed by Home to r
 camera. Client-only heading writes can be overwritten by the next update. Review the actual
 coordinates, heading and screenshots when adding a scene.
 
+`city_long` extends both city holds to 60 seconds. `town` uses the same longer holds with
+the second vantage in the Mines plaza. `field` measures clear weather, thunderstorms and
+a mob crowd outdoors; each settled phase holds for 20 seconds before the next change.
+
 The runner snapshots renderer files, boot scripts, registry hives, local account storage,
 and the selected account preferences. Its `private/` directory has mode 0700 and must never
 be published. On normal completion it restores the saved file states and preferences and
@@ -84,7 +88,13 @@ checks Docker IDs/start times. `--restore OUTPUT` repeats that recovery after an
 parent, and refuses to run while game or Wine processes remain.
 
 Candidate launchers are separate signed copies. Loaded D3D8/D3D9 hashes must match their
-resources. `--dump` presses F12 once at character selection for mtld3d's three-frame log.
+resources, and mtld3d's loaded shim and Unix library must match the candidate bundle too.
+`--dump` presses F12 once at character selection for mtld3d's three-frame log.
+`--dump-scene city-settled` captures the first town view instead. The runner saves the
+renderer log after the game exits, before a later launch can rotate it away.
+`--renderer-config` supplies mtld3d's existing configuration overrides and records them.
+`--renderer-log` selects its `RUST_LOG` filter for a diagnostic run. Keep detailed logging
+off for performance comparisons, since it adds work to the measured process.
 Game and capture limits cannot exceed 420 seconds. The regular driver performs cleanup
 afterwards, including the sidecar's eight-second finalization window.
 

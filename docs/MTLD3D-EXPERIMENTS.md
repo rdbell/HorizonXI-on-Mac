@@ -124,3 +124,33 @@ material-only build, and each device subtest retains the existing 180-second tim
 
 Apply this patch after the material patch so its coverage-document context matches. The
 source changes themselves address output alignment independently of the material correction.
+
+## Markets readback stalls
+
+A bounded in-world capture found one readback per application frame. FFXI draws a 16 x 16
+texture from its 4096 x 4096 scene texture, copies it to a lockable surface with StretchRect,
+then locks it. The captured frame contains 3,317 draws. The tiny readback waits for all the
+rendering ahead of it.
+
+`patches/mtld3d-0.8.0-readback-timing.patch` adds an opt-in `mtld3d::readback=trace` target.
+It separates the API's command flush from the readback call, and the native blit's encoding
+from its commit/completion wait. It changes no synchronization. In one Markets diagnostic
+run, the medians were 8.27 ms for the command flush and 8.48 ms for the readback. Encoding
+the blit took 0.14 ms; its commit/completion wait took 8.21 ms. These are diagnostic call
+timings, not an FPS improvement.
+
+mtld3d's existing performance grid counts internal submissions as frames. In this workload,
+374 reported frames contained 187 Surface LockRect calls and about 187 application Presents.
+Do not interpret that grid's milliseconds as application frame times without normalizing it.
+The renderer-independent `common-fps.csv` remains the FPS measurement.
+
+The corresponding guest sampler captured 99.7 percent of the game's lifetime. In complete
+Markets windows, 52.7 percent of samples were in `ulock_wait2` or `psynch_cvwait`. This supports
+investigating scheduling around readback. It does not make x87 operation counts a CPU-time
+profile. When analyzing captures after renderer restoration, resolve module offsets against
+the captured binary, since the same installed DLL path now names the restored renderer.
+
+The longer `town` scenario now places Hxitest near Valeri in Mines at 39, 0, -49 with rotation
+128. The earlier 0, 0, -18 placement put the camera inside geometry and is excluded. The
+replacement's screenshot shows a clear player and ground, with a large town structure ahead;
+it is a fixed vantage, not a representative average of the zone.

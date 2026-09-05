@@ -78,16 +78,29 @@ local scenarios = {
         { 3,  '!exec player:setPos(0.840,-5.027,76.838,64,106)', 'zone north gustaberg' },
         { 6,  'home',                            'camera reset requested' },
         { 20, 'settle',                          'field settled' },
-        { 3,  '!setweather 15',                  'thunderstorms' },
+        { 20, '!setweather 15',                  'thunderstorms' },
         { 15, 'settle',                          'weather settled' },
-        { 3,  'spawn 40',                        'spawn 40 mobs' },
+        { 20, 'spawn 40',                        'spawn 40 mobs' },
         { 30, 'settle',                          'crowd settled' },
-        { 3,  '!exec player:setPos(-201.904,1.928,-194.828,192,235)', 'zone bastok markets' },
+        { 20, '!exec player:setPos(-201.904,1.928,-194.828,192,235)', 'zone bastok markets' },
         { 6,  'home',                            'camera reset requested' },
         { 20, 'settle',                          'city after crowd' },
-        { 10, 'done',                            'done' },
+        { 20, 'done',                            'done' },
     },
 };
+
+-- Longer samples for profiler windows and repeated performance comparisons. The second
+-- town vantage looks toward the Mines auction counters from the open plaza.
+scenarios.city_long = {};
+scenarios.town = {};
+for _, s in ipairs(scenarios.city) do
+    local delay = (s[3] == 'zone bastok mines' or s[3] == 'done') and 60 or s[1];
+    scenarios.city_long[#scenarios.city_long + 1] = { delay, s[2], s[3] };
+    local command = s[3] == 'zone bastok mines'
+        and '!exec player:setPos(39,0,-49,128,234)' or s[2];
+    local label = s[3] == 'mines settled' and 'mines plaza settled' or s[3];
+    scenarios.town[#scenarios.town + 1] = { delay, command, label };
+end
 
 local state = {
     running   = nil,     -- scenario table
