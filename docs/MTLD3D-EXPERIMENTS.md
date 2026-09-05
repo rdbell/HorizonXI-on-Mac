@@ -184,3 +184,45 @@ hardware device after installing DXMT into a task-owned Wine SDK and prefix. Thi
 device creation on the machine, not compatibility with the game's launcher or bridge.
 The game trial uses the documented `dxgi.forceSDR=True` and
 `d3d11.preferredMaxFrameRate=0` configuration keys for subsequent attempts.
+
+With valid D3D8 presentation parameters, the isolated dgVoodoo probe reaches the Apple M2 Max
+adapter, then crashes in its D3D8 DLL at module offset `0x5e622` during device creation.
+DXMT's standalone D3D11 creation still succeeds. This is a reproducible bridge-compatibility
+lead; it is not evidence of a game performance ceiling.
+
+## Early submission experiment
+
+`patches/mtld3d-0.8.0-early-submission.patch` adds `render.submitDraws`, disabled at zero.
+A nonzero threshold sends a continuation through the existing bounded encoder channel while
+the game collects subsequent draws. It preserves color, depth, snapshot lifetimes, and
+readback ordering. Small chunks also add render-pass store/load work.
+
+At the existing distance-20, 4096-square settings, short clean captures gave 40.849 FPS
+Markets and 106.964 tunnel with a 512-draw threshold, versus 35.602 and 119.667 at zero.
+These single captures suggest a scene tradeoff and do not justify enabling the option.
+The threshold-1 rendering regression checks depth and changing draw snapshots across forced
+continuations. `make check` and all 2,128 tests passed with that threshold; full Wine
+conformance has not been repeated for this scheduling experiment.
+
+## Paired Metal submission timings
+
+`patches/mtld3d-0.8.0-gpu-timing.patch` samples adjacent submission sequences every 128
+submissions under `mtld3d::gpu_time=trace`. A single even sequence would repeatedly miss one
+half of a two-submission application frame. Timing uses the existing Metal completion handler
+and is disabled without the trace target.
+
+The verified `mtld3d-gpu-paired-city-01` run reached both expected zones and restored all 43
+file states. In the complete Markets interval, 33 samples per half gave these medians:
+
+| Submission | Metal passes | CPU encode and commit | Metal GPU elapsed |
+| --- | ---: | ---: | ---: |
+| Before readback | 184 | 4.898 ms | 11.005 ms |
+| With Present | 104 | 2.936 ms | 5.888 ms |
+
+The tunnel's 98 sampled submissions had 52 passes and a median 3.538 ms GPU elapsed.
+The run measured 35.873 FPS Markets and 107.701 tunnel with timing enabled. These diagnostic
+results identify pass overhead; they are not an improvement claim. The earlier GPU-stage
+run never left Mines, so its interval labelled Markets is invalid.
+
+Apply both experimental patches after the published material, alignment, fixed-function
+diagnostic, and readback-timing patches. They each apply to that common base independently.

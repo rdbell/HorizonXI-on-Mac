@@ -1,0 +1,180 @@
+diff --git a/mtld3d.conf b/mtld3d.conf
+index 8180614..e1462f8 100644
+--- a/mtld3d.conf
++++ b/mtld3d.conf
+@@ -191,6 +191,12 @@
+ 
+ # query.flushImmediate = false
+ 
++# Experimental early submission for games that read a render target every frame.
++# Send work after this many draws while the game continues collecting the next
++# chunk. Zero keeps whole-frame batching. Colour, depth and readback ordering are
++# preserved, at the cost of extra GPU store/load traffic at each split.
++# render.submitDraws = 0
++
+ 
+ #########
+ # Depth #
+diff --git a/windows/core/src/config.rs b/windows/core/src/config.rs
+index b78574d..d7b9a76 100644
+--- a/windows/core/src/config.rs
++++ b/windows/core/src/config.rs
+@@ -138,6 +138,12 @@ pub struct Mtld3dConfig {
+     /// fence every loading-screen upload batch that way and the wait costs
+     /// seconds per load. File key: `query.flushImmediate`.
+     pub query_flush_immediate: bool,
++    /// Submit a continuation after this many draws so encoding can overlap the API thread.
++    ///
++    /// Zero keeps whole-frame batching. A continuation preserves colour and
++    /// depth and does not present. Small values add render-pass store/load
++    /// traffic. Default: `0`. File key: `render.submitDraws`.
++    pub render_submit_draws: u32,
+     /// A newly bound same-size depth-stencil texture inherits the previous one's contents.
+     ///
+     /// D3D9-era drivers commonly backed all equal-size depth-stencil
+@@ -309,6 +315,7 @@ impl Default for Mtld3dConfig {
+             bytecode_dump_dir: String::new(),
+             skip_shaders: Vec::new(),
+             query_flush_immediate: false,
++            render_submit_draws: 0,
+             depth_alias_same_size: false,
+             buffer_ignore_lock_bounds: false,
+             vbib_retention_cap_bytes: 512 * 1024 * 1024,
+@@ -453,6 +460,10 @@ pub fn log_options(cfg: &Mtld3dConfig) {
+         target: crate::LOG_TARGET,
+         "config: query.flushImmediate = {}", cfg.query_flush_immediate
+     );
++    info!(
++        target: crate::LOG_TARGET,
++        "config: render.submitDraws = {}", cfg.render_submit_draws
++    );
+     info!(
+         target: crate::LOG_TARGET,
+         "config: depth.aliasSameSize = {}", cfg.depth_alias_same_size
+@@ -536,6 +547,11 @@ fn apply(cfg: &mut Mtld3dConfig, source: &str, key: &str, value: &str) {
+         "debug.bytecodeDumpDir" => value.clone_into(&mut cfg.bytecode_dump_dir),
+         "debug.skipShaders" => cfg.skip_shaders = parse_hex_list(value),
+         "query.flushImmediate" => assign_bool(source, key, value, &mut cfg.query_flush_immediate),
++        "render.submitDraws" => match value.parse::<u32>() {
++            Ok(draws) => cfg.render_submit_draws = draws,
++            Err(_) => log::warn!(target: crate::LOG_TARGET,
++                "{source}: invalid render.submitDraws {value:?}, expected a nonnegative integer"),
++        },
+         "depth.aliasSameSize" => assign_bool(source, key, value, &mut cfg.depth_alias_same_size),
+         "buffer.ignoreLockBounds" => {
+             assign_bool(source, key, value, &mut cfg.buffer_ignore_lock_bounds);
+diff --git a/windows/core/src/config/tests.rs b/windows/core/src/config/tests.rs
+index e2fa46b..347c1f6 100644
+--- a/windows/core/src/config/tests.rs
++++ b/windows/core/src/config/tests.rs
+@@ -35,6 +35,7 @@ fn defaults_match_documented_values() {
+     assert!(d.bytecode_dump_dir.is_empty());
+     assert!(d.skip_shaders.is_empty());
+     assert!(!d.query_flush_immediate);
++    assert_eq!(d.render_submit_draws, 0);
+     assert!(!d.buffer_ignore_lock_bounds);
+     assert_eq!(d.vbib_retention_cap_bytes, 512 * 1024 * 1024);
+     assert_eq!(d.pagebox_pool_cap_bytes, 128 * 1024 * 1024);
+diff --git a/windows/d3d9/src/device.rs b/windows/d3d9/src/device.rs
+index 234b09e..043a64b 100644
+--- a/windows/d3d9/src/device.rs
++++ b/windows/d3d9/src/device.rs
+@@ -431,6 +431,9 @@ pub struct DeviceInner {
+     /// the same `MTLDevice`.
+     prewarm: crate::shader_prewarm::PrewarmHandle,
+     current_frame: FrameData,
++    /// Optional continuation cadence; zero retains whole-frame submission.
++    render_submit_draws: u32,
++    pending_draw_count: u32,
+     /// Shared with the encoder thread and the unix completion handler.
+     ///
+     /// The frame's submit seq is stamped in `stamp_and_swap`; this atomic
+@@ -1402,6 +1405,7 @@ impl DeviceInner {
+     /// the `submit_seq` it carries. Shared between `Present` and
+     /// `flush_current_frame_blocking`.
+     fn stamp_and_swap(&mut self, new_frame: FrameData, no_present: bool) -> (FrameData, u64) {
++        self.pending_draw_count = 0;
+         let mut frame = core::mem::replace(&mut self.current_frame, new_frame);
+         // An F12 run ends with the frame the closing `Present` submits. A
+         // mid-frame flush sends the marked frame out early, so its stop mark
+@@ -1837,7 +1841,18 @@ impl DeviceInner {
+     /// Used by the hot draw path to emit `Op::Set*` + `Op::Draw` without
+     /// per-op heap alloc.
+     pub fn push_op_inline(&mut self, op: crate::encoder::Op) {
++        let is_draw = matches!(op, Op::Draw(_));
+         self.current_frame.push_op_inline(op);
++        if self.render_submit_draws != 0 && is_draw {
++            self.pending_draw_count += 1;
++            if self.pending_draw_count >= self.render_submit_draws {
++                // Use the existing continuation rules and bounded channel.
++                // Readback still drains this queue and waits for GPU completion.
++                let fresh = self.fresh_frame();
++                let (frame, _) = self.stamp_and_swap(fresh, true);
++                self.encoder.send_frame(frame);
++            }
++        }
+     }
+ 
+     /// Queue an eager `MTLTexture` create on the current frame.
+@@ -2644,6 +2659,8 @@ impl Direct3DDevice9 {
+             encoder: info.encoder,
+             prewarm: info.prewarm,
+             current_frame: info.current_frame,
++            render_submit_draws: crate::config::CONFIG.render_submit_draws,
++            pending_draw_count: 0,
+             coherent_seq,
+             upload_coherent_seq,
+             failed_submit_seq,
+diff --git a/windows/tests/tests/render_target.rs b/windows/tests/tests/render_target.rs
+index 405966b..c48b2bd 100644
+--- a/windows/tests/tests/render_target.rs
++++ b/windows/tests/tests/render_target.rs
+@@ -3727,6 +3727,48 @@ fn depth_survives_a_mid_frame_readback_flush() {
+     );
+ }
+ 
++#[test]
++fn early_submission_preserves_depth_and_changing_draw_snapshots() {
++    let merged = format!(
++        "{};render.submitDraws=1",
++        std::env::var("MTLD3D_CONFIG").unwrap_or_default()
++    );
++    // SAFETY: nextest gives each test its own process; no harness threads exist yet.
++    unsafe { std::env::set_var("MTLD3D_CONFIG", merged) };
++
++    let h = Harness::with_depth();
++    assert!(h.pump());
++    assert_eq!(h.begin_scene(), D3D_OK);
++    assert_eq!(
++        h.clear(D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER, BLACK, 1.0, 0),
++        D3D_OK
++    );
++    assert_eq!(h.set_render_state(D3DRS_ZENABLE, 1), D3D_OK);
++    assert_eq!(h.set_render_state(D3DRS_ZWRITEENABLE, 1), D3D_OK);
++    assert_eq!(h.set_render_state(D3DRS_ZFUNC, D3DCMP_LESS), D3D_OK);
++
++    // Every draw uses a new frame arena and an asynchronous continuation. The
++    // colour and depth must survive those boundaries while constants and UP
++    // vertices change. A far red draw must never overwrite the nearest fill.
++    for i in 0..32_u16 {
++        let z = f32::from(i).mul_add(-0.02, 0.8);
++        draw_fill_at_z(&h, if i % 2 == 0 { BLUE } else { GREEN }, z);
++        draw_fill_at_z(&h, RED, 0.95);
++    }
++    assert_eq!(
++        h.read_pixel(320, 240),
++        GREEN,
++        "readback sees all prior chunks"
++    );
++    assert_eq!(h.end_scene(), D3D_OK);
++    assert_eq!(h.present(), D3D_OK);
++    assert_eq!(
++        h.read_pixel(320, 240),
++        GREEN,
++        "present retains the completed scene"
++    );
++}
++
+ /// Assert each RGB channel of `got` is within `tolerance` of `expected` (alpha ignored).
+ fn assert_rgb_close(got: u32, expected: u32, tolerance: i32, context: &str) {
+     let channel = |c: u32, shift: u32| i32::try_from((c >> shift) & 0xff).unwrap_or(0);
