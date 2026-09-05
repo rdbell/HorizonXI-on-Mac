@@ -121,6 +121,18 @@ renderer hashes or recovery are reported. Review the game screenshots before tre
 renderers as equivalent workloads. Settled markers include the actual player coordinates
 and heading, so comparisons can check that the same vantage was used.
 
+For a capture with `--level standard`, correlate complete ten-second guest-sampler windows
+with those same scenes:
+
+```sh
+python3 scripts/harness/guest-scene-report.py /path/outside/git/mtld3d-city \
+  --renderer-bundle /path/to/immutable-mtld3d-bundle > guest-scenes.json
+```
+
+The bundle is optional. Renderer symbols are used only when a binary's hash matches the
+loaded-file record. If the installed DLL has since been restored and no matching bundle is
+available, the report keeps module offsets instead of assigning functions from another build.
+
 ## Offline fault benchmark
 
 `fault-bench.py` runs a Windows benchmark under the installed Wine runtime, without the x87

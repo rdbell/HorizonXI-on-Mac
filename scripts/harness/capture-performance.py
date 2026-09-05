@@ -822,7 +822,8 @@ def module_location(pc: int, modules: list[dict[str, Any]]) -> dict[str, Any]:
     name = module["path"].replace("\\", "/").rstrip("/").split("/")[-1] or "unknown"
     offset = pc - module["base"]
     location = f"{name}+0x{offset:x}"
-    symbol = export_symbol(module["path"], offset) if module.get("kind") == "pe" else None
+    symbol_path = module.get("symbol_path", module["path"])
+    symbol = export_symbol(symbol_path, offset) if symbol_path and module.get("kind") == "pe" else None
     if symbol:
         location = f"{name}!{symbol}"
     return {"location": location, "module": name, "offset": f"0x{offset:x}"}

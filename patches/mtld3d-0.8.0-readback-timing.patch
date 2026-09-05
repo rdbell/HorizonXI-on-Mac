@@ -1,5 +1,5 @@
 diff --git a/unix/unix/src/metal/command.rs b/unix/unix/src/metal/command.rs
-index 18e1be0..b473cb5 100644
+index 18e1be0..94ac2af 100644
 --- a/unix/unix/src/metal/command.rs
 +++ b/unix/unix/src/metal/command.rs
 @@ -2862,6 +2862,9 @@ fn encode_readback_resolve(
@@ -23,13 +23,13 @@ index 18e1be0..b473cb5 100644
 +        log::trace!(target: "mtld3d::readback",
 +            "metal_blit {width}x{height} encode_ms={:.3} wait_ms={:.3}",
 +            encode.as_secs_f64() * 1000.0,
-+            (start.elapsed() - encode).as_secs_f64() * 1000.0);
++            start.elapsed().saturating_sub(encode).as_secs_f64() * 1000.0);
 +    }
      // dst_buffer drops here — Metal wrapper released, caller's memory
      // untouched (deallocator was None).
      true
 diff --git a/windows/d3d9/src/surface.rs b/windows/d3d9/src/surface.rs
-index 8215f2c..f04cc46 100644
+index 8215f2c..280d657 100644
 --- a/windows/d3d9/src/surface.rs
 +++ b/windows/d3d9/src/surface.rs
 @@ -2746,6 +2746,8 @@ fn refresh_lockable_rt_staging(inner: &mut SurfaceInner) {
@@ -57,7 +57,7 @@ index 8215f2c..f04cc46 100644
 +        log::trace!(target: "mtld3d::readback",
 +            "lockable_rt {width}x{height} flush_ms={:.3} read_ms={:.3} status={status:#x}",
 +            flush.as_secs_f64() * 1000.0,
-+            (start.elapsed() - flush).as_secs_f64() * 1000.0);
++            start.elapsed().saturating_sub(flush).as_secs_f64() * 1000.0);
 +    }
      if status != 0 {
          mtld3d_shared::log_once_warn!(target: crate::LOG_TARGET,
