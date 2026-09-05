@@ -115,17 +115,17 @@ section only after its target exits, and the last sidecar to open a shared path 
 `x87sidecar-sticky-sampler.patch` adds opt-in `X87_SAMPLE_STICKY=1`. Discovery still selects the
 thread seen running guest code most often. Once selected, sticky mode follows that thread through
 DLLs, Rosetta runtime code, syscalls, and long stalls, and only searches again if the thread can no
-longer be read. It was written against commit `238a2147` and does not apply to `4e9c738` without
-a port. The sidecar installed on 2026-09-03 does not include it, so `X87_SAMPLE_STICKY=1` is
-currently ignored. The setting is harmless, and standard captures still produce a guest-PC
-profile, but coverage falls when the game thread runs outside the main executable for long
-periods.
+longer be read. It was ported to `4e9c738` on 2026-09-04 and applies on top of
+`x87sidecar-profile-pid-path.patch`. The shipped `vendor/x87sidecar-coop` includes both patches,
+so `X87_SAMPLE_STICKY=1` is honored. Without it, coverage falls when the game thread runs outside
+the main executable for long periods.
 
 ```sh
 git clone https://github.com/athei/x87sidecar.git
 cd x87sidecar
 git checkout 4e9c738
 git apply /path/to/x87sidecar-profile-pid-path.patch
+git apply /path/to/x87sidecar-sticky-sampler.patch
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel
 cp build/bin/x87sidecar /path/to/HorizonXI-on-Mac/vendor/x87sidecar-coop
