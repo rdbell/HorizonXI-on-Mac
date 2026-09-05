@@ -327,7 +327,9 @@ def main() -> int:
             sys.argv += ["--env", "WINEDLLPATH=" + str(options.renderer_bundle.resolve() / "wine"),
                          "--env", "MTLD3D_CONFIG=color.hdr.enable=false;render.scale=1;present.maxFps=0",
                          "--env", "RUST_LOG=mtld3d=info"]
-        return menu.main()
+        result = menu.main()
+        (options.output / "result.json").write_text(json.dumps({"exit_code": result}) + "\n")
+        return result
     finally:
         snapshot.restore()
 

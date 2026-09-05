@@ -371,6 +371,9 @@ class MenuRun:
                     continue
                 log(f"marker: {marker.get('label')}" + (
                     f" zone={marker['zone']}" if "zone" in marker else ""))
+                marker_label = marker.get("label", "")
+                if marker_label.endswith("settled") or marker_label == "city after crowd":
+                    self.screenshot(marker_label.replace(" ", "-"))
                 if marker.get("label") == label:
                     self.record["phases"][label.replace(" ", "_") + "_s"] = round(
                         time.monotonic() - self.started, 1)

@@ -107,9 +107,18 @@ local state = {
 };
 
 local function mark(label, extra)
-    local zone = AshitaCore:GetMemoryManager():GetParty():GetMemberZone(0);
-    local line = string.format('{"epoch": %.3f, "label": "%s", "zone": %d%s}',
-        epoch_s(clock_s()), (label:gsub('"', "'")), zone, extra or '');
+    local mem = AshitaCore:GetMemoryManager();
+    local zone = mem:GetParty():GetMemberZone(0);
+    local index = mem:GetParty():GetMemberTargetIndex(0);
+    local position = '';
+    if zone > 0 and index and index > 0 then
+        local entity = mem:GetEntity();
+        position = string.format(', "x": %.3f, "y": %.3f, "z": %.3f, "yaw": %.4f',
+            entity:GetLocalPositionX(index), entity:GetLocalPositionY(index),
+            entity:GetLocalPositionZ(index), entity:GetLocalPositionYaw(index));
+    end
+    local line = string.format('{"epoch": %.3f, "label": "%s", "zone": %d%s%s}',
+        epoch_s(clock_s()), (label:gsub('"', "'")), zone, position, extra or '');
     if (state.markers ~= nil) then
         local f = io.open(state.markers, 'a');
         if (f ~= nil) then f:write(line, '\n'); f:close(); end

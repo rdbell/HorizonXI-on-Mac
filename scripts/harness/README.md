@@ -85,6 +85,22 @@ whole-run percentile. Screenshots and `renderer-loaded-files.json` retain the re
 and binary evidence. A faster scene with missing geometry or shading is an invalid
 performance comparison.
 
+Generate a comparison from completed run directories:
+
+```sh
+python3 scripts/harness/renderer-report.py /path/outside/git/dxvk-city \
+  /path/outside/git/mtld3d-city > comparison.json
+```
+
+The report uses complete one-second windows inside each menu sample or settled world phase.
+It excludes the first two seconds after a settled marker to leave the scene screenshot out
+of the measured interval. FPS is total frames divided by total measured seconds. It also
+reports the minimum window FPS, time below 120 FPS, worst per-window p99, and longest frame.
+Missing counter windows, short samples, unexpected zones, unsuccessful runs, and unconfirmed
+renderer hashes or recovery are reported. Review the game screenshots before treating two
+renderers as equivalent workloads. Settled markers include the actual player coordinates
+and heading, so comparisons can check that the same vantage was used.
+
 ## Offline fault benchmark
 
 `fault-bench.py` runs a Windows benchmark under the installed Wine runtime, without the x87
