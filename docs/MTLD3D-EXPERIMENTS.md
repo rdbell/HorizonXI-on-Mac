@@ -39,8 +39,8 @@ unless a frame dump is active.
 
 Apply either patch to the pinned source checkout. Follow mtld3d's build instructions with
 Rust 1.97.1 and an isolated Wine SDK. `make install` must target the isolated SDK, since it
-replaces the renderer inside that Wine tree. Production builds disable debug alignment
-assertions that expose a separate legacy-client buffer-lock issue under investigation.
+replaces the renderer inside that Wine tree. Also apply the unaligned-lock patch below when
+using a build with debug assertions enabled.
 
 ```sh
 git checkout ea1b1ca3e584917a460c79aac8916d8084099fb4
@@ -101,3 +101,26 @@ These are single runs and need repeats. The 2048 result is a resolution-sensitiv
 its modest Markets gain suggests CPU work remains a better lead than reducing pixel count.
 No sample establishes stable 120 FPS. Even the faster 2048 tunnel run spent 5.87 percent of
 measured time below 120 FPS.
+
+## Packed buffer-lock outputs aborted the debug renderer
+
+FFXI supplies a pointer output slot aligned to two bytes when calling vertex-buffer `Lock`.
+mtld3d assigned through that pointer directly, which requires four-byte alignment on i686.
+Its debug build aborted at `vertex_buffer.rs:812`. Index-buffer `Lock` had the same defect,
+including the error paths that write a null output.
+
+`patches/mtld3d-0.8.0-unaligned-lock.patch` makes the existing `OutPtr` wrapper write unaligned
+storage and uses it in both buffer Lock methods. The wrapper creates no reference to the
+output, so its constructor can accept unaligned storage without weakening any downstream
+reference invariant. Existing aligned callers retain their behavior. No shader or wire layout
+changes are involved.
+
+Both new i686 rendering-suite probes aborted before the fix with the observed alignment
+panic. After the fix they pass on both architectures, including successful locks,
+invalid-range null outputs, and untouched neighboring bytes. A shared-unit regression checks
+the same byte-storage boundary. `make check` and all 2,126 tests pass. Full conformance ran
+on both architectures; completed subtests have identical failure sites and counts to the
+material-only build, and each device subtest retains the existing 180-second timeout.
+
+Apply this patch after the material patch so its coverage-document context matches. The
+source changes themselves address output alignment independently of the material correction.
