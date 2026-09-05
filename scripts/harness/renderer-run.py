@@ -10,6 +10,7 @@ those resources on every launch. Menu recognition and FPS measurement work acros
 from __future__ import annotations
 
 import argparse
+import csv
 import hashlib
 import importlib.util
 import json
@@ -44,6 +45,15 @@ def checked(argv: list[str], timeout: float = 30) -> str:
 
 def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def counter_is_advancing(path: Path, now: float) -> bool:
+    try:
+        with path.open() as handle:
+            rows = list(csv.DictReader(handle))
+        return bool(rows) and 0 <= now - float(rows[-1]["epoch"]) < 3
+    except (OSError, ValueError, KeyError):
+        return False
 
 
 def docker_state() -> list[dict]:
@@ -259,7 +269,8 @@ def main() -> int:
                     screen = self.session_dir / ("ocr-" + label.replace(" ", "-") + ".png")
                     checked(["screencapture", "-x", "-l", str(window["window_id"]), str(screen)], timeout=10)
                     seen = re.sub(r"\s+", " ", checked([str(OCR_TOOL), str(screen)], timeout=10).lower())
-                    matches = matches + 1 if all(text in seen for text in expected) else 0
+                    active = counter_is_advancing(self.session_dir / "common-fps.csv", time.time())
+                    matches = matches + 1 if active and all(text in seen for text in expected) else 0
                     if matches >= 2:
                         self.event("scene confirmed by OCR", scene=label)
                         return True
@@ -280,6 +291,8 @@ def main() -> int:
                 menu.read_available(self.recorder, self.recorder_lines)
                 time.sleep(0.5)
             self.event("menu sample end", scene=label, epoch=time.time())
+            if not counter_is_advancing(self.session_dir / "common-fps.csv", time.time()):
+                raise RuntimeError("Frame counter stopped during the menu sample")
             super().screenshot("measured-" + label)
             if label == "characters":
                 loaded = checked(["lsof", "-p", str(self.game_pid), "-Fn"])

@@ -49,7 +49,7 @@ RELATED_SUFFIXES = (
     "/FFXI-on-Mac", "/wine", "/wine-preloader", "/wine64-preloader", "/wineserver",
     "/x87sidecar-coop", "/x87sidecar_entitled", "Ashita-cli.exe", "horizon-loader.exe",
     "wineboot.exe", "pol.exe", "FFXiMain.dll", "explorer.exe", "plugplay.exe", "rpcss.exe",
-    "svchost.exe", "winedevice.exe", "services.exe", "conhost.exe",
+    "svchost.exe", "winedevice.exe", "services.exe", "conhost.exe", "winedbg", "winedbg.exe",
 )
 SIDECAR_SUFFIXES = ("/x87sidecar-coop", "/x87sidecar_entitled")
 GAME_SUFFIXES = ("horizon-loader.exe", "Ashita-cli.exe", "pol.exe", "FFXiMain.dll")

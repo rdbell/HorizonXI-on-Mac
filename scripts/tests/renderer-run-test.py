@@ -14,6 +14,16 @@ SPEC.loader.exec_module(renderer)
 
 
 class RendererRunTests(unittest.TestCase):
+    def test_frozen_window_cannot_satisfy_scene_detection(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "fps.csv"
+            self.assertFalse(renderer.counter_is_advancing(path, 100))
+            path.write_text("epoch,fps\n99,150\n")
+            self.assertTrue(renderer.counter_is_advancing(path, 100))
+            self.assertFalse(renderer.counter_is_advancing(path, 103))
+            path.write_text("epoch,fps\n99,150\npartial")
+            self.assertFalse(renderer.counter_is_advancing(path, 100))
+
     def test_snapshot_restores_content_permissions_symlinks_and_absence(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
