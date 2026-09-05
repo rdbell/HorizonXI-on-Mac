@@ -7,6 +7,7 @@ All are freely redistributable. Local modifications are listed below and in `../
 | --- | --- | --- | --- |
 | `d3d8to9.dll` | [crosire/d3d8to9](https://github.com/crosire/d3d8to9) | v1.15.1 | BSD 3-Clause |
 | `dxvk-1.10.3-x32-d3d9-horizonxi.dll` | [doitsujin/dxvk](https://github.com/doitsujin/dxvk) `x32/d3d9.dll` plus the project patches | v1.10.3+ | zlib |
+| `mtld3d/` | [athei/mtld3d](https://github.com/athei/mtld3d) `ea1b1ca3` plus the included `source.patch` | 0.8.0+, built 2026-09-05 | zlib, see `mtld3d/LICENSE` |
 | `x87sidecar-coop` | [athei/x87sidecar](https://github.com/athei/x87sidecar) `4e9c738` plus `x87sidecar-profile-pid-path.patch` | built 2026-09-03 | MIT |
 | `x87sidecar_entitled` | [athei/x87sidecar](https://github.com/athei/x87sidecar) `rosetta_loader` | built 2026-08-12 | MIT |
 
@@ -19,6 +20,15 @@ enforcement are active in normal play. The probes do nothing unless the launcher
 performance capture. SHA-256 `5164ce8dae9f1defaf03c6bfad67779944884854be5df4b01da1c7519371e9b6`,
 built 2026-09-03 from the patch stack in `../patches/README.md`, which was verified to reproduce
 the build tree exactly.
+
+## mtld3d
+
+The production build includes the FFXI material fallback and unaligned buffer-lock fixes,
+diagnostic probes, and optional independent render-pass merging. It is a modified upstream
+build. `mtld3d/build.json` records the base commit and every runtime file's SHA-256;
+`mtld3d/source.patch` records the complete source diff used to build it. The renderer selector
+enables pass merging and keeps early submission disabled. The Wine shim, Unix library and
+both prefix markers must accompany the native D3D9 DLL. See `../docs/MTLD3D-EXPERIMENTS.md`.
 
 ## x87sidecar-coop
 

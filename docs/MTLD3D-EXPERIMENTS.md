@@ -298,6 +298,59 @@ were verified again. The enabled run was 25.0 percent faster in Markets and 5.1 
 the tunnel. This is one sequential pair, not a repeated performance guarantee. In the tunnel,
 merging's minimum one-second FPS was worse, 79.716 versus 84.055, as was the worst per-window
 p99, 49.901 versus 42.412 ms. The option remains disabled pending repeats and wider scenes.
+
+## Launcher play testing, build 22
+
+The app now bundles that production build under `Contents/Resources/mtld3d`. Select
+**Metal / mtld3d (experimental)** in Settings to use it. The existing DXVK choice remains
+the default for new installations and the fallback for comparison. Changing the renderer
+preserves other performance preferences, server selection, account settings and boot scripts.
+
+The mtld3d choice enables `render.mergePasses=true` for play testing. It also sets
+`color.hdr.enable=false;render.scale=1;present.maxFps=0;render.submitDraws=0` and locates
+the bundled Wine shim through `WINEDLLPATH`. Early submission stays disabled. Normal Play
+installs both prefix markers and the D3D8 converter/native D3D9 pair. Missing resources or
+copy errors stop the launch with an error. Switch back to Metal / DXVK and relaunch to compare.
+Use `/fps 0` in-game to remove the client's separate limiter.
+
+`vendor/mtld3d/build.json` records the tested file hashes and `source.patch` contains the
+complete modified source diff. Packaging checks those hashes, signs the Unix library, then
+records its signed hash in the app's manifest while preserving `unsigned_unix_sha256`.
+Signing changes that library's bytes without rebuilding the renderer.
+
+To verify the installed launch path on Local LSB with Hxitest, close the game and launcher,
+select mtld3d first, and run:
+
+```sh
+python3 scripts/harness/renderer-run.py --installed-mtld3d \
+  --output /tmp/mtld3d-installed-validation \
+  --limit 200 --capture-seconds 180 --menu-sample 2 --hold 3
+```
+
+This mode rejects renderer-resource replacements and renderer environment overrides. It
+checks the launcher's own configuration, advancing frame counters, the local character
+screen, and hashes of the loaded D3D9, shim and Unix library. It restores temporary files
+and account preferences, including the saved renderer, and checks that Docker was unchanged.
+The output directory contains private rollback files and must stay outside Git.
+
+Installed build 22 passed this check in capture `20260905-105726-standard-nosample`.
+The local Hxitest character rendered correctly, frame counters advanced, and the loaded
+D3D8 converter, native D3D9, Wine shim and signed Unix library matched the packaged hashes.
+The launcher supplied the configuration above without a renderer override. Cleanup restored
+all 43 saved file states and the original preferences except the requested mtld3d selection;
+Docker was unchanged and no game or Wine processes remained. This was an installation check
+through character selection, not another in-world performance measurement. The recorder's
+generic DXVK-probe warning is expected for mtld3d; this mode checks the shared FPS counter
+and loaded renderer identities instead.
+
+Focused installation tests run with Command Line Tools:
+
+```sh
+swiftc app/Sources/HorizonXILauncher/{Renderer,Settings,Install,Servers}.swift \
+  scripts/tests/renderer-test.swift -o /tmp/renderer-test
+/tmp/renderer-test
+python3 scripts/tests/renderer-run-test.py
+```
 The numerical reports are preserved in
 [benchmarks/2026-09-05-pass-merge.json](benchmarks/2026-09-05-pass-merge.json).
 

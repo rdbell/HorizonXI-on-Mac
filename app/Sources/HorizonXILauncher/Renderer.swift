@@ -1,10 +1,6 @@
 import Foundation
 
-/// The three renderer pathways this project has actually measured on an M1/8GB MacBook Pro,
-/// 2026-08-10. Every claim below came off an instrumented run — `WINEDEBUG=fps` for the wine
-/// paths, DXVK's own HUD for DXVK, `ioreg IOAccelerator` for GPU load — and a screenshot.
-///
-/// Numbers are from the same machine, same zone (Selbina) or the same menu, so they compare.
+/// Available Wine, DXVK and native Metal renderer pathways.
 enum Renderer: String, Codable, CaseIterable, Identifiable {
     /// D3D8 -> wined3d -> Apple OpenGL. Everything renders. It is the only pathway that has ever
     /// put a complete, textured frame of the game world on screen.
@@ -33,6 +29,9 @@ enum Renderer: String, Codable, CaseIterable, Identifiable {
     /// four times a frame; see docs/MAX4K.md and `PerfSettings.flareReadbackNoWait`.
     case metal
 
+    /// D3D8 -> d3d8to9 -> mtld3d -> Metal, with the tested FFXI fixes and pass merging.
+    case mtld3d
+
     var id: String { rawValue }
 
     var title: String {
@@ -40,6 +39,7 @@ enum Renderer: String, Codable, CaseIterable, Identifiable {
         case .openGL: return "Classic (OpenGL)"
         case .vulkan: return "Vulkan"
         case .metal:  return "Metal / DXVK (recommended)"
+        case .mtld3d: return "Metal / mtld3d (experimental)"
         }
     }
 
@@ -54,10 +54,13 @@ enum Renderer: String, Codable, CaseIterable, Identifiable {
         case .metal:
             return "Recommended. The world draws correctly, fog included, at 4K with every "
                  + "setting at maximum."
+        case .mtld3d:
+            return "Native Metal with the FFXI rendering fixes and pass merging. Faster in our "
+                 + "local tests; broader play testing is still in progress."
         }
     }
 
-    /// All three pathways now draw the game correctly.
+    /// All pathways have rendered the game world in local testing.
     var playable: Bool { true }
 
     /// Shown as the default and the recommendation.
@@ -86,6 +89,13 @@ enum Renderer: String, Codable, CaseIterable, Identifiable {
             // shader fails to compile: "cannot reserve 'buffer' resource location at index 0".
             // DXVK then draws nothing but its own HUD.
             return ["MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS": "1"]
+        case .mtld3d:
+            var env = ["MTLD3D_CONFIG": RendererSetup.mtld3dConfig,
+                       "RUST_LOG": "mtld3d=info"]
+            if let bundle = RendererSetup.mtld3dBundle() {
+                env["WINEDLLPATH"] = bundle.appendingPathComponent("wine").path
+            }
+            return env
         default:
             return [:]
         }
@@ -97,7 +107,7 @@ enum Renderer: String, Codable, CaseIterable, Identifiable {
     /// missing, with it the sky, clouds and terrain silhouettes come back. FFXI changes the x87
     /// control word, and D3D9 without D3DCREATE_FPU_PRESERVE lets that corrupt its own maths.
     var iniOverrides: [String: String] {
-        needsDXVK ? ["behaviorflags.fpu_preserve": "1"] : [:]
+        (needsDXVK || self == .mtld3d) ? ["behaviorflags.fpu_preserve": "1"] : [:]
     }
 }
 
@@ -128,15 +138,36 @@ enum RendererSetup {
         return FileManager.default.fileExists(atPath: source.path) ? source : nil
     }
 
-    static func apply(_ renderer: Renderer, to install: Install, log: (String) -> Void) {
+    static func apply(_ renderer: Renderer, to install: Install, log: (String) -> Void) throws {
+        // Validate the whole mtld3d package before changing the prefix.
+        var nativeBundle: URL?
+        var converter: URL?
+        if renderer == .mtld3d {
+            guard let bundle = mtld3dBundle(),
+                  let shim = Bundle.main.url(forResource: "d3d8to9", withExtension: "dll") else {
+                throw SetupError.missingResource("mtld3d or d3d8to9")
+            }
+            try validateMTLD3D(bundle: bundle, converter: shim)
+            nativeBundle = bundle
+            converter = shim
+        }
         stopWineserver(install)
+        defer { stopWineserver(install) }
 
         reg(install, add: #"HKCU\Software\Wine\Direct3D"#, name: "renderer",
             type: "REG_SZ", data: renderer.wineRendererKey)
         reg(install, add: #"HKCU\Software\Wine\Direct3D"#, name: "MaxVersionGL",
             type: "REG_DWORD", data: String(format: "0x%x", maxVersionGL))
 
-        if renderer.needsDXVK {
+        if let bundle = nativeBundle, let shim = converter {
+            backupBuiltins(install)
+            try installMTLD3DFiles(to: install, bundle: bundle, converter: shim)
+            for name in ["*d3d8", "*d3d9"] {
+                reg(install, add: #"HKCU\Software\Wine\DllOverrides"#, name: name,
+                    type: "REG_SZ", data: "native")
+            }
+            log("renderer: mtld3d + d3d8to9 installed; \(mtld3dConfig)")
+        } else if renderer.needsDXVK {
             installDXVK(install, log: log)
         } else {
             removeDXVK(install, log: log)
@@ -146,8 +177,61 @@ enum RendererSetup {
             // wined3d's Vulkan renderer needs a MoltenVK that is not the ancient bundled one.
             linkMoltenVK(install, toCX: true)
         }
-        stopWineserver(install)
         log("renderer: \(renderer.title)")
+    }
+
+    // MARK: - mtld3d
+
+    static let mtld3dConfig = "color.hdr.enable=false;render.scale=1;present.maxFps=0;render.mergePasses=true;render.submitDraws=0"
+    static let mtld3dFiles = ["native/i386-windows/d3d9.dll",
+                            "wine/i386-windows/mtld3d.dll", "wine/x86_64-unix/mtld3d.so",
+                            "prefix-markers/syswow64/mtld3d.dll", "prefix-markers/system32/mtld3d.dll"]
+
+    enum SetupError: LocalizedError {
+        case missingResource(String)
+        var errorDescription: String? {
+            switch self {
+            case .missingResource(let name):
+                return "Renderer resource missing: \(name). Reinstall the app or select Metal / DXVK."
+            }
+        }
+    }
+
+    static func mtld3dBundle() -> URL? {
+        Bundle.main.url(forResource: "mtld3d", withExtension: nil)
+    }
+
+    static func validateMTLD3D(bundle: URL, converter: URL) throws {
+        for file in mtld3dFiles.map({ bundle.appendingPathComponent($0) }) + [converter] {
+            guard FileManager.default.isReadableFile(atPath: file.path),
+                  (try? file.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true else {
+                throw SetupError.missingResource(file.lastPathComponent)
+            }
+        }
+    }
+
+    /// The shim's prefix markers and WINEDLLPATH are required along with native d3d9.dll.
+    /// Kept separate from registry operations so missing files and repeat installs can be tested.
+    static func installMTLD3DFiles(to install: Install, bundle: URL, converter: URL) throws {
+        try validateMTLD3D(bundle: bundle, converter: converter)
+        let fm = FileManager.default
+        func copy(_ source: URL, to target: URL) throws {
+            let bytes = try Data(contentsOf: source)
+            // Never write through a Wine builtin symlink into its runtime directory.
+            if (try? fm.destinationOfSymbolicLink(atPath: target.path)) != nil {
+                try fm.removeItem(at: target)
+            }
+            try bytes.write(to: target, options: .atomic)
+        }
+        for dir in dllDirs(install) where fm.fileExists(atPath: dir.path) {
+            try copy(converter, to: dir.appendingPathComponent("d3d8.dll"))
+            try copy(bundle.appendingPathComponent("native/i386-windows/d3d9.dll"),
+                     to: dir.appendingPathComponent("d3d9.dll"))
+        }
+        for bits in ["syswow64", "system32"] {
+            try copy(bundle.appendingPathComponent("prefix-markers/\(bits)/mtld3d.dll"),
+                     to: install.driveC.appendingPathComponent("windows/\(bits)/mtld3d.dll"))
+        }
     }
 
     // MARK: - DXVK

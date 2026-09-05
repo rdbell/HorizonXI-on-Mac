@@ -1,0 +1,16 @@
+{
+  "base": "ea1b1ca3e584917a460c79aac8916d8084099fb4",
+  "profile": "production",
+  "perf": false,
+  "frame_pointers": false,
+  "rust": "1.97.1",
+  "created_utc": "2026-09-05T15:41:25.625953+00:00",
+  "patch_sha256": "56bf0285fe0769f4766344444302fbea4d4b2356d6ca761c26a37b4d787d0ca5",
+  "files": {
+    "native/i386-windows/d3d9.dll": "5c50f730f02ef38aee0b6bec847ae559e91d1dfc179de5f9895615f1ae3abdcf",
+    "wine/i386-windows/mtld3d.dll": "6618f35ca777b8c16d76e01e3261d2f17040b86ed7e88f34f6975d3ec6ac3701",
+    "wine/x86_64-unix/mtld3d.so": "a078a2848d83337def0c97920f8f8cf0428f2a9fa5bb2273e8baa47154db9208",
+    "prefix-markers/syswow64/mtld3d.dll": "a74c0363a54b92db5deb731533e27d1248b9e51bc770dac281f8925e518123dc",
+    "prefix-markers/system32/mtld3d.dll": "602de35e20ca24d8d44eddc4e7a1d24a428e80fedc8aa012666cb35caa24a1af"
+  }
+}

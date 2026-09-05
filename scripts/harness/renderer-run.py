@@ -35,7 +35,8 @@ assert REPORT_SPEC.loader is not None
 REPORT_SPEC.loader.exec_module(reporting)
 WORLD = "Local LSB (Docker)"
 USER = "hxitest"
-PREFERENCE_KEYS = ("server.selected", "account.user", "account.user." + WORLD, "account.remember")
+PREFERENCE_KEYS = ("server.selected", "account.user", "account.user." + WORLD, "account.remember",
+                   "perf.settings")
 OCR_TOOL = HERE / ".build/scene-ocr"
 
 
@@ -180,9 +181,12 @@ class Snapshot:
         for key in PREFERENCE_KEYS:
             if key in prefs:
                 value = prefs[key]
-                checked(["defaults", "write", menu.APP_BUNDLE_ID, key,
-                         "-bool" if isinstance(value, bool) else "-string",
-                         str(value).lower() if isinstance(value, bool) else value])
+                if isinstance(value, bytes):
+                    checked(["defaults", "write", menu.APP_BUNDLE_ID, key, "-data", value.hex()])
+                else:
+                    checked(["defaults", "write", menu.APP_BUNDLE_ID, key,
+                             "-bool" if isinstance(value, bool) else "-string",
+                             str(value).lower() if isinstance(value, bool) else value])
             else:
                 menu.run(["defaults", "delete", menu.APP_BUNDLE_ID, key])
         before = json.loads((self.output / "docker-before.json").read_text())
@@ -225,7 +229,7 @@ def stage_app(options: argparse.Namespace) -> Path:
                      resources / "dxvk-1.10.3-x32-d3d9-horizonxi.dll")
     if options.converter:
         shutil.copy2(options.converter, resources / "d3d8to9.dll")
-    checked(["codesign", "--force", "--deep", "--sign", "-", str(app)], timeout=60)
+    checked(["codesign", "--force", "--sign", "-", str(app)], timeout=60)
     checked(["codesign", "--verify", "--deep", "--strict", str(app)])
     return app
 
@@ -235,6 +239,8 @@ def main() -> int:
     parser.add_argument("--output", type=Path)
     parser.add_argument("--restore", type=Path)
     parser.add_argument("--renderer-bundle", type=Path)
+    parser.add_argument("--installed-mtld3d", action="store_true",
+                        help="verify the installed app's mtld3d selection without renderer overrides")
     parser.add_argument("--dxmt-bundle", type=Path, help="DXMT release directory containing i386-windows and x86_64-unix")
     parser.add_argument("--dgvoodoo-config", type=Path, help="dgVoodoo configuration for the supplied D3D8 converter")
     parser.add_argument("--renderer-config", default="color.hdr.enable=false;render.scale=1;present.maxFps=0",
@@ -253,6 +259,11 @@ def main() -> int:
     parser.add_argument("--dump", action="store_true", help="F12 dump at character selection")
     parser.add_argument("--dump-scene", help="F12 dump at a named scene screenshot, such as city-settled")
     options, forwarded = parser.parse_known_args()
+    if options.installed_mtld3d and (options.renderer_bundle or options.converter or options.dxmt_bundle):
+        parser.error("--installed-mtld3d cannot replace renderer resources")
+    if options.installed_mtld3d and any(any(key in arg for key in
+            ("WINEDLLPATH", "WINEDLLOVERRIDES", "MTLD3D_", "RUST_LOG")) for arg in forwarded):
+        parser.error("--installed-mtld3d cannot inject renderer environment overrides")
     if not 0 < options.draw_distance <= 20:
         parser.error("--draw-distance must be greater than 0 and at most 20")
     if options.dxmt_bundle and (options.renderer_bundle or not options.converter or not options.dgvoodoo_config):
@@ -286,6 +297,21 @@ def main() -> int:
             if self.args.world != WORLD or self.args.game_dir != menu.DEFAULT_GAME or self.args.profile != "lsb-docker.ini":
                 raise RuntimeError("Renderer runs are restricted to the installed local Hxitest profile")
             pin_local_account(self.game_dir)
+            prefs = plistlib.loads(checked(["defaults", "export", menu.APP_BUNDLE_ID, "-"]).encode())
+            perf = json.loads(prefs.get("perf.settings", b"{}"))
+            if options.installed_mtld3d:
+                if perf.get("renderer") != "mtld3d":
+                    raise RuntimeError("Select mtld3d in the installed launcher before validation")
+                for key in ("WINEDLLPATH", "WINEDLLOVERRIDES", "MTLD3D_CONFIG", "RUST_LOG"):
+                    if menu.launchctl_get(key) or any(line.partition("=")[0].strip() == key
+                            for line in perf.get("extraEnv", "").splitlines()):
+                        raise RuntimeError(f"Clear the experimental {key} override before installed validation")
+            else:
+                # Staged experiments replace the DXVK resource. A saved mtld3d choice would
+                # otherwise bypass that candidate and invalidate the comparison.
+                perf["renderer"] = "metal"
+                checked(["defaults", "write", menu.APP_BUNDLE_ID, "perf.settings", "-data",
+                         json.dumps(perf).encode().hex()])
             profile = self.game_dir / "config/boot/lsb-docker.ini"
             if options.background:
                 profile.write_text(set_background(profile.read_text(), options.background))
@@ -330,7 +356,24 @@ def main() -> int:
             return ok
 
         def launch(self) -> bool:
+            launched_at = time.time()
             ok = super().launch()
+            if ok and options.installed_mtld3d:
+                spawn = Path.home() / "Library/Application Support/HorizonXI-on-Mac/last-spawn.txt"
+                if spawn.stat().st_mtime < launched_at:
+                    raise RuntimeError("No fresh launcher environment record")
+                keys = ("WINEDLLPATH", "MTLD3D_CONFIG", "RUST_LOG")
+                environment = {key: value for line in spawn.read_text().splitlines()
+                               for key, sep, value in [line.partition("=")] if sep and key in keys}
+                installed_wine = menu.APP / "Contents/Resources/mtld3d/wine"
+                if environment.get("WINEDLLPATH") != str(installed_wine):
+                    raise RuntimeError("Normal launcher did not select the bundled Wine shim")
+                config = dict(part.split("=", 1) for part in environment.get("MTLD3D_CONFIG", "").split(";") if "=" in part)
+                if any(config.get(key) != value for key, value in {
+                    "color.hdr.enable": "false", "render.scale": "1", "present.maxFps": "0",
+                    "render.mergePasses": "true", "render.submitDraws": "0"}.items()):
+                    raise RuntimeError("Normal launcher did not select the tested mtld3d configuration")
+                self.record["installed_renderer_environment"] = environment
             self.record["graphics_at_launch"] = graphics_values(
                 (self.game_dir / "config/boot/lsb-docker.ini").read_text())
             (options.output / "active.json").write_text(json.dumps({"session": str(self.session_dir), "pid": self.game_pid}) + "\n")
@@ -404,6 +447,14 @@ def main() -> int:
                 resources = menu.APP / "Contents/Resources"
                 expected = {"d3d8.dll": digest(resources / "d3d8to9.dll"),
                             "d3d9.dll": digest(resources / "dxvk-1.10.3-x32-d3d9-horizonxi.dll")}
+                if options.installed_mtld3d:
+                    installed_bundle = resources / "mtld3d"
+                    manifest = json.loads((installed_bundle / "build.json").read_text())
+                    for name, checksum in manifest["files"].items():
+                        if digest(installed_bundle / name) != checksum:
+                            raise RuntimeError(f"Installed mtld3d checksum mismatch: {name}")
+                    expected.update({Path(name).name: checksum for name, checksum in manifest["files"].items()
+                                     if name.startswith(("native/", "wine/"))})
                 if options.renderer_bundle:
                     expected.update({"mtld3d.dll": digest(options.renderer_bundle / "wine/i386-windows/mtld3d.dll"),
                                      "mtld3d.so": digest(options.renderer_bundle / "wine/x86_64-unix/mtld3d.so")})
@@ -417,7 +468,9 @@ def main() -> int:
                                for row in identities):
                         raise RuntimeError(f"Loaded {name} does not match the staged renderer")
                 self.record["renderer_verified"] = expected
-                self.record["renderer_config"] = options.renderer_config if options.renderer_bundle else None
+                self.record["installed_mtld3d"] = options.installed_mtld3d
+                self.record["renderer_config"] = (self.record["installed_renderer_environment"]["MTLD3D_CONFIG"]
+                    if options.installed_mtld3d else options.renderer_config if options.renderer_bundle else None)
                 self.record["renderer_log"] = options.renderer_log if options.renderer_bundle else None
                 self.record["draw_distance_requested"] = options.draw_distance
                 if options.dxmt_bundle:

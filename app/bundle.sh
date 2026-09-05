@@ -46,6 +46,18 @@ for dll in d3d8to9.dll dxvk-1.10.3-x32-d3d9-horizonxi.dll; do
 done
 [[ -f "$REPO/vendor/dxvk.conf" ]] && cp "$REPO/vendor/dxvk.conf" "$APP/Contents/Resources/dxvk.conf"
 
+# Frozen, tested mtld3d build. Include the Wine shim, Unix library and prefix markers.
+# Verify every runtime file before packaging so an incomplete renderer cannot ship.
+python3 - "$REPO/vendor/mtld3d" <<'PY'
+import hashlib, json, pathlib, sys
+root = pathlib.Path(sys.argv[1])
+manifest = json.loads((root / "build.json").read_text())
+for name, expected in manifest["files"].items():
+    if hashlib.sha256((root / name).read_bytes()).hexdigest() != expected:
+        raise SystemExit(f"mtld3d checksum mismatch: {name}")
+PY
+cp -R "$REPO/vendor/mtld3d" "$APP/Contents/Resources/mtld3d"
+
 # x87sidecar: the fix for FFXI's x87 floating-point math running ~100x slow under Rosetta (see
 # docs/X87-WALL.md). Signed individually below with its own entitlements -- the app's deep-sign
 # strips them otherwise, and without get-task-allow/cs.debugger it cannot attach to the game.
@@ -101,7 +113,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   <key>NSDocumentsFolderUsageDescription</key><string>To find a wrapper you keep in Documents.</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>3.8</string>
-  <key>CFBundleVersion</key><string>21</string>
+  <key>CFBundleVersion</key><string>22</string>
   <key>LSMinimumSystemVersion</key><string>13.0</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>LSApplicationCategoryType</key><string>public.app-category.games</string>
@@ -126,6 +138,7 @@ find "$APP" -exec xattr -c {} \; 2>/dev/null || true
 X87SC="$APP/Contents/Resources/x87sidecar_entitled"
 X87COOP="$APP/Contents/Resources/x87sidecar-coop"
 AUDIOFOLLOW="$APP/Contents/Resources/audiofollow.dylib"
+MTLD3D="$APP/Contents/Resources/mtld3d/wine/x86_64-unix/mtld3d.so"
 if [[ -n "${HXI_SIGN_ID:-}" ]]; then
   # The cooperative sidecar has no entitlements, so it can carry the hardened runtime and the
   # secure timestamp the notary demands of nested executables. --timestamp is required here:
@@ -136,12 +149,30 @@ if [[ -n "${HXI_SIGN_ID:-}" ]]; then
   # Nested dylibs need the hardened runtime and a secure timestamp too, or the notary rejects
   # the whole bundle on this one file.
   [[ -f "$AUDIOFOLLOW" ]] && codesign --force --options runtime --timestamp -s "$HXI_SIGN_ID" "$AUDIOFOLLOW"
-  codesign --force --options runtime -s "$HXI_SIGN_ID" "$APP"
+  codesign --force --options runtime --timestamp -s "$HXI_SIGN_ID" "$MTLD3D"
 else
   [[ -f "$X87SC" ]] && codesign --force -s - \
     --entitlements "$REPO/vendor/x87sidecar-entitlements.plist" "$X87SC" >/dev/null 2>&1 || true
   [[ -f "$AUDIOFOLLOW" ]] && codesign --force -s - "$AUDIOFOLLOW" >/dev/null 2>&1 || true
-  codesign --force -s - "$APP" >/dev/null 2>&1 || true
+  codesign --force -s - "$MTLD3D"
+fi
+
+# Signing changes the Mach-O bytes. Retain the tested unsigned hash and record the installed
+# hash before sealing the app, so the packaged manifest can verify the loaded library too.
+python3 - "$APP/Contents/Resources/mtld3d" <<'PY'
+import hashlib, json, pathlib, sys
+root = pathlib.Path(sys.argv[1])
+path = root / "build.json"
+manifest = json.loads(path.read_text())
+name = "wine/x86_64-unix/mtld3d.so"
+manifest["unsigned_unix_sha256"] = manifest["files"][name]
+manifest["files"][name] = hashlib.sha256((root / name).read_bytes()).hexdigest()
+path.write_text(json.dumps(manifest, indent=2) + "\n")
+PY
+if [[ -n "${HXI_SIGN_ID:-}" ]]; then
+  codesign --force --options runtime -s "$HXI_SIGN_ID" "$APP"
+else
+  codesign --force -s - "$APP"
 fi
 
 # Re-register with Launch Services. Replacing a bundle in place leaves the Dock and Finder

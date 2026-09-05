@@ -64,7 +64,8 @@ class RendererRunTests(unittest.TestCase):
             system_dll.parent.mkdir(parents=True)
             system_dll.write_bytes(b"original system renderer")
             output = root / "output"
-            prefs = {"server.selected": "Example world", "account.remember": False}
+            prefs = {"server.selected": "Example world", "account.remember": False,
+                     "perf.settings": b'{"renderer":"mtld3d","msync":false}'}
             changes = []
 
             def checked(argv, timeout=30):
@@ -98,6 +99,7 @@ class RendererRunTests(unittest.TestCase):
             self.assertTrue(json.loads((output / "restoration.json").read_text())["docker_unchanged"])
             self.assertEqual(snapshot.private.stat().st_mode & 0o777, 0o700)
             self.assertTrue(any(row[-2:] == ["-bool", "false"] for row in changes))
+            self.assertTrue(any(row[-2:] == ["-data", prefs["perf.settings"].hex()] for row in changes))
 
     def test_restore_refuses_live_processes_before_writing(self):
         with patch.object(renderer.menu, "matching", return_value=[(1, "wine")]):

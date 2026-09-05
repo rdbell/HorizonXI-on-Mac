@@ -561,7 +561,15 @@ final class Runner: ObservableObject {
             // A wrapper that has been copied or moved still has its dylib links aimed at the old
             // copy; fix that before anything tries to load one. See relinkStrayDylibs.
             RendererSetup.relinkStrayDylibs(install) { log($0) }
-            RendererSetup.apply(perf.renderer, to: install) { log($0) }
+            do {
+                try RendererSetup.apply(perf.renderer, to: install) { log($0) }
+            } catch {
+                await MainActor.run { [weak self] in
+                    self?.appendLine("!! \(error.localizedDescription)")
+                    self?.running = false
+                }
+                return
+            }
             // Same moment, same reason: the registry has to name *this* world's SquareEnix folder.
             GameRegistry.point(install) { log($0) }
             Self.cleanStaleWineSockets()

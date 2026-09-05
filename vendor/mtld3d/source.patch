@@ -1,0 +1,1407 @@
+diff --git a/mtld3d.conf b/mtld3d.conf
+index 8180614..e7f0987 100644
+--- a/mtld3d.conf
++++ b/mtld3d.conf
+@@ -191,6 +191,16 @@
+ 
+ # query.flushImmediate = false
+ 
++# Experimental early submission for games that read a render target every frame.
++# Send work after this many draws while the game continues collecting the next
++# chunk. Zero keeps whole-frame batching. Colour, depth and readback ordering are
++# preserved, at the cost of extra GPU store/load traffic at each split.
++# render.submitDraws = 0
++
++# Experimental: combine single-sample passes when texture dependencies allow it.
++# Copies, clears, resolves, and visibility queries retain their ordering.
++# render.mergePasses = false
++
+ 
+ #########
+ # Depth #
+diff --git a/unix/shared/src/ffi_boundary.rs b/unix/shared/src/ffi_boundary.rs
+index ee5bd6b..4e6b6f6 100644
+--- a/unix/shared/src/ffi_boundary.rs
++++ b/unix/shared/src/ffi_boundary.rs
+@@ -174,7 +174,7 @@ impl<T: Copy> ValueIn<'_, T> {
+ 
+ /// Null-guarded FFI out-param. `write` consumes `self`.
+ ///
+-/// Construction is `unsafe` (the caller asserts writeability and alignment);
++/// Construction is `unsafe` (the caller asserts writeability and lifetime);
+ /// `write` is safe because the invariant is type-encoded.
+ pub struct OutPtr<'a, T>(NonNull<T>, PhantomData<&'a mut T>);
+ 
+@@ -183,8 +183,8 @@ impl<T> OutPtr<'_, T> {
+     ///
+     /// # Safety
+     ///
+-    /// Caller asserts that any non-null `out` is a writable, properly-aligned
+-    /// `T*` valid for the call frame (the D3D9 ABI for typed out-params).
++    /// Caller asserts that any non-null `out` spans writable storage for a `T`
++    /// valid for the call frame. The storage need not be aligned to `T`.
+     #[must_use]
+     pub const unsafe fn opt(out: *mut T) -> Option<Self> {
+         match NonNull::new(out) {
+@@ -196,7 +196,7 @@ impl<T> OutPtr<'_, T> {
+     /// Consume `self` and write `val` through the pointer.
+     pub const fn write(self, val: T) {
+         // SAFETY: invariant carried from construction.
+-        unsafe { self.0.as_ptr().write(val) };
++        unsafe { self.0.as_ptr().write_unaligned(val) };
+     }
+ 
+     /// One-shot null-guarded write. Convenience for the `opt + write` pair.
+diff --git a/unix/shared/src/ffi_boundary/tests.rs b/unix/shared/src/ffi_boundary/tests.rs
+index 09f99c6..0afdcb8 100644
+--- a/unix/shared/src/ffi_boundary/tests.rs
++++ b/unix/shared/src/ffi_boundary/tests.rs
+@@ -67,6 +67,20 @@ fn out_ptr_opt_filters_null() {
+     assert!(opt.is_none());
+ }
+ 
++#[test]
++fn out_ptr_writes_unaligned_storage_without_touching_neighbors() {
++    let mut storage = [u64::MAX; 3];
++    let raw = storage.as_mut_ptr().wrapping_byte_add(2);
++    assert!(!raw.is_aligned());
++    // SAFETY: `raw` spans eight writable bytes in the local storage; alignment is not required.
++    let out = unsafe { OutPtr::opt(raw) }.unwrap();
++    out.write(0x1122_3344_5566_7788);
++    let bytes: Vec<_> = storage.iter().flat_map(|word| word.to_ne_bytes()).collect();
++    assert_eq!(&bytes[2..10], &0x1122_3344_5566_7788_u64.to_ne_bytes());
++    assert!(bytes[..2].iter().all(|byte| *byte == 0xff));
++    assert!(bytes[10..].iter().all(|byte| *byte == 0xff));
++}
++
+ #[test]
+ fn vtable_this_round_trip() {
+     let mut p = Point { x: 10, y: 20 };
+diff --git a/unix/unix/src/metal/command.rs b/unix/unix/src/metal/command.rs
+index 18e1be0..6eb9ee4 100644
+--- a/unix/unix/src/metal/command.rs
++++ b/unix/unix/src/metal/command.rs
+@@ -294,6 +294,11 @@ impl core::fmt::Display for BlitSite {
+ /// with its own attachments and load actions, optionally blits the
+ /// backbuffer to the drawable, and commits.
+ pub fn submit_frame(params: &mut SubmitFrameParams) -> bool {
++    // Sample adjacent submissions: readback workloads can split every
++    // application frame in two, so a single even sequence is biased.
++    let timer = (params.submit_seq % 128 < 2
++        && log::log_enabled!(target: "mtld3d::gpu_time", log::Level::Trace))
++    .then(std::time::Instant::now);
+     params.drawable_wait_ns = 0;
+     mtld3d_shared::crumb!("submit:enter", params.queue_handle.raw(), params.pass_count);
+     mtld3d_shared::crumb!("submit:queueret", params.queue_handle.raw());
+@@ -592,6 +597,7 @@ pub fn submit_frame(params: &mut SubmitFrameParams) -> bool {
+             .expect("PE wire pointer fits host address space (unix is 64-bit)");
+         let seq = params.submit_seq;
+         let failed_seq_ptr = params.failed_submit_seq_ptr;
++        let sample_gpu_time = timer.is_some();
+         let handler = RcBlock::new(
+             move |cb_ptr: core::ptr::NonNull<ProtocolObject<dyn MTLCommandBuffer>>| {
+                 // Tripwire: a command buffer the GPU rejected discards every
+@@ -606,6 +612,12 @@ pub fn submit_frame(params: &mut SubmitFrameParams) -> bool {
+                 // SAFETY: Metal invokes the block with the completed command
+                 // buffer; the pointer is valid for the handler's duration.
+                 let cb = unsafe { cb_ptr.as_ref() };
++                if sample_gpu_time {
++                    log::trace!(target: "mtld3d::gpu_time",
++                        "submit_seq={seq} gpu_ms={:.3} kernel_ms={:.3}",
++                        (cb.GPUEndTime() - cb.GPUStartTime()).max(0.0) * 1000.0,
++                        (cb.kernelEndTime() - cb.kernelStartTime()).max(0.0) * 1000.0);
++                }
+                 // The failure is recorded before the retirement bump below:
+                 // both stores are `Release`, so a PE-side `Acquire` load of
+                 // `coherent_seq` that observes this seq observes the failure
+@@ -644,6 +656,12 @@ pub fn submit_frame(params: &mut SubmitFrameParams) -> bool {
+ 
+     mtld3d_shared::crumb!("submit:commit");
+     cmd_buf.commit();
++    if let Some(start) = timer {
++        log::trace!(target: "mtld3d::gpu_time",
++            "submit_seq={} no_present={} passes={} cpu_encode_commit_ms={:.3}",
++            params.submit_seq, params.present_layer.is_null(), params.pass_count,
++            start.elapsed().as_secs_f64() * 1000.0);
++    }
+     mtld3d_shared::crumb!("submit:done");
+     true
+ }
+@@ -2862,6 +2880,9 @@ fn encode_readback_resolve(
+ pub fn blit_texture_to_buffer(args: &BlitArgs) -> bool {
+     use core::{ffi::c_void, ptr::NonNull};
+ 
++    let timer = log::log_enabled!(target: "mtld3d::readback", log::Level::Trace)
++        .then(std::time::Instant::now);
++
+     let to_usize =
+         |v: u64| usize::try_from(v).expect("PE wire u64 fits unix host usize (unix is 64-bit)");
+     let BlitArgs {
+@@ -3024,8 +3045,15 @@ pub fn blit_texture_to_buffer(args: &BlitArgs) -> bool {
+     }
+ 
+     blit.endEncoding();
++    let encode_elapsed = timer.map(|start| start.elapsed());
+     cmd_buf.commit();
+     cmd_buf.waitUntilCompleted();
++    if let (Some(start), Some(encode)) = (timer, encode_elapsed) {
++        log::trace!(target: "mtld3d::readback",
++            "metal_blit {width}x{height} encode_ms={:.3} wait_ms={:.3}",
++            encode.as_secs_f64() * 1000.0,
++            start.elapsed().saturating_sub(encode).as_secs_f64() * 1000.0);
++    }
+     // dst_buffer drops here — Metal wrapper released, caller's memory
+     // untouched (deallocator was None).
+     true
+diff --git a/windows/core/src/config.rs b/windows/core/src/config.rs
+index b78574d..a4f818f 100644
+--- a/windows/core/src/config.rs
++++ b/windows/core/src/config.rs
+@@ -138,6 +138,16 @@ pub struct Mtld3dConfig {
+     /// fence every loading-screen upload batch that way and the wait costs
+     /// seconds per load. File key: `query.flushImmediate`.
+     pub query_flush_immediate: bool,
++    /// Submit a continuation after this many draws so encoding can overlap the API thread.
++    ///
++    /// Zero keeps whole-frame batching. A continuation preserves colour and
++    /// depth and does not present. Small values add render-pass store/load
++    /// traffic. Default: `0`. File key: `render.submitDraws`.
++    pub render_submit_draws: u32,
++    /// Merge independent single-sample passes. Experimental, default false.
++    ///
++    /// File key: `render.mergePasses`.
++    pub render_merge_passes: bool,
+     /// A newly bound same-size depth-stencil texture inherits the previous one's contents.
+     ///
+     /// D3D9-era drivers commonly backed all equal-size depth-stencil
+@@ -309,6 +319,8 @@ impl Default for Mtld3dConfig {
+             bytecode_dump_dir: String::new(),
+             skip_shaders: Vec::new(),
+             query_flush_immediate: false,
++            render_submit_draws: 0,
++            render_merge_passes: false,
+             depth_alias_same_size: false,
+             buffer_ignore_lock_bounds: false,
+             vbib_retention_cap_bytes: 512 * 1024 * 1024,
+@@ -453,6 +465,11 @@ pub fn log_options(cfg: &Mtld3dConfig) {
+         target: crate::LOG_TARGET,
+         "config: query.flushImmediate = {}", cfg.query_flush_immediate
+     );
++    info!(
++        target: crate::LOG_TARGET,
++        "config: render.submitDraws = {}", cfg.render_submit_draws
++    );
++    info!(target: crate::LOG_TARGET, "config: render.mergePasses = {}", cfg.render_merge_passes);
+     info!(
+         target: crate::LOG_TARGET,
+         "config: depth.aliasSameSize = {}", cfg.depth_alias_same_size
+@@ -536,6 +553,12 @@ fn apply(cfg: &mut Mtld3dConfig, source: &str, key: &str, value: &str) {
+         "debug.bytecodeDumpDir" => value.clone_into(&mut cfg.bytecode_dump_dir),
+         "debug.skipShaders" => cfg.skip_shaders = parse_hex_list(value),
+         "query.flushImmediate" => assign_bool(source, key, value, &mut cfg.query_flush_immediate),
++        "render.submitDraws" => match value.parse::<u32>() {
++            Ok(draws) => cfg.render_submit_draws = draws,
++            Err(_) => log::warn!(target: crate::LOG_TARGET,
++                "{source}: invalid render.submitDraws {value:?}, expected a nonnegative integer"),
++        },
++        "render.mergePasses" => assign_bool(source, key, value, &mut cfg.render_merge_passes),
+         "depth.aliasSameSize" => assign_bool(source, key, value, &mut cfg.depth_alias_same_size),
+         "buffer.ignoreLockBounds" => {
+             assign_bool(source, key, value, &mut cfg.buffer_ignore_lock_bounds);
+diff --git a/windows/core/src/config/tests.rs b/windows/core/src/config/tests.rs
+index e2fa46b..f9913f0 100644
+--- a/windows/core/src/config/tests.rs
++++ b/windows/core/src/config/tests.rs
+@@ -35,6 +35,7 @@ fn defaults_match_documented_values() {
+     assert!(d.bytecode_dump_dir.is_empty());
+     assert!(d.skip_shaders.is_empty());
+     assert!(!d.query_flush_immediate);
++    assert_eq!(d.render_submit_draws, 0);
+     assert!(!d.buffer_ignore_lock_bounds);
+     assert_eq!(d.vbib_retention_cap_bytes, 512 * 1024 * 1024);
+     assert_eq!(d.pagebox_pool_cap_bytes, 128 * 1024 * 1024);
+@@ -193,6 +194,12 @@ fn buffer_ignore_lock_bounds_defaults_off_and_round_trips() {
+     assert!(!cfg.buffer_ignore_lock_bounds);
+ }
+ 
++#[test]
++fn merge_passes_defaults_off_and_accepts_an_explicit_override() {
++    assert!(!parse(None, "", None).render_merge_passes);
++    assert!(parse(None, "render.mergePasses = true\n", None).render_merge_passes);
++}
++
+ #[test]
+ fn cursor_scale_auto_keyword_case_insensitive() {
+     let cfg = parse(None, "cursor.scale = Auto\n", None);
+diff --git a/windows/core/src/convert.rs b/windows/core/src/convert.rs
+index d021cf0..bb69a11 100644
+--- a/windows/core/src/convert.rs
++++ b/windows/core/src/convert.rs
+@@ -1169,11 +1169,6 @@ bitflags::bitflags! {
+         /// Drives whether the FF VS emit needs the indexed-palette input
+         /// attribute (slot 13).
+         const DECLARED_INDICES = 1 << 4;
+-        /// The vertex format came from `SetVertexDeclaration`, not `SetFVF`.
+-        ///
+-        /// A COLORVERTEX material source pointing at a vertex colour the
+-        /// declaration omits reads 0 (FVF instead falls back to the material).
+-        const USES_VERTEX_DECL = 1 << 5;
+         /// Vertex declaration has a PSIZE element (per-vertex point size).
+         const HAS_PSIZE = 1 << 6;
+     }
+@@ -1187,11 +1182,6 @@ impl FfVsLayout {
+     }
+     #[inline]
+     #[must_use]
+-    pub const fn uses_vertex_decl(&self) -> bool {
+-        self.flags.contains(FfVsLayoutFlags::USES_VERTEX_DECL)
+-    }
+-    #[inline]
+-    #[must_use]
+     pub const fn has_psize(&self) -> bool {
+         self.flags.contains(FfVsLayoutFlags::HAS_PSIZE)
+     }
+@@ -1223,9 +1213,8 @@ impl FfVsLayout {
+ ///
+ /// Panics if `tex_coord_count` exceeds the `u8` range (clamped to ≤8 by the
+ /// loop, so unreachable).
+-pub fn ff_vs_layout_from_elements(elements: &[D3DVERTEXELEMENT9], uses_decl: bool) -> FfVsLayout {
++pub fn ff_vs_layout_from_elements(elements: &[D3DVERTEXELEMENT9]) -> FfVsLayout {
+     let mut flags = FfVsLayoutFlags::empty();
+-    flags.set(FfVsLayoutFlags::USES_VERTEX_DECL, uses_decl);
+     let mut max_texcoord_index: Option<u8> = None;
+     let mut tex_coord_dims = [0u8; 8];
+     let mut declared_weights_count = 0u8;
+diff --git a/windows/core/src/convert/tests.rs b/windows/core/src/convert/tests.rs
+index 35fca49..3f8e90c 100644
+--- a/windows/core/src/convert/tests.rs
++++ b/windows/core/src/convert/tests.rs
+@@ -727,7 +727,7 @@ fn resolve_attrs_drops_streams_past_the_slot_table() {
+     let resolved = resolve_attrs_for_ff(&elems);
+     assert_eq!(resolved.attrs.len(), 1);
+     assert_eq!(resolved.used_streams, 0b1);
+-    let layout = ff_vs_layout_from_elements(&elems, true);
++    let layout = ff_vs_layout_from_elements(&elems);
+     assert!(
+         !layout.has_color0(),
+         "dropped element leaves no flag behind"
+@@ -811,7 +811,7 @@ fn ff_vs_layout_clamps_tex_coord_count_to_8() {
+             usage_index: 12,
+         },
+     ];
+-    let layout = ff_vs_layout_from_elements(&elements, false);
++    let layout = ff_vs_layout_from_elements(&elements);
+     assert_eq!(layout.tex_coord_count, 8);
+ }
+ 
+@@ -828,13 +828,13 @@ fn ff_vs_layout_in_spec_usage_index_7_yields_8() {
+             usage_index: 7,
+         },
+     ];
+-    let layout = ff_vs_layout_from_elements(&elements, false);
++    let layout = ff_vs_layout_from_elements(&elements);
+     assert_eq!(layout.tex_coord_count, 8);
+ }
+ 
+ #[test]
+ fn ff_vs_layout_single_tex0_yields_1() {
+-    let layout = ff_vs_layout_from_elements(&[pos3(), tex0(12)], false);
++    let layout = ff_vs_layout_from_elements(&[pos3(), tex0(12)]);
+     assert_eq!(layout.tex_coord_count, 1);
+ }
+ 
+diff --git a/windows/core/src/dxso/ff.rs b/windows/core/src/dxso/ff.rs
+index 00692df..9182d68 100644
+--- a/windows/core/src/dxso/ff.rs
++++ b/windows/core/src/dxso/ff.rs
+@@ -106,12 +106,6 @@ bitflags::bitflags! {
+         // Bit 10 was DIFFUSE_DECLARED_UNBOUND: a COLOR0 on a stream nothing
+         // feeds now reaches the shader as zeros through the stream's
+         // constant layout, so the plain HAS_COLOR0 path covers it.
+-        /// The vertex format came from `SetVertexDeclaration`, not `SetFVF`.
+-        ///
+-        /// A COLORVERTEX material source pointing at a vertex colour the
+-        /// declaration omits reads 0, whereas FVF falls back to the material
+-        /// colour.
+-        const USES_VERTEX_DECL = 1 << 11;
+         /// `D3DRS_NORMALIZENORMALS` is enabled.
+         ///
+         /// The FF VS then renormalizes the eye-space normal after the
+@@ -246,11 +240,6 @@ impl FfVsKey {
+     }
+     #[inline]
+     #[must_use]
+-    pub const fn uses_vertex_decl(&self) -> bool {
+-        self.flags.contains(FfVsFlags::USES_VERTEX_DECL)
+-    }
+-    #[inline]
+-    #[must_use]
+     pub const fn lighting_enabled(&self) -> bool {
+         self.flags.contains(FfVsFlags::LIGHTING_ENABLED)
+     }
+@@ -1004,7 +993,6 @@ fn emit_vs(out: &mut String, vs: &FfVsKey, entry: &str) {
+         mat_flags.set(MatColorFlags::COLOR_VERTEX, vs.color_vertex());
+         mat_flags.set(MatColorFlags::HAS_COLOR0, vs.has_color0());
+         mat_flags.set(MatColorFlags::HAS_COLOR1, vs.has_color1());
+-        mat_flags.set(MatColorFlags::USES_DECL, vs.uses_vertex_decl());
+         let mat_diffuse = resolve_mat(vs.diffuse_source, 10, mat_flags);
+         let mat_ambient = resolve_mat(vs.ambient_source, 11, mat_flags);
+         let mat_specular = resolve_mat(vs.specular_source, 12, mat_flags);
+@@ -1365,11 +1353,6 @@ bitflags::bitflags! {
+         const HAS_COLOR0 = 1 << 1;
+         /// The vertex carries a `COLOR1` (specular) channel.
+         const HAS_COLOR1 = 1 << 2;
+-        /// The draw uses a vertex declaration (not a legacy FVF).
+-        ///
+-        /// An absent colour reads 0 rather than falling back to the material
+-        /// constant.
+-        const USES_DECL = 1 << 3;
+     }
+ }
+ 
+@@ -1378,6 +1361,8 @@ bitflags::bitflags! {
+ /// The field (0 = `MCS_MATERIAL`, 1 = `MCS_COLOR1`, 2 = `MCS_COLOR2`) selects
+ /// the expression that feeds the FF lighting math. When `D3DRS_COLORVERTEX` is
+ /// false, the override is ignored and the material constant is always used.
++/// An omitted colour semantic also falls back to the material; a declared
++/// colour on an unbound stream reaches the shader input as zero instead.
+ fn resolve_mat(source: u8, mat_slot: u32, flags: MatColorFlags) -> String {
+     if flags.contains(MatColorFlags::COLOR_VERTEX) {
+         if source == 1 && flags.contains(MatColorFlags::HAS_COLOR0) {
+@@ -1386,12 +1371,6 @@ fn resolve_mat(source: u8, mat_slot: u32, flags: MatColorFlags) -> String {
+         if source == 2 && flags.contains(MatColorFlags::HAS_COLOR1) {
+             return "in.v3".to_string();
+         }
+-        if (source == 1 || source == 2) && flags.contains(MatColorFlags::USES_DECL) {
+-            // A vertex declaration that omits the requested COLOR reads 0 — only
+-            // the legacy FVF path falls back to the material colour for an
+-            // absent vertex colour source.
+-            return "float4(0.0)".to_string();
+-        }
+         if source > 2 {
+             mtld3d_shared::log_once_warn!(target: super::LOG_TARGET, "dxso FF: unknown material source {source} → MCS_MATERIAL");
+         }
+diff --git a/windows/core/src/ff_state.rs b/windows/core/src/ff_state.rs
+index 9eab569..68edc8f 100644
+--- a/windows/core/src/ff_state.rs
++++ b/windows/core/src/ff_state.rs
+@@ -1743,7 +1743,6 @@ fn build_vs_flags(
+     let mut flags = FfVsFlags::empty();
+     flags.set(FfVsFlags::HAS_NORMAL, layout.has_normal());
+     flags.set(FfVsFlags::HAS_COLOR0, layout.has_color0());
+-    flags.set(FfVsFlags::USES_VERTEX_DECL, layout.uses_vertex_decl());
+     flags.set(FfVsFlags::HAS_COLOR1, layout.has_color1());
+     flags.set(FfVsFlags::LIGHTING_ENABLED, lighting_enabled);
+     // D3DRS_NORMALIZENORMALS only affects a lit draw with a normal — gate the
+diff --git a/windows/core/src/passes.rs b/windows/core/src/passes.rs
+index e41b60d..94cad74 100644
+--- a/windows/core/src/passes.rs
++++ b/windows/core/src/passes.rs
+@@ -5555,3 +5555,5 @@ impl LastBoundCache {
+ 
+ #[cfg(test)]
+ mod tests;
++
++mod merge;
+diff --git a/windows/core/src/passes/merge.rs b/windows/core/src/passes/merge.rs
+new file mode 100644
+index 0000000..15a8a46
+--- /dev/null
++++ b/windows/core/src/passes/merge.rs
+@@ -0,0 +1,157 @@
++//! Conservative scheduling of independent single-sample render passes.
++
++use super::{
++    ColorLoad, Command, CommandType, DepthLoad, FxHashMap, FxHashSet, MTLTextureKind, MetalHandle,
++    Pass, PassState, StencilLoad,
++};
++
++struct Access {
++    reads: FxHashSet<u64>,
++    writes: FxHashSet<u64>,
++    movable: bool,
++}
++
++impl Access {
++    fn new(
++        pass: &Pass,
++        twins: &FxHashMap<MetalHandle<MTLTextureKind>, MetalHandle<MTLTextureKind>>,
++    ) -> Self {
++        let mut result = Self {
++            reads: FxHashSet::default(),
++            writes: [pass.color_texture.raw(), pass.depth_texture.raw()]
++                .into_iter()
++                .filter(|h| *h != 0)
++                .collect(),
++            movable: pass.leading_blits.is_empty()
++                && !pass.has_counting_visibility
++                && pass.extra_color.iter().all(|a| !a.is_bound())
++                && pass.color_msaa_texture.is_null()
++                && pass.color_resolve_texture.is_null()
++                && pass.depth_resolve_texture.is_null(),
++        };
++        for command in &pass.commands {
++            match CommandType::from_repr(command.cmd) {
++                Some(CommandType::SetFragmentTexture | CommandType::SetVertexTexture) => {
++                    if command.param_b != 0 {
++                        // SAFETY: both texture-bind commands carry an MTLTexture handle in param_b.
++                        let handle = unsafe { MetalHandle::new(command.param_b) };
++                        result
++                            .reads
++                            .insert(twins.get(&handle).unwrap_or(&handle).raw());
++                    }
++                }
++                // D3D9 shaders only read buffers. Uploads are either already ordered
++                // before all passes or in leading_blits, which is a barrier above.
++                Some(
++                    CommandType::SetRenderPipelineState
++                    | CommandType::SetViewport
++                    | CommandType::SetVertexBytes
++                    | CommandType::DrawPrimitives
++                    | CommandType::SetDepthStencilState
++                    | CommandType::SetCullMode
++                    | CommandType::SetFragmentSamplerState
++                    | CommandType::SetVertexBytesAt
++                    | CommandType::SetFragmentBytesAt
++                    | CommandType::SetScissorRect
++                    | CommandType::SetVertexBuffer
++                    | CommandType::DrawIndexedPrimitives
++                    | CommandType::SetBlendColor
++                    | CommandType::SetDepthBias
++                    | CommandType::DrawIndexedPrimitivesUp
++                    | CommandType::SetStencilReference
++                    | CommandType::SetFragmentNullTexture
++                    | CommandType::SetVertexSamplerState
++                    | CommandType::SetVertexNullTexture
++                    | CommandType::SetFragmentBuffer
++                    | CommandType::PushDebugGroup
++                    | CommandType::PopDebugGroup,
++                ) => {}
++                Some(CommandType::SetVisibilityResultMode) | None => result.movable = false,
++            }
++        }
++        // Sampling an attachment can require a completed earlier render pass.
++        result.movable &= result.reads.is_disjoint(&result.writes);
++        result
++    }
++
++    fn independent_of(&self, other: &Self) -> bool {
++        self.movable
++            && other.movable
++            && self.writes.is_disjoint(&other.writes)
++            && self.reads.is_disjoint(&other.writes)
++            && self.writes.is_disjoint(&other.reads)
++    }
++}
++
++fn compatible(first: &Pass, next: &Pass) -> bool {
++    first.color_texture == next.color_texture
++        && first.color_srgb_texture == next.color_srgb_texture
++        && first.color_subresource == next.color_subresource
++        && first.color_size == next.color_size
++        && first.color_format == next.color_format
++        && first.depth_texture == next.depth_texture
++        && first.depth_level == next.depth_level
++        && first.depth_is_sampleable == next.depth_is_sampleable
++        && first.viewport == next.viewport
++        && (next.color_texture.is_null() || next.color_load == ColorLoad::Load)
++        && (next.depth_texture.is_null()
++            || (next.depth_load == DepthLoad::Load && next.stencil_load == StencilLoad::Load))
++}
++
++impl PassState {
++    /// Merge later draws into an earlier pass only across independent texture accesses.
++    ///
++    /// Each original pass keeps its draw order. Clears, copies, resolves, visibility
++    /// commands, attachment feedback, and unknown commands prevent unsafe movement.
++    /// Run before load/store finalization, which must see the resulting pass order.
++    pub fn merge_independent_draw_passes(&mut self) {
++        let before = self.passes.len();
++        let mut accesses: Vec<_> = self
++            .passes
++            .iter()
++            .map(|p| Access::new(p, &self.srgb_twin_to_base))
++            .collect();
++        let mut index = 1;
++        while index < self.passes.len() {
++            let mut target = None;
++            if accesses[index].movable {
++                // A fixed lookback bounds scheduling overhead on pathological frames.
++                for earlier in (index.saturating_sub(16)..index).rev() {
++                    if accesses[earlier].movable
++                        && compatible(&self.passes[earlier], &self.passes[index])
++                    {
++                        target = Some(earlier);
++                        break;
++                    }
++                    if !accesses[index].independent_of(&accesses[earlier]) {
++                        break;
++                    }
++                }
++            }
++            let Some(target) = target else {
++                index += 1;
++                continue;
++            };
++            let mut next = self.passes.remove(index);
++            let next_access = accesses.remove(index);
++            let first = &mut self.passes[target];
++            // LastBoundCache suppresses these fresh-encoder defaults. Recreate
++            // the old pass boundary's state before replaying its commands.
++            first.commands.extend([
++                Command::set_blend_color(1.0, 1.0, 1.0, 1.0),
++                Command::set_depth_bias(0.0, 0.0),
++                Command::set_stencil_reference(0),
++            ]);
++            let offset = first.commands.len();
++            first.commands.append(&mut next.commands);
++            first.color_clear_quad_ranges.extend(
++                next.color_clear_quad_ranges
++                    .into_iter()
++                    .map(|(start, end)| (start + offset, end + offset)),
++            );
++            first.color_writes_observed |= next.color_writes_observed;
++            accesses[target].reads.extend(next_access.reads);
++        }
++        log::trace!(target: "mtld3d::pass_merge", "passes_before={before} passes_after={}", self.passes.len());
++    }
++}
+diff --git a/windows/core/src/passes/tests.rs b/windows/core/src/passes/tests.rs
+index c450bab..15edd06 100644
+--- a/windows/core/src/passes/tests.rs
++++ b/windows/core/src/passes/tests.rs
+@@ -153,6 +153,115 @@ fn dummy_draw() -> Command {
+     Command::draw_primitives(mtld3d_shared::mtl::PrimitiveType::Triangle, 0, 3)
+ }
+ 
++fn independent_pass_sequence() -> PassState {
++    let mut state = fresh();
++    state.clear_color(0, 0, 0, 1.0f32.to_bits());
++    state.clear_depth(1.0f32.to_bits());
++    state.emit_command(dummy_draw());
++    state.set_color_render_target(tex(0x3000), 640, 480, RT_FORMAT, RenderScale::IDENTITY);
++    state.set_depth_stencil_attachment(MetalHandle::NULL, (0, 0), false, false);
++    state.emit_command(dummy_draw());
++    state.set_color_render_target(backbuffer(), 640, 480, BB_FORMAT, RenderScale::IDENTITY);
++    state.set_depth_stencil_attachment(depth(), BB_SIZE, false, false);
++    state.emit_command(dummy_draw());
++    state.end_current_pass("test");
++    state
++}
++
++#[test]
++fn independent_draw_passes_merge_and_reset_implicit_encoder_state() {
++    let mut state = independent_pass_sequence();
++    assert_eq!(state.passes.len(), 3);
++    state.merge_independent_draw_passes();
++    assert_eq!(state.passes.len(), 2);
++    let commands = &state.passes[0].commands;
++    let draw_at: Vec<_> = commands
++        .iter()
++        .enumerate()
++        .filter(|(_, c)| c.cmd == CommandType::DrawPrimitives as u32)
++        .map(|(i, _)| i)
++        .collect();
++    assert_eq!(draw_at.len(), 2);
++    for kind in [
++        CommandType::SetBlendColor,
++        CommandType::SetDepthBias,
++        CommandType::SetStencilReference,
++    ] {
++        assert!(
++            commands[draw_at[0] + 1..draw_at[1]]
++                .iter()
++                .any(|c| c.cmd == kind as u32)
++        );
++    }
++}
++
++#[test]
++fn independent_merge_keeps_texture_read_write_dependencies() {
++    for vertex in [false, true] {
++        for read_by_middle in [false, true] {
++            for srgb in [false, true] {
++                let mut state = independent_pass_sequence();
++                let (index, texture) = if read_by_middle {
++                    (
++                        1,
++                        if srgb {
++                            backbuffer_srgb()
++                        } else {
++                            backbuffer()
++                        },
++                    )
++                } else {
++                    if srgb {
++                        state.register_srgb_twin(tex(0x3001), tex(0x3000));
++                    }
++                    (2, if srgb { tex(0x3001) } else { tex(0x3000) })
++                };
++                let command = if vertex {
++                    Command::set_vertex_texture(texture.raw(), 0)
++                } else {
++                    Command::set_fragment_texture(texture.raw(), 0)
++                };
++                state.passes[index].commands.insert(1, command);
++                state.merge_independent_draw_passes();
++                assert_eq!(
++                    state.passes.len(),
++                    3,
++                    "vertex={vertex} middle={read_by_middle} srgb={srgb}"
++                );
++            }
++        }
++    }
++}
++
++#[test]
++fn independent_merge_stops_at_clears_queries_blits_and_shared_depth() {
++    for barrier in 0..6 {
++        let mut state = independent_pass_sequence();
++        match barrier {
++            0 => {
++                state.passes[2].color_load = ColorLoad::Clear {
++                    r: 0,
++                    g: 0,
++                    b: 0,
++                    a: 0,
++                }
++            }
++            1 => state.passes[2].depth_load = DepthLoad::Clear { value: 0 },
++            2 => state.passes[1].has_counting_visibility = true,
++            3 => state.passes[1]
++                .leading_blits
++                .push(BlitCommand::generate_mipmaps(tex(0x4000).raw())),
++            4 => state.passes[1].depth_texture = depth(),
++            5 => state.passes[2]
++                .commands
++                .insert(1, Command::set_fragment_texture(backbuffer().raw(), 0)),
++            _ => unreachable!(),
++        }
++        state.merge_independent_draw_passes();
++        assert_eq!(state.passes.len(), 3, "barrier={barrier}");
++    }
++}
++
+ fn unpack_scissor(cmd: &Command) -> (u32, u32, u32, u32) {
+     assert_eq!(cmd.cmd, CommandType::SetScissorRect as u32);
+     let x = cmd.param_a;
+diff --git a/windows/core/src/shader_cache.rs b/windows/core/src/shader_cache.rs
+index dd195b7..ce56804 100644
+--- a/windows/core/src/shader_cache.rs
++++ b/windows/core/src/shader_cache.rs
+@@ -269,7 +269,10 @@ use crate::shader_compile_stats::CompileBucket;
+ /// bound to a volume or cube texture emits `texture3d<float>` /
+ /// `texturecube<float>` and a `.xyz` coordinate whatever its `dcl_<dim>` said,
+ /// which is new MSL and a new programmable-VS disk-key input.
+-pub const SHADER_CACHE_SCHEMA_VERSION: u32 = 67;
++///
++/// `68` falls back to material constants for omitted vertex colour semantics
++/// in fixed-function lighting and removes the declaration-origin key bit.
++pub const SHADER_CACHE_SCHEMA_VERSION: u32 = 68;
+ 
+ /// File magic.
+ ///
+diff --git a/windows/d3d9/src/device.rs b/windows/d3d9/src/device.rs
+index 9f0ab21..043a64b 100644
+--- a/windows/d3d9/src/device.rs
++++ b/windows/d3d9/src/device.rs
+@@ -431,6 +431,9 @@ pub struct DeviceInner {
+     /// the same `MTLDevice`.
+     prewarm: crate::shader_prewarm::PrewarmHandle,
+     current_frame: FrameData,
++    /// Optional continuation cadence; zero retains whole-frame submission.
++    render_submit_draws: u32,
++    pending_draw_count: u32,
+     /// Shared with the encoder thread and the unix completion handler.
+     ///
+     /// The frame's submit seq is stamped in `stamp_and_swap`; this atomic
+@@ -1402,6 +1405,7 @@ impl DeviceInner {
+     /// the `submit_seq` it carries. Shared between `Present` and
+     /// `flush_current_frame_blocking`.
+     fn stamp_and_swap(&mut self, new_frame: FrameData, no_present: bool) -> (FrameData, u64) {
++        self.pending_draw_count = 0;
+         let mut frame = core::mem::replace(&mut self.current_frame, new_frame);
+         // An F12 run ends with the frame the closing `Present` submits. A
+         // mid-frame flush sends the marked frame out early, so its stop mark
+@@ -1837,7 +1841,18 @@ impl DeviceInner {
+     /// Used by the hot draw path to emit `Op::Set*` + `Op::Draw` without
+     /// per-op heap alloc.
+     pub fn push_op_inline(&mut self, op: crate::encoder::Op) {
++        let is_draw = matches!(op, Op::Draw(_));
+         self.current_frame.push_op_inline(op);
++        if self.render_submit_draws != 0 && is_draw {
++            self.pending_draw_count += 1;
++            if self.pending_draw_count >= self.render_submit_draws {
++                // Use the existing continuation rules and bounded channel.
++                // Readback still drains this queue and waits for GPU completion.
++                let fresh = self.fresh_frame();
++                let (frame, _) = self.stamp_and_swap(fresh, true);
++                self.encoder.send_frame(frame);
++            }
++        }
+     }
+ 
+     /// Queue an eager `MTLTexture` create on the current frame.
+@@ -2644,6 +2659,8 @@ impl Direct3DDevice9 {
+             encoder: info.encoder,
+             prewarm: info.prewarm,
+             current_frame: info.current_frame,
++            render_submit_draws: crate::config::CONFIG.render_submit_draws,
++            pending_draw_count: 0,
+             coherent_seq,
+             upload_coherent_seq,
+             failed_submit_seq,
+@@ -10353,10 +10370,7 @@ fn emit_snapshot_deltas(obj: &Direct3DDevice9) {
+         let decl_ptr = dev.vertex_decl();
+         let (resolved, vdecl_hash, ff_vs_layout) = if decl_ptr.is_null() {
+             let (elements, _fvf_stride) = fvf_to_elements(fvf);
+-            // `fvf == 0` only when the format came from SetVertexDeclaration
+-            // (SetFVF always carries D3DFVF_XYZ); a real declaration reads 0
+-            // for an omitted COLORVERTEX source, FVF falls back to material.
+-            let layout = convert::ff_vs_layout_from_elements(&elements, fvf == 0);
++            let layout = convert::ff_vs_layout_from_elements(&elements);
+             // Pre-transformed (POSITIONT/XYZRHW) layouts bypass a bound VS —
+             // D3D9 runs the FF pre-transformed path regardless, even when a
+             // VS is still bound — so the attrs must resolve for the FF VS too.
+@@ -10372,7 +10386,7 @@ fn emit_snapshot_deltas(obj: &Direct3DDevice9) {
+             // SAFETY: non-null check passed; refcount holds it live.
+             let decl = unsafe { &*decl_ptr };
+             let elements = decl.inner().elements();
+-            let layout = convert::ff_vs_layout_from_elements(elements, fvf == 0);
++            let layout = convert::ff_vs_layout_from_elements(elements);
+             // See the FVF arm: POSITIONT bypasses a bound VS.
+             let resolved = if bound_vertex_shader.is_null() || layout.has_rhw() {
+                 resolve_attrs_for_ff(elements)
+@@ -11479,7 +11493,7 @@ extern "system" fn device_set_vertex_declaration(this: *mut c_void, decl: *mut c
+         // unconditionally.
+         let new_rhw = !new.is_null()
+             // SAFETY: non-null checked; the slot adopted a ref above.
+-            && convert::ff_vs_layout_from_elements(unsafe { (*new).inner().elements() }, true)
++            && convert::ff_vs_layout_from_elements(unsafe { (*new).inner().elements() })
+                 .has_rhw();
+         if new_rhw || dev.cached_ff_vs_layout.has_rhw() {
+             mask |= SnapshotDirty::VS_CONST | SnapshotDirty::VARIANT;
+diff --git a/windows/d3d9/src/device/frame_dump.rs b/windows/d3d9/src/device/frame_dump.rs
+index 77dd655..27a6bab 100644
+--- a/windows/d3d9/src/device/frame_dump.rs
++++ b/windows/d3d9/src/device/frame_dump.rs
+@@ -20,9 +20,9 @@ use core::ffi::c_void;
+ 
+ use log::info;
+ use mtld3d_types::{
+-    D3DRS_ALPHABLENDENABLE, D3DRS_ALPHAFUNC, D3DRS_ALPHAREF, D3DRS_ALPHATESTENABLE, D3DRS_BLENDOP,
+-    D3DRS_BLENDOPALPHA, D3DRS_CCW_STENCILFAIL, D3DRS_CCW_STENCILFUNC, D3DRS_CCW_STENCILPASS,
+-    D3DRS_CCW_STENCILZFAIL, D3DRS_COLORWRITEENABLE, D3DRS_COLORWRITEENABLE1,
++    D3DCOLORVALUE, D3DRS_ALPHABLENDENABLE, D3DRS_ALPHAFUNC, D3DRS_ALPHAREF, D3DRS_ALPHATESTENABLE,
++    D3DRS_AMBIENT, D3DRS_BLENDOP, D3DRS_BLENDOPALPHA, D3DRS_CCW_STENCILFAIL, D3DRS_CCW_STENCILFUNC,
++    D3DRS_CCW_STENCILPASS, D3DRS_CCW_STENCILZFAIL, D3DRS_COLORWRITEENABLE, D3DRS_COLORWRITEENABLE1,
+     D3DRS_COLORWRITEENABLE2, D3DRS_COLORWRITEENABLE3, D3DRS_CULLMODE, D3DRS_DEPTHBIAS,
+     D3DRS_DESTBLEND, D3DRS_DESTBLENDALPHA, D3DRS_SCISSORTESTENABLE, D3DRS_SEPARATEALPHABLENDENABLE,
+     D3DRS_SLOPESCALEDEPTHBIAS, D3DRS_SRCBLEND, D3DRS_SRCBLENDALPHA, D3DRS_STENCILENABLE,
+@@ -342,6 +342,31 @@ impl DeviceInner {
+             rs(D3DRS_SCISSORTESTENABLE),
+             textures.trim_start(),
+         );
++        if let Some(source) = self.snapshot_cache.vs
++            && let VsSource::FixedFunction { key, max_row_count } = source.as_ref()
++        {
++            let material = self.ff_state().material();
++            let color = |value: &D3DCOLORVALUE| [value.r, value.g, value.b, value.a];
++            info!(
++                target: LOG_TARGET,
++                "[dump] draw {seq} ffvs: fvf={:#x} stride0={} rows={max_row_count} \
++                 key={key:?} ambient={:#x} material=[diffuse={:?} ambient={:?} \
++                 specular={:?} emissive={:?} power={}]",
++                self.fvf_field(),
++                self.bound_buffers().stream_stride(0),
++                rs(D3DRS_AMBIENT),
++                color(&material.diffuse),
++                color(&material.ambient),
++                color(&material.specular),
++                color(&material.emissive),
++                material.power,
++            );
++        }
++        if let Some(source) = self.snapshot_cache.ps
++            && let PsSource::FixedFunction { key, .. } = source.as_ref()
++        {
++            info!(target: LOG_TARGET, "[dump] draw {seq} ffps: key={key:?}");
++        }
+         // Draws that fetch raw depth reconstruct positions from shared PS
+         // constants (screen scale, linearization); print the window those
+         // shaders read so wrong uploads are visible next to the draw.
+diff --git a/windows/d3d9/src/encoder.rs b/windows/d3d9/src/encoder.rs
+index 4441efb..c902e2f 100644
+--- a/windows/d3d9/src/encoder.rs
++++ b/windows/d3d9/src/encoder.rs
+@@ -9466,6 +9466,9 @@ fn trailing_blit_descriptor(trailing_blits: &[BlitCommand]) -> PassDescriptor {
+ /// Rule G so the cull picks up the strip.
+ fn apply_pass_rules(enc: &mut FrameEncoder, frame_continues: bool) {
+     enc.pass_state.coalesce_clear_only_passes();
++    if crate::config::CONFIG.render_merge_passes {
++        enc.pass_state.merge_independent_draw_passes();
++    }
+     enc.pass_state.finalize_load_actions();
+     enc.pass_state.finalize_store_actions(frame_continues);
+     enc.pass_state.strip_dead_color_in_clear_only_passes();
+diff --git a/windows/d3d9/src/index_buffer.rs b/windows/d3d9/src/index_buffer.rs
+index 4cb867a..1e12fc6 100644
+--- a/windows/d3d9/src/index_buffer.rs
++++ b/windows/d3d9/src/index_buffer.rs
+@@ -18,7 +18,7 @@ use mtld3d_core::{
+     ids::BufferId,
+     page_box::PageBox,
+ };
+-use mtld3d_shared::{InPtr, InPtrMut};
++use mtld3d_shared::{InPtr, InPtrMut, OutPtr};
+ use mtld3d_types::{
+     D3DINDEXBUFFER_DESC, D3DLOCK_DISCARD, D3DLOCK_KNOWN_BITS, D3DLOCK_NOOVERWRITE,
+     D3DLOCK_READONLY, D3DRTYPE_INDEXBUFFER, Guid, IDirect3DIndexBuffer9Vtbl,
+@@ -502,18 +502,18 @@ extern "system" fn ib_lock(
+     flags: u32,
+ ) -> i32 {
+     let _timer = ib_timer(this);
+-    if pp_data.is_null() {
++    // SAFETY: the Lock ABI supplies a writable pointer-sized output slot for the call.
++    // The caller may place that slot in a packed structure.
++    let Some(out) = (unsafe { OutPtr::opt(pp_data) }) else {
+         return D3DERR_INVALIDCALL;
+-    }
++    };
+     // SAFETY: vtable thunk; `this` is *mut Direct3DIndexBuffer9 per ABI.
+     let Some(mut obj) = (unsafe { InPtrMut::<Direct3DIndexBuffer9>::opt(this) }) else {
+         return D3DERR_INVALIDCALL;
+     };
+     let inner = obj.inner_mut();
+     if offset_to_lock > inner.length {
+-        // SAFETY: `pp_data` is non-null (checked above) and per the D3D9
+-        // ABI points to a writable `*mut c_void` slot owned by the caller.
+-        unsafe { *pp_data = core::ptr::null_mut() };
++        out.write(core::ptr::null_mut());
+         return D3DERR_INVALIDCALL;
+     }
+     if size_to_lock != 0 && offset_to_lock.saturating_add(size_to_lock) > inner.length {
+@@ -674,14 +674,10 @@ extern "system" fn ib_lock(
+     // allocated for `inner.length` bytes, so the offset lands inside it.
+     let Some(ptr) = inner.backing.write_ptr_at(offset_to_lock as usize) else {
+         mtld3d_shared::log_once_warn!(target: crate::LOG_TARGET, "ib_lock: no backing to map");
+-        // SAFETY: `pp_data` is non-null (checked above) and per the D3D9
+-        // ABI points to a writable `*mut c_void` slot owned by the caller.
+-        unsafe { *pp_data = core::ptr::null_mut() };
++        out.write(core::ptr::null_mut());
+         return D3DERR_INVALIDCALL;
+     };
+-    // SAFETY: `pp_data` is non-null (checked above) and per the D3D9
+-    // ABI points to a writable `*mut c_void` slot owned by the caller.
+-    unsafe { *pp_data = ptr.cast::<c_void>() };
++    out.write(ptr.cast::<c_void>());
+     D3D_OK
+ }
+ 
+diff --git a/windows/d3d9/src/surface.rs b/windows/d3d9/src/surface.rs
+index 8215f2c..280d657 100644
+--- a/windows/d3d9/src/surface.rs
++++ b/windows/d3d9/src/surface.rs
+@@ -2746,6 +2746,8 @@ fn refresh_lockable_rt_staging(inner: &mut SurfaceInner) {
+ /// rendered content. A blit failure leaves the staging as-is (the zero-init /
+ /// prior content) — the lock still succeeds.
+ fn lockable_rt_readback_fill(inner: &mut SurfaceInner, bpp: u32) {
++    let timer = log::log_enabled!(target: "mtld3d::readback", log::Level::Trace)
++        .then(std::time::Instant::now);
+     let (width, height) = (inner.standalone_width, inner.standalone_height);
+     let tex_handle = inner.live_color_handle();
+     if bpp == 0 || width == 0 || height == 0 || tex_handle.is_null() {
+@@ -2798,6 +2800,7 @@ fn lockable_rt_readback_fill(inner: &mut SurfaceInner, bpp: u32) {
+     // `finalize_store_actions` keeps the rendered content.
+     device_inner.push_op(Box::new(move |enc| enc.note_color_read_back(tex_handle)));
+     device_inner.flush_current_frame_blocking();
++    let flush_elapsed = timer.map(|start| start.elapsed());
+     let mut params = BlitTextureToBufferParams {
+         queue_handle: device_inner.queue_handle(),
+         device_handle: device_inner.device_handle(),
+@@ -2822,6 +2825,12 @@ fn lockable_rt_readback_fill(inner: &mut SurfaceInner, bpp: u32) {
+         block_height: 1,
+     };
+     let status = unix_call(&mut params);
++    if let (Some(start), Some(flush)) = (timer, flush_elapsed) {
++        log::trace!(target: "mtld3d::readback",
++            "lockable_rt {width}x{height} flush_ms={:.3} read_ms={:.3} status={status:#x}",
++            flush.as_secs_f64() * 1000.0,
++            start.elapsed().saturating_sub(flush).as_secs_f64() * 1000.0);
++    }
+     if status != 0 {
+         mtld3d_shared::log_once_warn!(target: crate::LOG_TARGET,
+             "lockable RT LockRect read-back: BlitTextureToBuffer failed status={status:#x} (staging left as-is)"
+diff --git a/windows/d3d9/src/vertex_buffer.rs b/windows/d3d9/src/vertex_buffer.rs
+index a7b22d9..c3d6ca8 100644
+--- a/windows/d3d9/src/vertex_buffer.rs
++++ b/windows/d3d9/src/vertex_buffer.rs
+@@ -28,7 +28,7 @@ use mtld3d_core::{
+     ids::BufferId,
+     page_box::PageBox,
+ };
+-use mtld3d_shared::{InPtr, InPtrMut};
++use mtld3d_shared::{InPtr, InPtrMut, OutPtr};
+ use mtld3d_types::{
+     D3DFMT_VERTEXDATA, D3DLOCK_DISCARD, D3DLOCK_KNOWN_BITS, D3DLOCK_NOOVERWRITE, D3DLOCK_READONLY,
+     D3DRTYPE_VERTEXBUFFER, D3DVERTEXBUFFER_DESC, Guid, IDirect3DVertexBuffer9Vtbl,
+@@ -616,18 +616,18 @@ extern "system" fn vb_lock(
+     flags: u32,
+ ) -> i32 {
+     let _timer = vb_timer(this);
+-    if pp_data.is_null() {
++    // SAFETY: the Lock ABI supplies a writable pointer-sized output slot for the call.
++    // The caller may place that slot in a packed structure.
++    let Some(out) = (unsafe { OutPtr::opt(pp_data) }) else {
+         return D3DERR_INVALIDCALL;
+-    }
++    };
+     // SAFETY: vtable thunk; `this` is *mut Direct3DVertexBuffer9 per ABI.
+     let Some(mut obj) = (unsafe { InPtrMut::<Direct3DVertexBuffer9>::opt(this) }) else {
+         return D3DERR_INVALIDCALL;
+     };
+     let inner = obj.inner_mut();
+     if offset_to_lock > inner.length {
+-        // SAFETY: `pp_data` is non-null (checked above) and per the D3D9
+-        // ABI points to a writable `*mut c_void` slot owned by the caller.
+-        unsafe { *pp_data = core::ptr::null_mut() };
++        out.write(core::ptr::null_mut());
+         return D3DERR_INVALIDCALL;
+     }
+     if size_to_lock != 0 && offset_to_lock.saturating_add(size_to_lock) > inner.length {
+@@ -802,14 +802,10 @@ extern "system" fn vb_lock(
+     // allocated for `inner.length` bytes, so the offset lands inside it.
+     let Some(ptr) = inner.backing.write_ptr_at(offset_to_lock as usize) else {
+         mtld3d_shared::log_once_warn!(target: crate::LOG_TARGET, "vb_lock: no backing to map");
+-        // SAFETY: `pp_data` is non-null (checked above) and per the D3D9
+-        // ABI points to a writable `*mut c_void` slot owned by the caller.
+-        unsafe { *pp_data = core::ptr::null_mut() };
++        out.write(core::ptr::null_mut());
+         return D3DERR_INVALIDCALL;
+     };
+-    // SAFETY: `pp_data` is non-null (checked above) and per the D3D9
+-    // ABI points to a writable `*mut c_void` slot owned by the caller.
+-    unsafe { *pp_data = ptr.cast::<c_void>() };
++    out.write(ptr.cast::<c_void>());
+     D3D_OK
+ }
+ 
+diff --git a/windows/tests/COVERAGE.md b/windows/tests/COVERAGE.md
+index 54ec575..63b6dbc 100644
+--- a/windows/tests/COVERAGE.md
++++ b/windows/tests/COVERAGE.md
+@@ -38,7 +38,7 @@ test file lands with its row in the same change.
+ | `draw.rs` | XYZRHW screen-space quad; every accepted primitive type (point/line/linestrip/tristrip); triangle fans through `DrawPrimitiveUP` (including a 300 triangle fan that outgrows the encoder's shared index pattern mid-frame), `DrawPrimitive` (bound stream, `StartVertex`, and the same mid-frame pattern growth) and `DrawIndexedPrimitive` (bound 16-bit indices, `StartIndex` + `BaseVertexIndex`, and two fans in one `D3DUSAGE_WRITEONLY` `D3DPOOL_DEFAULT` index buffer whose CPU copy was released, so the indices are read back off the GPU and the second fan is written through a later announced window), all rewritten as triangle lists; `DrawIndexedPrimitiveUP`; `ProcessVertices` transforming through the current FVF, and rejected from an explicit declaration. |
+ | `points.rs` | `D3DRS_POINTSIZE` sizing the square; an XYZ-only point under an ortho projection (Wine's test_pointsize shape); several sizes in one scene with a Clear between scenes and no Present; `POINTSIZE_MIN`/`MAX` clamp; `D3DFVF_PSIZE` per-vertex size; `POINTSCALEENABLE` with the viewport-height factor and eye-distance attenuation; programmable VS `oPts` vs the render-state default; point sprites through fixed-function and `ps_2_0` texcoords (quadrant texture), and the sprite state leaving triangles alone. The probes one pixel either side of a square's edge, and the one-pixel points whose every probe is a boundary, assert at the default `render.scale` alone; every extent with room around it is asserted at any scale. |
+ | `clip_planes.rs` | Fixed-function plane keeping the positive side and released when disabled; world-space semantics under a translated view; `D3DRS_CLIPPING` gating; two sparse-index planes intersecting; RHW geometry ignoring the planes; clip-space semantics under a programmable VS; `D3DSBT_ALL` capture/apply round trip that renders. |
+-| `buffers.rs` | `CreateVertexBuffer`/`CreateIndexBuffer`; `DrawPrimitive`/`DrawIndexedPrimitive` from bound streams; DYNAMIC+DISCARD refill; `GetDesc` round-trips; `GetStreamSource`/`GetIndices` round-trips including higher streams and the NULL-bind offset/stride retention; under `buffer.ignoreLockBounds=true`, a `Staged` (DEFAULT, non-DYNAMIC) vertex buffer and index buffer each carrying the writes a title makes past the `[OffsetToLock, SizeToLock)` window it announced, checked by re-locking a window whose announced bytes do not change and reading back the pixel the rest of the write moves; the CPU-backing release a `D3DPOOL_DEFAULT` `D3DUSAGE_WRITEONLY` non-`DYNAMIC` vertex buffer takes after an upload has carried every byte, checked by refilling half of a two-triangle buffer through an announced sub-range and through a zero-`SizeToLock` tail and reading back the half neither `Lock` named, and by a `Reset` after a release still leaving buffer draws working. |
++| `buffers.rs` | `CreateVertexBuffer`/`CreateIndexBuffer`; unaligned `Lock` output slots on both buffer types, including successful locks, invalid-range null outputs and untouched neighboring bytes; `DrawPrimitive`/`DrawIndexedPrimitive` from bound streams; DYNAMIC+DISCARD refill; `GetDesc` round-trips; `GetStreamSource`/`GetIndices` round-trips including higher streams and the NULL-bind offset/stride retention; under `buffer.ignoreLockBounds=true`, a `Staged` (DEFAULT, non-DYNAMIC) vertex buffer and index buffer each carrying the writes a title makes past the `[OffsetToLock, SizeToLock)` window it announced, checked by re-locking a window whose announced bytes do not change and reading back the pixel the rest of the write moves; the CPU-backing release a `D3DPOOL_DEFAULT` `D3DUSAGE_WRITEONLY` non-`DYNAMIC` vertex buffer takes after an upload has carried every byte, checked by refilling half of a two-triangle buffer through an announced sub-range and through a zero-`SizeToLock` tail and reading back the half neither `Lock` named, and by a `Reset` after a release still leaving buffer draws working. |
+ | `streams.rs` | A two-stream declaration through a programmable VS; a zero `SetStreamSource` stride feeding every vertex the element at the stream offset; the `SetStreamSourceFreq` contract (defaults, rejections leaving state untouched, flag round-trip); instanced indexed draws (count from stream 0, per-instance step rate, non-indexed draws never instance, no per-instance stream means one instance); recorded and `D3DSBT_ALL` state blocks restoring stream bindings and frequencies. |
+ | `render_states.rs` | Alpha + additive blend; COLORWRITEENABLE mask; scissor; cull-mode winding; defaults vs `render_state_defaults()`; set/get round-trip; stencil round-trip; stencil test gating a draw; stencil clear preserving depth; combined depth+stencil mid-frame clear resetting both planes; stencil reference compared through the mask; stencil clear and test against a depth-only surface; wireframe no-op (pinned).; a Clear after a draw in the same pass (clear quad) surviving the draw's cull mode; `D3DRS_SRGBWRITEENABLE` encoding an opaque draw's linear 0x80 to 0xBC in a render-target texture, and blending in linear before that encode (half-alpha white over a stored 0x80 lands on 0xCD, not the 0xC0 a gamma-space blend gives) on a render-target texture, on the back buffer, and on a `CreateRenderTarget` surface. |
+ | `textures.rs` | Lock/sample A8R8G8B8/X8R8G8B8/R5G6B5/A1R5G5B5/X1R5G5B5/A4R4G4B4/L8 (X1R5G5B5 with its padding bit clear, which also blends as fully opaque under SRCALPHA and round-trips a texel through a 5-5-5 `GetDC` DIB); a 2x2 lock/sample round trip per quadrant for the reversed-channel A8B8G8R8/X8B8G8R8 pair and for 24-bit R8G8B8, whose three-byte texels stride an eight-byte row and are widened into the BGRA8 backing by the GPU upload pass, plus X8B8G8R8 sampling alpha as 1 through a SRC_ALPHA-blended draw whatever its padding byte holds; DXT1 block decode; mip chain levels/dims; every level of an 8x8 mip chain carrying its own texels, which puts the bottom two mips under the linear texture alignment and so on the GPU upload pass; AUTOGENMIPMAP (level count, `GetLevelDesc` usage, filter-type round trip, and `UnlockRect` rejecting a level the chain does not expose); SetLOD no-op; cube creation in all pools; CPU-only extension-format cubes; managed DXT face isolation; cube face upload, sampling, state blocks, render targets, and AUTOGENMIPMAP (including `GetCubeMapSurface` rejecting a level the chain does not expose); volume creates; `UpdateTexture` between volumes copies every slice (sampled per slice centre through the fixed-function 3D texcoord path); a level from `GetVolumeLevel` locked through `IDirect3DVolume9` and written samples back on every slice; the `D3DPOOL_DEFAULT` lock split (`default_pool_texture_lock_splits_by_entry_point`: a non-DYNAMIC level rejected through `IDirect3DSurface9::LockRect` and served through `IDirect3DTexture9::LockRect`, both entry points serving it once the texture carries `D3DUSAGE_DYNAMIC`); `GetDC` on level 0 of a 33x4 R5G6B5 managed texture, whose odd row length is where the level's staging and the stride a DIB steps by would part company (the DC reads the last texel of the last row, GDI's drawing reaches the staging at `ReleaseDC`, and a draw after it samples what GDI drew); `GetDC` and `LockRect` on one texture level excluding each other in both orders, each accepted once the other side is given up (the level's lock lives on the parent texture, out of reach of the surface shell's own map count); the same exclusion read across the whole resource, where `GetDC` on level 0 is rejected while level 1 is locked and `IDirect3DTexture9::LockRect` on either level is rejected while a level surface holds a DC, both accepted again once the other side is given up; `UpdateTexture` from a transposed source (2x4 into 4x2, which D3D9 accepts because the two agree on their larger dimension) copies the 2x2 the levels share and leaves the rest; the system-memory pool contract (a `D3DPOOL_SYSTEMMEM` texture, which allocates nothing on the GPU until it is bound, samples what was written to it once bound and picks up later writes; `LockRect` round-trips its texels; a level and an offscreen surface of one odd-width 16-bit size report one `LockRect` pitch, with rows written at it surviving `UpdateTexture` and sampling; the texels survive a resizing `Reset` and still reach the GPU through `UpdateTexture` afterwards; and no `D3DPOOL_SYSTEMMEM` / `D3DPOOL_SCRATCH` surface is accepted by `SetRenderTarget`); a block-compressed `D3DPOOL_SCRATCH` volume, which only the CPU-only path can represent, created, locked and written with the GPU pools rejecting the format; a DEFAULT-pool level written through four partial `UpdateTexture` rects that together cover it (its staging is released only once they do) sampling back whole, and a fifth partial update after that release leaving the quadrants it does not touch alone; a `LockRect` of a DEFAULT-pool level whose staging was released after its upload reading the level's own texels back (and the `D3DLOCK_DISCARD` form rewriting it whole from fresh pages).a sub-rectangle `UpdateSurface` from a system-memory offscreen-plain source into a default-pool level whose staging was already released, leaving the texels outside the rectangle untouched;a released DEFAULT-pool level reading the level's own texels back through the DIB, with GDI's `SetPixel` on it sampling back after `ReleaseDC`; a `GetDC` held across two draws that upload the level keeping its staging, so GDI's `SetPixel` under the held DC still samples back after `ReleaseDC`; `GetDC` onthe same `UpdateSurface` between two draws of one scene reaching the second draw, with no other state change to dirty the snapshot for it;the same standalone-source `UpdateSurface` rejecting a managed destination, a destination of another format and a `D3DPOOL_SCRATCH` source, and accepted for the matching default-pool destination and system-memory source;; `UpdateTexture` rejecting a resource-type mismatch in both directions (2D into volume, volume into 2D) with the destination left as it was, while a volume pair one depth slice deep, which is backed 2D, is still accepted; `UpdateTexture` accepting a source that still has one of its levels mapped, unlike the per-endpoint rejection `UpdateSurface` applies (pinned).; a single-slice DEFAULT volume taking a second `UpdateTexture` after the first one has been drawn, the point a droppable level's staging would have gone; `UpdateSurface` and `UpdateTexture` across a format pair the CPU codec covers (X8R8G8B8 into A8R8G8B8, R5G6B5 into X8R8G8B8, A8R8G8B8 into R5G6B5, A1R5G5B5 into A8R8G8B8, A8R8G8B8 into A4R4G4B4, L8 into A8R8G8B8, R8G8B8 into A8R8G8B8, A8B8G8R8 into A8R8G8B8, each sampled back), with a block-compressed source still answering `D3DERR_INVALIDCALL`., converting an X8R8G8B8 source into an A8R8G8B8 level and into a cube face, and still rejecting the pairs the codec omits (V8U8 into R5G6B5, any source into a DXT1 destination); a `Levels` count one past the chain the extent allows resolving to that chain on all four create paths (`CreateTexture`, the depth-format `CreateTexture`, `CreateCubeTexture` and `CreateVolumeTexture`, the last measured on its depth as well), with the count at exactly the chain unchanged; the lock contract a level's contents rest on (`dynamic_whole_level_lock_without_discard_keeps_the_texels_it_does_not_rewrite`, `partial_discard_lock_leaves_the_rest_of_the_level_alone`, `discard_lock_of_a_managed_level_is_ignored`): a DEFAULT DYNAMIC level locked whole without `D3DLOCK_DISCARD` while its previous upload is still in flight, rewritten in one quadrant and sampled back with the other three intact; the same with a `D3DLOCK_DISCARD` sub-rect lock, which cannot be honoured and is served as a plain partial lock; and a MANAGED level whose whole-level `D3DLOCK_DISCARD` is ignored the same way; the rect a lock names being what its `UnlockRect` publishes (`partial_locks_publish_their_own_rect_on_every_upload_path`): four contended quadrant locks on a DEFAULT DYNAMIC A8R8G8B8 level, on a DXT1 level with block-aligned rects and with rects off the block grid (the encoder's whole-mip fallback), and on one face of a cube, each sampled back as its four quadrants |
+@@ -51,7 +51,7 @@ test file lands with its row in the same change.
+ | `texture_stages.rs` | COLOROP round-trip; MODULATE/ADD/SELECTARG2; TFACTOR arg source; sampling a locked A16B16G16R16F texture. |
+ | `shaders.rs` | hand-assembled VS/PS; PS-constant colour; VS-constant translation; float-constant setters (in-range accept + out-of-range/`-1` → `INVALIDCALL`); integer/bool constant round trips; a `vs_2_0` static `if b0` branch driven by `SetVertexShaderConstantB` (TRUE and FALSE arms, no shader rebind); the same `if b0` in a `ps_3_0` driven by `SetPixelShaderConstantB`; a `ps_3_0` `rep i0` loop count driven by `SetPixelShaderConstantI` (4 iterations vs 0); a `ps_2_0` writing `oDepth` still drawing with no depth buffer bound (the depth export is dropped for that pass); `GetFunction` returning the creating bytecode (size query, round trip, undersized buffer, null size pointer) for both shader kinds and for a shader-model 1 program; a `ps_3_0` sampler reading the texture kind the application bound rather than the one its `dcl` names, over all four combinations of a 2D and a volume texture with a `dcl_2d` and a `dcl_volume` slot; a `ps_2_0` whose only `c0` read is `def`-declared keeping its literal colour across a `SetPixelShaderConstantF` upload; three draws in one pass alternating that program with one that does read `c0`, pinning that the reader still sees a row set between the draws; a `vs_3_0` whose only relative constant read (`c[a0.x + 0]`, the row index itself uploaded in `c0`) sits in a subroutine reached through `call`, drawing the colour uploaded twenty rows past anything the instruction stream names; a `vs_3_0` vertex texture fetch reading the texture bound at `D3DVERTEXTEXTURESAMPLER0` with `texldl`, and the same fetch declared `dcl_volume` over a 2D binding, pinning that the sampler argument and its coordinate follow the bound texture kind rather than the declaration. |
+ | `vertex_decl.rs` | `CreateVertexDeclaration` drives an FF draw; `GetVertexDeclaration` round-trip; a two-stream declaration through the FF pipeline; a declared stream with nothing bound reads zeros (bound and UP draws). |
+-| `transforms_ff.rs` | Set/Get/MultiplyTransform; FF diffuse passthrough; alpha test; Set/Get material + light + LightEnable. |
++| `transforms_ff.rs` | Set/Get/MultiplyTransform; FF diffuse passthrough; alpha test; Set/Get material + light + LightEnable; omitted declaration colors fall back to all four material sources, while declared colors on unbound streams read zero. |
+ | `render_target.rs` | Render-to-texture + sample; A16B16G16R16F render target create and draw/readback round trip; depth occlusion; auto depth-stencil Get/Set; `GetDepthStencilSurface` answering with the surface `SetDepthStencilSurface` bound (pointer identity against an app-created surface, a save/bind-other/restore leaving that surface bound, `D3DERR_NOTFOUND` and a null out-pointer once depth is unbound); CreateDepthStencilSurface; backbuffer desc; StretchRect 1:1 accept; a full-surface depth→depth StretchRect, its copy read back by depth-testing two quads against the destination and the filtered form accepted as well; StretchRect between two rects of one surface (a disjoint copy, and an overlapping shift whose result is the source as it stood before the copy); StretchRect format conversion (R5G6B5 into X8R8G8B8 through the scaling render quad, YUY2/UYVY decode into the backbuffer and, on the CPU path, into an offscreen-plain surface, including a source sub-rectangle converted into a destination level smaller than the source level); INTZ sampleable-depth dual-use (render-as-depth → sample) via both the FF and a programmable PS; a depth texture's content surviving a `CreateDepthStencilSurface` bind and a `Present` before it is sampled (the store action a texture-backed depth bind's `is_sampleable` keeps); the INTZ texture sampled while it is still the bound depth attachment (the encoder copies it first); `GetRenderTargetData` read-back into a SYSTEMMEM offscreen surface (`Surface::GetDevice` + `CreateOffscreenPlainSurface` + `LockRect`, pixels matched against the private export); `GetRenderTargetData` and `GetFrontBufferData` into level 0 of a `D3DPOOL_SYSTEMMEM` / `D3DPOOL_SCRATCH` texture, read back through `LockRect`, plus the destinations both reject (a GPU-resident level, another extent, another byte layout); a 33x4 R5G6B5 read-back pinning that the blit writes its rows at the pitch the destination's `LockRect` reports, not the tight one (an odd width in a 16-bit format is where the two differ); `StretchRect` into a lockable DEFAULT offscreen plain read back through `LockRect` (whole surface and a sub-rect that leaves the rest alone), with a `D3DLOCK_DISCARD` lock after such a blit keeping the pixels it wrote instead of the blitted ones, `StretchRect` from a render target into a render-target texture level read back through `GetDC`/`GetPixel` over staging a lock seeded with another colour, the same round trip through `LockRect` for the two copies that take the render quad instead of the 1:1 blit (a 64x64 render target scaled into a 32x32 render-target texture level, and a same-size R5G6B5 offscreen plain converted into an A8R8G8B8 one), the same blit into face 3 of a DEFAULT render-target cube read back through that face's `GetDC` with a differently filled face 0 left alone, a `ColorFill` of two cube faces each reading its own colour back through its own `GetDC`, `GetRenderTargetData` from a render-target cube's face-3 surface and from that face's level 1 reading each subresource's own fill while face 0 keeps its own, a scaling `StretchRect` into face 3 of a DEFAULT render-target cube sampled back along that face's direction with a differently filled face 0 left alone, a scaling `StretchRect` out of a cube face onto the back buffer carrying that face's colour, a 1:1 same-format `StretchRect` out of face 3 into a 2D render target carrying face 3's colour rather than face 0's, a 1:1 same-format `StretchRect` from face 1 onto face 3 of one cube at the same rectangle carrying face 1's colour (both endpoints resolve to one Metal texture, where equal rectangles on two faces are still a real copy), the scaling form of that pair landing the whole of face 1 in face 3's top-left quarter through the scratch detour and leaving the rest of face 3 alone, and the surface-class restriction that keeps a render-target source out of an offscreen-plain destination (standalone `CreateRenderTarget`, render-target texture level, and the reverse direction accepted); surface-op contracts (ColorFill/CreateRenderTarget` rejecting an unmappable format, `GetRenderTargetData`/`GetFrontBufferData` refusing a non-SYSTEMMEM destination, `CreateOffscreenPlainSurface` taking `D3DPOOL_DEFAULT` and refusiong `D3DPOOL_MANAGED`); a fresh DEFAULT offscreen plain served out of its own staging (a read-only lock before anything wrote it, a `LockRect` write and the `LockRect` read after it, and a `ColorFill` of a plain no lock has touched); `GetDC` on a DEFAULT offscreen plain reading the `ColorFill` before it, with GDI's `SetPixel` through the DC reaching both the staging a later `LockRect` maps and the Metal texture a 1:1 `StretchRect` into the back buffer reads; `ColorFill` of a sub-rect and of an over-the-edge rect on a lockable DEFAULT offscreen-plain surface, read back inside and outside through `LockRect`; `ColorFill` of a DEFAULT offscreen plain in each of A1R5G5B5, X1R5G5B5, A4R4G4B4, L8 and A8 read back through `LockRect` as that format's own packing of the fill colour, over a seed the fill has to replace; `ColorFill` of a bound render target erasing an earlier draw and blending under a later `SRCALPHA` one; `ColorFill` into level 0 of an `AUTOGENMIPMAP` render-target texture regenerating the chain (a sample pinned to level 4 through `D3DSAMP_MAXMIPLEVEL` reads the fill colour, not the seeded chain); a lockable `CreateRenderTarget` surface staying coherent with its CPU staging in every direction (a whole-surface and a sub-rect `ColorFill`, a `Clear` and a draw all read back through `LockRect`, and a `GetDC` that shows the GPU's pixels with GDI's own drawing reaching the colour texture at `ReleaseDC`, and the same `GetDC` round trip on a 33x4 R5G6B5 surface, whose odd row length puts the last row out of reach of a DIB over a tighter store); a lockable `CreateRenderTarget` surface created at the back buffer's own size keeping the extent D3D9 reports rather than inheriting `render.scale`, with the bind-and-`Clear`, the `ColorFill`, the `LockRect` read-back and the `UnlockRect` upload all probed on the far corner a scaled texture would not reach; a depth texture with a mip chain (per-level `GetLevelDesc`, level 1 bound as the depth attachment beside the back buffer and gating a farther draw); a rect-bounded depth `Clear` touching only its rects; a full-surface depth→depth `StretchRect` feeding a later depth test; `StretchRect` addressing an upper mip level on both the source and the destination, on the scaling and the 1:1 path; `Clear(D3DCLEAR_ZBUFFER)` rejected once no depth-stencil is bound and accepted for an offscreen target with a custom depth surface; `CreateRenderTarget` reporting a DEFAULT-pool `D3DUSAGE_RENDERTARGET` surface (against a DEFAULT offscreen-plain surface reporting no usage), accepting A32B32G32R32F and rejecting an unmappable format; a DEFAULT-pool render target bound, drawn into and read back; 1:1 `StretchRect` between two DEFAULT render targets, from a rendered target into the backbuffer across a `Present`, and into a backbuffer with a pending `Clear` (the copy lands last); `SetRenderTarget` snapping the viewport and scissor to the new target; a float-texture sample rendered into an A32B32G32R32F target; depth surviving a mid-frame readback flush (the far group still fails LESS against the primed near depth); the RESZ resolve (`D3DRS_POINTSIZE` = `0x7FA05000` with the destination INTZ texture at stage 0) copying the bound depth-stencil into that texture, read back by sampling the destination, and the `RESZ` pseudo-format probe answering `D3D_OK`; the `oDepth` depth restore, a `ps_3_0` writing sampled INTZ depth into the bound depth buffer and gating a later sprite z-test, with a colour-writing twin painting the sampled depth back as grayscale; INTZ carrying a working stencil plane (a REPLACE mark gating a later EQUAL draw); and, under `depth.aliasSameSize`, a same-size depth-stencil rebind whose z-test sees the contents rendered through the other surface; `GetDC` on a DEFAULT offscreen plain rejected while its own `LockRect` is outstanding, and accepted once it is released; 64 rounds of create, bind, depth-test and release of a standalone `CreateDepthStencilSurface` surface, one per frame, each round's depth test proving its own fresh texture and the run proving the retirement of the previous one lands after the frame that drew with it.` on the standalone backbuffer, ``; a non-lockable A16B16G16R16F render target locked read-only reporting the pitch its own format asks for (eight bytes per texel), with the last texel of the last row inside the staging; `LockRect` and `UnlockRect` on a non-lockable `CreateRenderTarget` surface both rejected with the caller's `D3DLOCKED_RECT` left untouched, and the same surface created lockable lockinge |
+ | `render_scale.rs` | Every assertion in *reported* coordinates, so the whole file must pass unchanged under `make test SCALE=0.75`: the scissor confining a whole-target clear; `Clear` with `pRects`, and those rects intersected with the scissor; the viewport bounding a whole-target colour clear, and bounding the colour plane of a combined `TARGET | ZBUFFER` clear; a whole-target depth clear bounded to the viewport, read back through the depth test, including that it writes `Clear`'s raw Z rather than one remapped through the viewport's `MinZ`; rebinding the back buffer by surface keeping its coordinate space; a back-buffer readback carrying the frame's alpha rather than an opaque one; a game-created render target passing through untouched; a resizing `Reset` reporting and clipping in the new size; `ColorFill` of a sub-rect of a render-target texture created at the reported back-buffer size, and of a sub-rect of that target's mip level 1 read back by sampling the level; `ColorFill` of a sub-rect of a standalone `CreateRenderTarget` surface at that size, copied onto the back buffer with `StretchRect`; and a point's diameter, which D3D9 states in the reported space and Metal consumes in the rasterized one, keeping its reported extent; a `D3DUSAGE_DEPTHSTENCIL` texture created at the reported back-buffer size charged the mip chain its Metal levels hold rather than the one its descriptor reports, while a texture of another size keeps costing what it asked for; and a `CreateRenderTarget` and a `CreateDepthStencilSurface` surface at that size each charged the texture their Metal create holds and refunded it on release, while a target of another size keeps costing what it asked for (those three tests pin `render.scale=0.5` themselves, since none of those quantities is observable at the identity). |
+ | `implicit_surface.rs` | The device-owned implicit surfaces: `GetRenderTarget(0)` and `GetBackBuffer(0)` handing back one cached object that survives its refcount reaching zero and resolves its extent live across a resizing `Reset`; the cached implicit depth-stencil; `GetDC` on a non-lockable back buffer rejected with the caller's out `HDC` untouched, and on a `D3DPRESENTFLAG_LOCKABLE_BACKBUFFER` one reading the pixels the GPU painted and carrying GDI's own drawing back into the back buffer at `ReleaseDC`, with no `Present` in between, both at the extent D3D9 reports and, with `render.scale` pinned below 1.0 in the test's own process, through the resample the write-back needs when the back buffer is rasterized smaller. |
+diff --git a/windows/tests/src/resource.rs b/windows/tests/src/resource.rs
+index 89bac19..6928d81 100644
+--- a/windows/tests/src/resource.rs
++++ b/windows/tests/src/resource.rs
+@@ -975,6 +975,42 @@ pub struct VertexBuffer<'h> {
+ }
+ 
+ impl VertexBuffer<'_> {
++    /// Probe `Lock` with an output slot two bytes past a pointer-aligned address.
++    ///
++    /// Returns the HRESULT and whether the output is non-null. Successful locks are unlocked.
++    ///
++    /// # Panics
++    /// Panics if the output is aligned, Lock overwrites neighboring bytes, or Unlock fails.
++    #[must_use]
++    pub fn lock_unaligned_probe(&self, offset: u32, size: u32) -> (i32, bool) {
++        let mut storage = [usize::MAX; 3];
++        let out = storage
++            .as_mut_ptr()
++            .cast::<*mut c_void>()
++            .wrapping_byte_add(2);
++        assert!(!out.is_aligned(), "probe output must be unaligned");
++        // SAFETY: the vtable and buffer are live; `out` spans a writable pointer-sized
++        // region of `storage`. Lock accepts a byte-addressed output slot.
++        let hr = unsafe { (self.vtbl().lock)(self.ptr, offset, size, out, 0) };
++        // SAFETY: Lock initialized the pointer bytes in `storage`; unaligned access is required.
++        let data = unsafe { out.read_unaligned() };
++        let bytes: Vec<_> = storage.iter().flat_map(|word| word.to_ne_bytes()).collect();
++        assert!(bytes[..2].iter().all(|byte| *byte == 0xff));
++        assert!(
++            bytes[2 + size_of::<usize>()..]
++                .iter()
++                .all(|byte| *byte == 0xff)
++        );
++        if hr >= 0 {
++            // SAFETY: the live buffer was successfully locked above.
++            expect_ok(
++                unsafe { (self.vtbl().unlock)(self.ptr) },
++                "VertexBuffer Unlock",
++            );
++        }
++        (hr, !data.is_null())
++    }
++
+     pub const fn from_raw(ptr: *mut c_void) -> Self {
+         Self {
+             ptr,
+@@ -1152,6 +1188,42 @@ pub struct IndexBuffer<'h> {
+ }
+ 
+ impl IndexBuffer<'_> {
++    /// Probe `Lock` with an output slot two bytes past a pointer-aligned address.
++    ///
++    /// Returns the HRESULT and whether the output is non-null. Successful locks are unlocked.
++    ///
++    /// # Panics
++    /// Panics if the output is aligned, Lock overwrites neighboring bytes, or Unlock fails.
++    #[must_use]
++    pub fn lock_unaligned_probe(&self, offset: u32, size: u32) -> (i32, bool) {
++        let mut storage = [usize::MAX; 3];
++        let out = storage
++            .as_mut_ptr()
++            .cast::<*mut c_void>()
++            .wrapping_byte_add(2);
++        assert!(!out.is_aligned(), "probe output must be unaligned");
++        // SAFETY: the vtable and buffer are live; `out` spans a writable pointer-sized
++        // region of `storage`. Lock accepts a byte-addressed output slot.
++        let hr = unsafe { (self.vtbl().lock)(self.ptr, offset, size, out, 0) };
++        // SAFETY: Lock initialized the pointer bytes in `storage`; unaligned access is required.
++        let data = unsafe { out.read_unaligned() };
++        let bytes: Vec<_> = storage.iter().flat_map(|word| word.to_ne_bytes()).collect();
++        assert!(bytes[..2].iter().all(|byte| *byte == 0xff));
++        assert!(
++            bytes[2 + size_of::<usize>()..]
++                .iter()
++                .all(|byte| *byte == 0xff)
++        );
++        if hr >= 0 {
++            // SAFETY: the live buffer was successfully locked above.
++            expect_ok(
++                unsafe { (self.vtbl().unlock)(self.ptr) },
++                "IndexBuffer Unlock",
++            );
++        }
++        (hr, !data.is_null())
++    }
++
+     pub const fn from_raw(ptr: *mut c_void) -> Self {
+         Self {
+             ptr,
+diff --git a/windows/tests/tests/buffers.rs b/windows/tests/tests/buffers.rs
+index a0791d9..52de382 100644
+--- a/windows/tests/tests/buffers.rs
++++ b/windows/tests/tests/buffers.rs
+@@ -51,6 +51,25 @@ fn arm_diffuse(h: &Harness) {
+     assert_eq!(h.set_fvf(FVF), 0, "SetFVF");
+ }
+ 
++#[test]
++fn vertex_buffer_lock_accepts_unaligned_output() {
++    let h = Harness::new();
++    let vb = h.create_vertex_buffer(stride() * 3, D3DUSAGE_DYNAMIC, FVF, D3DPOOL_DEFAULT);
++    assert_eq!(vb.lock_unaligned_probe(0, 0), (D3D_OK, true));
++    assert_eq!(
++        vb.lock_unaligned_probe(stride() * 3 + 1, 0),
++        (D3DERR_INVALIDCALL, false)
++    );
++}
++
++#[test]
++fn index_buffer_lock_accepts_unaligned_output() {
++    let h = Harness::new();
++    let ib = h.create_index_buffer(6, D3DUSAGE_DYNAMIC, D3DFMT_INDEX16, D3DPOOL_DEFAULT);
++    assert_eq!(ib.lock_unaligned_probe(0, 0), (D3D_OK, true));
++    assert_eq!(ib.lock_unaligned_probe(7, 0), (D3DERR_INVALIDCALL, false));
++}
++
+ #[test]
+ fn draw_primitive_from_vertex_buffer() {
+     let h = Harness::new();
+diff --git a/windows/tests/tests/render_target.rs b/windows/tests/tests/render_target.rs
+index 405966b..89e0d82 100644
+--- a/windows/tests/tests/render_target.rs
++++ b/windows/tests/tests/render_target.rs
+@@ -226,6 +226,61 @@ fn render_to_texture_then_sample() {
+     assert_eq!(h.clear_texture(0), 0, "unbind RT texture");
+ }
+ 
++#[test]
++fn alternating_independent_targets_preserve_draw_order_and_depth() {
++    let h = Harness::new();
++    let backbuffer = h.render_target(0);
++    let depth = h.create_depth_stencil_surface(640, 480, D3DFMT_D24S8);
++    assert_eq!(h.set_depth_stencil_surface(&depth), 0);
++    let texture = h.create_texture(
++        640,
++        480,
++        1,
++        D3DUSAGE_RENDERTARGET,
++        D3DFMT_A8R8G8B8,
++        D3DPOOL_DEFAULT,
++    );
++    let surface = texture.surface_level(0);
++    assert_eq!(h.set_render_state(D3DRS_LIGHTING, 0), 0);
++    h.select_diffuse_stage(0);
++    assert_eq!(h.set_fvf(D3DFVF_XYZ | D3DFVF_DIFFUSE), 0);
++    assert_eq!(h.set_render_state(D3DRS_ZENABLE, 1), 0);
++    assert_eq!(h.set_render_state(D3DRS_ZWRITEENABLE, 1), 0);
++    assert_eq!(h.set_render_state(D3DRS_ZFUNC, D3DCMP_LESS), 0);
++    assert_eq!(
++        h.clear(D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER, BLACK, 1.0, 0),
++        0
++    );
++    let mut near = fullscreen_triangle(RED);
++    for vertex in &mut near {
++        vertex.z = 0.25;
++    }
++    assert_eq!(h.draw_primitive_up(D3DPT_TRIANGLELIST, 1, &near), 0);
++    assert_eq!(h.set_render_target(0, &surface), 0);
++    assert_eq!(h.clear_depth_stencil_surface(), 0);
++    draw_fill(&h, GREEN);
++    assert_eq!(h.set_render_target(0, &backbuffer), 0);
++    assert_eq!(h.set_depth_stencil_surface(&depth), 0);
++    let mut far = fullscreen_triangle(BLUE);
++    for vertex in &mut far {
++        vertex.z = 0.75;
++    }
++    assert_eq!(h.draw_primitive_up(D3DPT_TRIANGLELIST, 1, &far), 0);
++    assert_eq!(h.set_render_target(0, &surface), 0);
++    assert_eq!(h.clear_depth_stencil_surface(), 0);
++    draw_fill(&h, WHITE);
++    assert_eq!(
++        read_surface_pixel(&h, &backbuffer, 320, 240),
++        RED,
++        "the later farther draw remains behind the earlier red draw"
++    );
++    assert_eq!(
++        read_surface_pixel(&h, &surface, 320, 240),
++        WHITE,
++        "the second independent-target draw remains last"
++    );
++}
++
+ #[test]
+ fn depth_test_near_occludes_far() {
+     let h = Harness::with_depth();
+@@ -3727,6 +3782,48 @@ fn depth_survives_a_mid_frame_readback_flush() {
+     );
+ }
+ 
++#[test]
++fn early_submission_preserves_depth_and_changing_draw_snapshots() {
++    let merged = format!(
++        "{};render.submitDraws=1",
++        std::env::var("MTLD3D_CONFIG").unwrap_or_default()
++    );
++    // SAFETY: nextest gives each test its own process; no harness threads exist yet.
++    unsafe { std::env::set_var("MTLD3D_CONFIG", merged) };
++
++    let h = Harness::with_depth();
++    assert!(h.pump());
++    assert_eq!(h.begin_scene(), D3D_OK);
++    assert_eq!(
++        h.clear(D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER, BLACK, 1.0, 0),
++        D3D_OK
++    );
++    assert_eq!(h.set_render_state(D3DRS_ZENABLE, 1), D3D_OK);
++    assert_eq!(h.set_render_state(D3DRS_ZWRITEENABLE, 1), D3D_OK);
++    assert_eq!(h.set_render_state(D3DRS_ZFUNC, D3DCMP_LESS), D3D_OK);
++
++    // Every draw uses a new frame arena and an asynchronous continuation. The
++    // colour and depth must survive those boundaries while constants and UP
++    // vertices change. A far red draw must never overwrite the nearest fill.
++    for i in 0..32_u16 {
++        let z = f32::from(i).mul_add(-0.02, 0.8);
++        draw_fill_at_z(&h, if i % 2 == 0 { BLUE } else { GREEN }, z);
++        draw_fill_at_z(&h, RED, 0.95);
++    }
++    assert_eq!(
++        h.read_pixel(320, 240),
++        GREEN,
++        "readback sees all prior chunks"
++    );
++    assert_eq!(h.end_scene(), D3D_OK);
++    assert_eq!(h.present(), D3D_OK);
++    assert_eq!(
++        h.read_pixel(320, 240),
++        GREEN,
++        "present retains the completed scene"
++    );
++}
++
+ /// Assert each RGB channel of `got` is within `tolerance` of `expected` (alpha ignored).
+ fn assert_rgb_close(got: u32, expected: u32, tolerance: i32, context: &str) {
+     let channel = |c: u32, shift: u32| i32::try_from((c >> shift) & 0xff).unwrap_or(0);
+diff --git a/windows/tests/tests/transforms_ff.rs b/windows/tests/tests/transforms_ff.rs
+index 3455b4a..9f52709 100644
+--- a/windows/tests/tests/transforms_ff.rs
++++ b/windows/tests/tests/transforms_ff.rs
+@@ -2,12 +2,16 @@
+ 
+ use mtld3d_tests::{Harness, LitVertex, PosVertex, SpecularVertex, Vertex};
+ use mtld3d_types::{
+-    D3DCMP_GREATER, D3DCOLORVALUE, D3DFVF_DIFFUSE, D3DFVF_NORMAL, D3DFVF_SPECULAR, D3DFVF_XYZ,
+-    D3DLIGHT_DIRECTIONAL, D3DLIGHT_POINT, D3DLIGHT_SPOT, D3DLIGHT9, D3DMATERIAL9, D3DMCS_MATERIAL,
+-    D3DPT_TRIANGLELIST, D3DRS_ALPHAFUNC, D3DRS_ALPHAREF, D3DRS_ALPHATESTENABLE, D3DRS_AMBIENT,
+-    D3DRS_AMBIENTMATERIALSOURCE, D3DRS_EMISSIVEMATERIALSOURCE, D3DRS_LIGHTING, D3DRS_LOCALVIEWER,
+-    D3DRS_SPECULARENABLE, D3DTA_ALPHAREPLICATE, D3DTA_DIFFUSE, D3DTA_SPECULAR, D3DTS_PROJECTION,
+-    D3DTS_TEXTURE0, D3DTS_VIEW, D3DTS_WORLD, D3DTSS_COLORARG1, D3DVECTOR,
++    D3DCMP_GREATER, D3DCOLORVALUE, D3DDECL_END, D3DDECLMETHOD_DEFAULT, D3DDECLTYPE_D3DCOLOR,
++    D3DDECLTYPE_FLOAT3, D3DDECLUSAGE_COLOR, D3DDECLUSAGE_NORMAL, D3DDECLUSAGE_POSITION,
++    D3DFVF_DIFFUSE, D3DFVF_NORMAL, D3DFVF_SPECULAR, D3DFVF_XYZ, D3DLIGHT_DIRECTIONAL,
++    D3DLIGHT_POINT, D3DLIGHT_SPOT, D3DLIGHT9, D3DMATERIAL9, D3DMCS_COLOR1, D3DMCS_COLOR2,
++    D3DMCS_MATERIAL, D3DPT_TRIANGLELIST, D3DRS_ALPHAFUNC, D3DRS_ALPHAREF, D3DRS_ALPHATESTENABLE,
++    D3DRS_AMBIENT, D3DRS_AMBIENTMATERIALSOURCE, D3DRS_COLORVERTEX, D3DRS_DIFFUSEMATERIALSOURCE,
++    D3DRS_EMISSIVEMATERIALSOURCE, D3DRS_LIGHTING, D3DRS_LOCALVIEWER, D3DRS_SPECULARENABLE,
++    D3DRS_SPECULARMATERIALSOURCE, D3DTA_ALPHAREPLICATE, D3DTA_DIFFUSE, D3DTA_SPECULAR,
++    D3DTS_PROJECTION, D3DTS_TEXTURE0, D3DTS_VIEW, D3DTS_WORLD, D3DTSS_COLORARG1, D3DVECTOR,
++    D3DVERTEXELEMENT9,
+ };
+ 
+ #[rustfmt::skip]
+@@ -20,6 +24,133 @@ const IDENTITY: [f32; 16] = [
+ 
+ const BLUE: u32 = 0xFF00_00FF;
+ 
++fn lit_color_declaration(h: &Harness, declare_colors: bool) {
++    let mut elements = vec![
++        D3DVERTEXELEMENT9 {
++            stream: 0,
++            offset: 0,
++            type_: D3DDECLTYPE_FLOAT3,
++            method: D3DDECLMETHOD_DEFAULT,
++            usage: D3DDECLUSAGE_POSITION,
++            usage_index: 0,
++        },
++        D3DVERTEXELEMENT9 {
++            stream: 0,
++            offset: 12,
++            type_: D3DDECLTYPE_FLOAT3,
++            method: D3DDECLMETHOD_DEFAULT,
++            usage: D3DDECLUSAGE_NORMAL,
++            usage_index: 0,
++        },
++    ];
++    if declare_colors {
++        for usage_index in 0..2 {
++            elements.push(D3DVERTEXELEMENT9 {
++                stream: u16::from(usage_index) + 1,
++                offset: 0,
++                type_: D3DDECLTYPE_D3DCOLOR,
++                method: D3DDECLMETHOD_DEFAULT,
++                usage: D3DDECLUSAGE_COLOR,
++                usage_index,
++            });
++        }
++    }
++    elements.push(D3DDECL_END);
++    let decl = h.create_vertex_declaration(&elements);
++    assert_eq!(h.set_vertex_declaration(&decl), 0);
++    assert_eq!(h.set_stream_source_null(1, 0, 0), 0);
++    assert_eq!(h.set_stream_source_null(2, 0, 0), 0);
++}
++
++fn check_declared_material_sources(declare_colors: bool) {
++    let h = Harness::new();
++    lit_color_declaration(&h, declare_colors);
++    for state in [D3DTS_WORLD, D3DTS_VIEW, D3DTS_PROJECTION] {
++        assert_eq!(h.set_transform(state, &IDENTITY), 0);
++    }
++    for (state, value) in [
++        (D3DRS_LIGHTING, 1),
++        (D3DRS_COLORVERTEX, 1),
++        (D3DRS_LOCALVIEWER, 0),
++        (D3DRS_SPECULARENABLE, 1),
++        (D3DRS_AMBIENT, 0xFFFF_FFFF),
++    ] {
++        assert_eq!(h.set_render_state(state, value), 0);
++    }
++    h.select_diffuse_stage(0);
++    let white = D3DCOLORVALUE {
++        r: 1.0,
++        g: 1.0,
++        b: 1.0,
++        a: 1.0,
++    };
++    let light = D3DLIGHT9 {
++        type_: D3DLIGHT_DIRECTIONAL,
++        diffuse: white,
++        specular: white,
++        direction: D3DVECTOR {
++            x: 0.0,
++            y: 0.0,
++            z: 1.0,
++        },
++        ..D3DLIGHT9::default()
++    };
++    assert_eq!(h.set_light(0, &light), 0);
++    assert_eq!(h.light_enable(0, true), 0);
++    let tri = [(0.0, 0.5), (0.5, -0.5), (-0.5, -0.5)].map(|(x, y)| LitVertex {
++        x,
++        y,
++        z: 0.5,
++        nx: 0.0,
++        ny: 0.0,
++        nz: -1.0,
++    });
++    let material_sources = [
++        D3DRS_DIFFUSEMATERIALSOURCE,
++        D3DRS_AMBIENTMATERIALSOURCE,
++        D3DRS_SPECULARMATERIALSOURCE,
++        D3DRS_EMISSIVEMATERIALSOURCE,
++    ];
++    for source in [D3DMCS_COLOR1, D3DMCS_COLOR2] {
++        for state in material_sources {
++            assert_eq!(h.set_render_state(state, source), 0);
++        }
++        for component in 0..4 {
++            let mut material = D3DMATERIAL9::default();
++            material.diffuse.a = 1.0;
++            material.power = 1.0;
++            let selected = match component {
++                0 => &mut material.diffuse,
++                1 => &mut material.ambient,
++                2 => &mut material.specular,
++                _ => &mut material.emissive,
++            };
++            selected.r = 1.0;
++            assert_eq!(h.set_material(&material), 0);
++            h.render_once(BLUE, |d| {
++                assert_eq!(d.draw_primitive_up(D3DPT_TRIANGLELIST, 1, &tri), 0);
++            });
++            let expected = if declare_colors { 0 } else { 0xFFFF_0000 };
++            assert_eq!(h.read_pixel(10, 10), BLUE, "corner remains clear");
++            assert_eq!(
++                h.read_pixel(320, 280),
++                expected,
++                "source {source}, material component {component}, declared {declare_colors}"
++            );
++        }
++    }
++}
++
++#[test]
++fn lit_decl_omitted_colors_fall_back_to_material() {
++    check_declared_material_sources(false);
++}
++
++#[test]
++fn lit_decl_unbound_colors_read_zero() {
++    check_declared_material_sources(true);
++}
++
+ const fn solid_triangle(color: u32) -> [Vertex; 3] {
+     [
+         Vertex {
