@@ -30,7 +30,7 @@ final class Runner: ObservableObject {
     /// `[ashita.boot] file`): horizon-loader.exe on HorizonXI, pol.exe on CatsEyeXI, xiloader.exe
     /// elsewhere. Both the exit watcher and the x87 sidecar look for this, by name.
     private var gameExe = "horizon-loader.exe"
-    static var currentGameExe = "horizon-loader.exe"
+    nonisolated(unsafe) static var currentGameExe = "horizon-loader.exe"
 
     /// Every FFXI graphics setting at max, 4K resolution. Registry keys documented in
     /// `[ffxi.registry]` of any Ashita boot .ini; mirrors `scripts/max4k.json`, which is the
@@ -510,128 +510,154 @@ final class Runner: ObservableObject {
     func launch(_ install: Install, perf: PerfSettings, profile: String = "horizonxi.ini",
                 useX87: Bool = true, world: String = "", addonPolicy: AddonPolicy = .unknown) {
         guard !running else { return }
+        guard let gameWine = X87Sidecar.patchedWine() else {
+            appendLine("!! patched game Wine is missing at \(WineRuntime.executable.path). "
+                       + "Open Setup & Diagnostics and run Install wine.")
+            return
+        }
         running = true
         loginFailure = ""
         currentInstall = install
         currentProfile = profile
         currentWorld = world.isEmpty ? "Vana'diel" : world
-        // The renderer lives in the prefix's registry and DLLs, not in the environment, so it has
-        // to be written before the process starts — and after any wineserver holding the old copy
-        // of the registry has exited.
-        // A wrapper that has been copied or moved still has its dylib links aimed at the old
-        // copy; fix that before anything tries to load one. See relinkStrayDylibs.
-        RendererSetup.relinkStrayDylibs(install) { [weak self] in self?.appendLine($0) }
-        RendererSetup.apply(perf.renderer, to: install) { [weak self] in self?.appendLine($0) }
-        // Same moment, same reason: the registry has to name *this* world's SquareEnix folder.
-        GameRegistry.point(install) { [weak self] in self?.appendLine($0) }
-        Self.cleanStaleWineSockets()
+        // gameExe names the client process for both the spawn and the watch poller. Resolve it
+        // here on the main actor -- a cheap boot-profile read -- so it is set the instant Play is
+        // pressed, ahead of the detached setup below.
         gameExe = Credentials.bootLoaderName(in: install, profile: profile) ?? "horizon-loader.exe"
         Self.currentGameExe = gameExe
-        Credentials.applyIniOverrides(perf.renderer.iniOverrides, to: install, profile: profile)
-        // Launching with Sandbox loaded and its interface bypass off produces the worst failure
-        // this project has: a clean login followed by a silent exit, no window, no error. Put it
-        // back rather than letting the user hit that. See Sandbox.swift.
-        if Sandbox.isBroken(install, profile: profile) {
-            Sandbox.repair(install) { [weak self] in self?.appendLine($0) }
-        }
-        // The local server is the one everything else here is a test against (see
-        // docs/X87-WALL.md and scripts/max4k.json, which this mirrors) -- 4K, every graphics
-        // setting maxed. Never applied to a live server profile: that would silently change
-        // someone's real account's display settings out from under them.
-        // The local world starts small -- but only if nobody has said otherwise. Forcing it on
-        // every launch (which is what the old max-4K line did) means the graphics panel silently
-        // does nothing on this world: you set it, press Play, and the launcher writes over you.
-        if profile == "lsb.ini", GraphicsSettings.read(from: install, profile: profile) == nil {
-            GraphicsSettings.lowSpec.write(to: install, profile: profile)
-            appendLine("==> local world: no graphics settings yet, seeding 640x480 "
-                       + "(change them in Graphics; they will be kept)")
-        }
-        // Every launch: make sure no addon can take the LuaJIT trace-patch fault that Ashita 4.3
-        // hits on this Mac (see LuaJITGuard). Idempotent, so this is cheap after the first run.
-        LuaJITGuard.apply(install) { [weak self] in self?.appendLine($0) }
-        // Cutscene narration, if the user asked for it: install VanaVoice's addon and start the
-        // narrator. Never fatal -- a failure here leaves the game exactly as silent as before.
-        Narration.prepare(install, enabled: perf.narrateCutscenes, policy: addonPolicy,
-                          profile: profile) { [weak self] in self?.appendLine($0) }
-        appendLine("==> launching \(install.bootProfileName(profile)) (Ashita \(install.ashitaGeneration.rawValue))")
-        // Make the Dock tile say which world is running, under this project's own icon.
-        DockIcon.apply(to: install, world: world.isEmpty ? "Vana'diel" : world) { [weak self] in self?.appendLine($0) }
-        var env = perf.environment(for: install, x87: useX87)
-        // The tile the *wine process* wears: CrossOver wine's CX_ROOT icon fallback, since the
-        // loader has no icon resource of its own. See DockIcon.cxRoot.
-        if env["CX_ROOT"] == nil, let cx = DockIcon.cxRoot(for: world.isEmpty ? "Vana'diel" : world,
-                                                          log: { [weak self] in self?.appendLine($0) }) {
-            env["CX_ROOT"] = cx.path
-        }
-        // x87 acceleration, two generations:
-        //  * Cooperative (preferred): x87sidecar --cooperative launching the patched CX wine
-        //    (athei/wine-build at COOP_WINE). Every wine process — including horizon-loader,
-        //    a *grandchild* via Ashita — does its own handshake and flushes its own i-cache,
-        //    which is the only reliable way since macOS 26.5.2's Rosetta. No entitlements.
-        //  * attach-by-pid (legacy, x87sidecar_entitled in Resources): broken on 26.5.2 —
-        //    cross-process i-cache flush is unreliable, the client page-faults minutes after
-        //    attach. Kept only as a fallback for older macOS; the binary is currently NOT
-        //    bundled for that reason.
-        // ROSETTA_DISABLE_AOT only pays off when a sidecar actually patches x87; without one
-        // it forces Rosetta's slow path and costs ~half the stock frame rate (measured
-        // 2026-08-19: ~5 fps vs ~11 stock). Set it only when acceleration will engage.
-        // A world may have to run without x87 acceleration (see Server.x87).
-        // x87 acceleration rides on ROSETTA_X87_PATH now (set in PerfSettings.environment), so
-        // there is nothing to wrap here: wine re-execs every i386 process through the sidecar
-        // itself, including the client Ashita spawns. See Settings.swift for the measurements.
-        if !useX87 {
-            appendLine("i  x87 acceleration is off for this world — its client exits at boot with it on.")
-        } else if X87Sidecar.coopBinary() == nil {
-            appendLine("!! x87sidecar-coop missing from the bundle — the client will run at "
-                       + "Rosetta's stock x87 speed (single-digit fps in-world).")
-        }
-        // Spawned through a shell with a *file* redirect, not Foundation.Process pipes.
-        // 2026-08-19: after the wrapper moved to the x10, every game launched the old way died
-        // one second after "Connected to server!" — while a byte-identical spawn (same exe,
-        // args, cwd, and the full 58-variable environment, verified via last-spawn.txt) from a
-        // shell with stdout on a file ran to character select every single time. Sidecar off,
-        // wineserver stopped, strays killed — the only surviving difference was how Foundation
-        // wires the child. So launch the way that demonstrably works and tail the file for the
-        // log pane.
-        let exe: URL
-        let args: [String]
-        // Ashita v4 injects with `Ashita-cli.exe <profile>.ini`; Eden's v3 client with
-        // `injector.exe <profile>.xml`. Same shape, different names — see Install.AshitaGeneration.
-        let injector = install.gameDirWine + "\\" + install.ashitaCLI.lastPathComponent
-        let bootFile = install.bootProfileName(profile)
-        if let wine = X87Sidecar.patchedWine() {
-            // Not about x87: the wrapper's own wine exits one second after login. See
-            // X87Sidecar.patchedWine.
-            exe = wine
-            args = [injector, bootFile]
-            appendLine("==> wine: \(wine.path)"
-                       + (useX87 && X87Sidecar.coopBinary() != nil ? " + x87 sidecar" : ""))
-        } else {
-            exe = install.wine
-            args = [injector, bootFile]
-            appendLine("!! falling back to the wrapper's own wine — expect the client to exit "
-                       + "about a second after login (docs/WINE-BUILD.md)")
-        }
-        // Every registry edit above (renderer, SquareEnix path) went through the *wrapper's*
-        // wine, which leaves the wrapper's wineserver alive on this prefix for ~3 s after its
-        // last client. The game runs on the cooperative wine, a different protocol -- and
-        // joining that server is "wine client error: version mismatch 856/1809" followed by a
-        // refused login (2026-08-27, two launches in a row). Wait for it to be gone first;
-        // this is a no-op when a game is already running in the prefix.
-        if RendererSetup.stopWineserver(install) {
-            appendLine("==> wrapper wineserver stopped; the game starts its own")
-        }
-        spawnViaShell(exe,
-              args: args,
-              env: env,
-              cwd: install.gameDir) { [weak self] code in
-            // This is Ashita-cli.exe, the *injector*. It exits within seconds of a successful
-            // injection, while the game carries on in horizon-loader.exe -- so its exit is not
-            // the game's exit, and tearing down the sidecar here killed the client roughly ten
-            // seconds after every launch ("connects to nothing, window never appears"). Wait for
-            // the actual client process instead.
-            self?.appendLine("==> injector exited \(code)")
-            self?.watchGameProcess()
+        // Everything from here to the spawn shells out to wine: the registry writes in
+        // RendererSetup.apply / GameRegistry.point, and stopWineserver, which blocks the caller
+        // until the wrapper's wineserver has flushed the registry and exited (bounded at 30 s, and
+        // genuinely seconds on a slow disk). Runner is @MainActor, so doing this inline is what
+        // beach-balled the UI on Play. Run it off the main actor instead, in the exact same order
+        // -- that order is what the comments below guard -- hopping every log line and the final
+        // spawn back to the main actor.
+        Task.detached { [weak self] in
+            let log: (String) -> Void = { s in Task { @MainActor in self?.appendLine(s) } }
+            // The renderer lives in the prefix's registry and DLLs, not in the environment, so it
+            // has to be written before the process starts — and after any wineserver holding the
+            // old copy of the registry has exited.
+            // A wrapper that has been copied or moved still has its dylib links aimed at the old
+            // copy; fix that before anything tries to load one. See relinkStrayDylibs.
+            RendererSetup.relinkStrayDylibs(install) { log($0) }
+            RendererSetup.apply(perf.renderer, to: install) { log($0) }
+            // Same moment, same reason: the registry has to name *this* world's SquareEnix folder.
+            GameRegistry.point(install) { log($0) }
+            Self.cleanStaleWineSockets()
+            Credentials.applyIniOverrides(perf.renderer.iniOverrides, to: install, profile: profile)
+            // Launching with Sandbox loaded and its interface bypass off produces the worst
+            // failure this project has: a clean login followed by a silent exit, no window, no
+            // error. Put it back rather than letting the user hit that. See Sandbox.swift.
+            if Sandbox.isBroken(install, profile: profile) {
+                Sandbox.repair(install) { log($0) }
+            }
+            // The local server is the one everything else here is a test against (see
+            // docs/X87-WALL.md and scripts/max4k.json, which this mirrors) -- 4K, every graphics
+            // setting maxed. Never applied to a live server profile: that would silently change
+            // someone's real account's display settings out from under them.
+            // The local world starts small -- but only if nobody has said otherwise. Forcing it on
+            // every launch (which is what the old max-4K line did) means the graphics panel
+            // silently does nothing on this world: you set it, press Play, and the launcher writes
+            // over you.
+            if profile == "lsb.ini", GraphicsSettings.read(from: install, profile: profile) == nil {
+                GraphicsSettings.lowSpec.write(to: install, profile: profile)
+                log("==> local world: no graphics settings yet, seeding 640x480 "
+                    + "(change them in Graphics; they will be kept)")
+            }
+            // Every launch: make sure no addon can take the LuaJIT trace-patch fault that Ashita
+            // 4.3 hits on this Mac (see LuaJITGuard). Idempotent, so this is cheap after the first
+            // run.
+            LuaJITGuard.apply(install) { log($0) }
+            // Cutscene narration, if the user asked for it: install VanaVoice's addon and start the
+            // narrator. Never fatal -- a failure here leaves the game exactly as silent as before.
+            Narration.prepare(install, enabled: perf.narrateCutscenes, policy: addonPolicy,
+                              profile: profile) { log($0) }
+            log("==> launching \(install.bootProfileName(profile)) (Ashita \(install.ashitaGeneration.rawValue))")
+            // Make the Dock tile say which world is running, under this project's own icon.
+            DockIcon.apply(to: install, world: world.isEmpty ? "Vana'diel" : world) { log($0) }
+            // A hidden launchctl-only switch for matched diagnostics. It must be read by the Mac
+            // launcher, not passed through Extra environment, because the setting under test is
+            // whether ROSETTA_X87_PATH exists in Wine's environment at all.
+            let x87DisabledForDiagnostics =
+                ProcessInfo.processInfo.environment["FFXI_ON_MAC_DISABLE_X87"] == "1"
+            let x87Enabled = useX87 && !x87DisabledForDiagnostics
+            var env = perf.environment(for: install, x87: x87Enabled)
+            if let capture = PerformanceDiagnostics.consume(
+                for: install.gameDir, gameDirectoryWine: install.gameDirWine) {
+                for (key, value) in capture.environment { env[key] = value }
+                log("==> performance capture \(capture.session) enabled (\(capture.level))")
+                log("    \(capture.directory.path)")
+            }
+            // The tile the *wine process* wears: CrossOver wine's CX_ROOT icon fallback, since the
+            // loader has no icon resource of its own. See DockIcon.cxRoot.
+            if env["CX_ROOT"] == nil, let cx = DockIcon.cxRoot(for: world.isEmpty ? "Vana'diel" : world,
+                                                              log: { log($0) }) {
+                env["CX_ROOT"] = cx.path
+            }
+            // x87 acceleration, two generations:
+            //  * Cooperative (preferred): x87sidecar --cooperative launching the patched CX wine
+            //    (athei/wine-build at COOP_WINE). Every wine process — including horizon-loader,
+            //    a *grandchild* via Ashita — does its own handshake and flushes its own i-cache,
+            //    which is the only reliable way since macOS 26.5.2's Rosetta. No entitlements.
+            //  * attach-by-pid (legacy, x87sidecar_entitled in Resources): broken on 26.5.2 —
+            //    cross-process i-cache flush is unreliable, the client page-faults minutes after
+            //    attach. Kept only as a fallback for older macOS; the binary is currently NOT
+            //    bundled for that reason.
+            // ROSETTA_DISABLE_AOT only pays off when a sidecar actually patches x87; without one
+            // it forces Rosetta's slow path and costs ~half the stock frame rate (measured
+            // 2026-08-19: ~5 fps vs ~11 stock). Set it only when acceleration will engage.
+            // A world may have to run without x87 acceleration (see Server.x87).
+            // x87 acceleration rides on ROSETTA_X87_PATH now (set in PerfSettings.environment), so
+            // there is nothing to wrap here: wine re-execs every i386 process through the sidecar
+            // itself, including the client Ashita spawns. See Settings.swift for the measurements.
+            if x87DisabledForDiagnostics {
+                log("i  x87 acceleration disabled for this diagnostic launch; Rosetta AOT remains enabled")
+            } else if !useX87 {
+                log("i  x87 acceleration is off for this world because this client is slower "
+                    + "or incompatible with it.")
+            } else if X87Sidecar.coopBinary() == nil {
+                log("!! x87sidecar-coop missing from the bundle — the client will run at "
+                    + "Rosetta's stock x87 speed (single-digit fps in-world).")
+            }
+            // Spawned through a shell with a *file* redirect, not Foundation.Process pipes.
+            // 2026-08-19: after the wrapper moved to the x10, every game launched the old way died
+            // one second after "Connected to server!" — while a byte-identical spawn (same exe,
+            // args, cwd, and the full 58-variable environment, verified via last-spawn.txt) from a
+            // shell with stdout on a file ran to character select every single time. Sidecar off,
+            // wineserver stopped, strays killed — the only surviving difference was how Foundation
+            // wires the child. So launch the way that demonstrably works and tail the file for the
+            // log pane.
+            // Ashita v4 injects with `Ashita-cli.exe <profile>.ini`; Eden's v3 client with
+            // `injector.exe <profile>.xml`. Same shape, different names — see Install.AshitaGeneration.
+            let injector = install.gameDirWine + "\\" + install.ashitaCLI.lastPathComponent
+            let bootFile = install.bootProfileName(profile)
+            let args = [injector, bootFile]
+            log("==> wine: \(gameWine.path)"
+                + (x87Enabled && X87Sidecar.coopBinary() != nil ? " + x87 sidecar" : ""))
+            // Every registry edit above (renderer, SquareEnix path) went through the *wrapper's*
+            // wine, which leaves the wrapper's wineserver alive on this prefix for ~3 s after its
+            // last client. The game runs on the cooperative wine, a different protocol -- and
+            // joining that server is "wine client error: version mismatch 856/1809" followed by a
+            // refused login (2026-08-27, two launches in a row). Wait for it to be gone first;
+            // this is a no-op when a game is already running in the prefix.
+            if RendererSetup.stopWineserver(install) {
+                log("==> wrapper wineserver stopped; the game starts its own")
+            }
+            let spawnEnv = env
+            await MainActor.run { [weak self] in
+                self?.spawnViaShell(gameWine,
+                      args: args,
+                      env: spawnEnv,
+                      cwd: install.gameDir) { [weak self] code in
+                    // This is Ashita-cli.exe, the *injector*. It exits within seconds of a
+                    // successful injection, while the game carries on in horizon-loader.exe -- so
+                    // its exit is not the game's exit, and tearing down the sidecar here killed the
+                    // client roughly ten seconds after every launch ("connects to nothing, window
+                    // never appears"). Wait for the actual client process instead.
+                    self?.appendLine("==> injector exited \(code)")
+                    self?.watchGameProcess()
+                }
+            }
         }
     }
 
@@ -645,7 +671,9 @@ final class Runner: ObservableObject {
             let scale = self?.currentInstall.map(WindowMemory.scale(for:)) ?? 1
             for _ in 0..<300 {
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
-                let pids = Self.gamePIDs()
+                // pgrep is a subprocess with a blocking waitUntilExit; run it off the main actor
+                // so the 2 s poll never freezes the UI (the shutdown beach ball).
+                let pids = await Task.detached { Self.gamePIDs() }.value
                 if pids.isEmpty { break }
                 if let s = await MainActor.run(body: { WindowMemory.currentSize(pids: pids, scale: scale) }) {
                     if self?.firstWindowSize == nil { self?.firstWindowSize = s }
@@ -655,7 +683,8 @@ final class Runner: ObservableObject {
             // Two consecutive misses, because pgrep can miss the process for a beat while wine
             // re-execs it during start-up.
             try? await Task.sleep(nanoseconds: 2_000_000_000)
-            if Self.gameIsRunning() { self?.watchGameProcess(); return }
+            let stillRunning = await Task.detached { Self.gameIsRunning() }.value
+            if stillRunning { self?.watchGameProcess(); return }
             await MainActor.run {
                 guard let self else { return }
                 self.running = false
@@ -678,7 +707,7 @@ final class Runner: ObservableObject {
     /// Bumped whenever a size was written back, so the Graphics panel can reload.
     @Published var windowSizeRemembered = 0
 
-    private static func gamePIDs() -> [pid_t] {
+    nonisolated private static func gamePIDs() -> [pid_t] {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/pgrep")
         p.arguments = ["-f", currentGameExe]
@@ -692,7 +721,7 @@ final class Runner: ObservableObject {
             .compactMap { pid_t($0.trimmingCharacters(in: .whitespaces)) }
     }
 
-    private static func gameIsRunning() -> Bool {
+    nonisolated private static func gameIsRunning() -> Bool {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/pgrep")
         p.arguments = ["-f", currentGameExe]
@@ -711,7 +740,7 @@ final class Runner: ObservableObject {
     /// file descriptor", "Injection failed!") without ever touching wine's own cleanup path,
     /// because Ashita-cli connects to whatever socket file it finds rather than starting fresh.
     /// This app is the only wine user on the machine, so clearing all of them here is safe.
-    private static func cleanStaleWineSockets() {
+    nonisolated private static func cleanStaleWineSockets() {
         // Only when no wineserver is alive: deleting the socket dir of a *live* server (one the
         // user's own manual wine session started, say) orphans every process attached to it.
         let chk = Process()
@@ -753,16 +782,21 @@ final class Runner: ObservableObject {
         let out = FileManager.default.temporaryDirectory
             .appendingPathComponent("ffxi-on-mac-game-\(getpid()).log")
         FileManager.default.createFile(atPath: out.path, contents: nil)
-        let quoted = ([exe.path] + args).map { "'" + $0.replacingOccurrences(of: "'", with: "'\\''") + "'" }
-            .joined(separator: " ")
         var e = ProcessInfo.processInfo.environment
         for (k, v) in env { e[k] = v }
         // Record exactly what was spawned. Diffing this against a hand-run that works is how
         // the launch-death and Gaia XI exits were bisected; it costs one small file per launch.
         let spawnLog = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("HorizonXI-on-Mac/last-spawn.txt")
+        // Do not dump the inherited process environment. Launching this app from a development
+        // shell can put API keys and database credentials in it, none of which belong in a
+        // persistent game diagnostic. Values below are limited to the environment this launcher
+        // deliberately adds; ambient keys are recorded by name only so spawn comparisons can
+        // still spot a meaningful difference without copying their contents.
+        let explicit = env.keys.sorted().map { "\($0)=\(env[$0] ?? "")" }.joined(separator: "\n")
+        let ambient = e.keys.filter { env[$0] == nil }.sorted().joined(separator: ",")
         let dump = "exe: \(exe.path)\nargs: \(args)\ncwd: \(cwd.path)\n"
-            + e.keys.sorted().map { "\($0)=\(e[$0] ?? "")" }.joined(separator: "\n") + "\n"
+            + explicit + "\nambient keys: \(ambient)\n"
         try? dump.write(to: spawnLog, atomically: true, encoding: .utf8)
         // Detached, in its own session, so quitting the launcher does not take the game with
         // it. That means no Process object and no terminationHandler -- the child is not ours
