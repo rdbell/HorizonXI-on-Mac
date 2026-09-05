@@ -6,6 +6,7 @@ from pathlib import Path
 import tempfile
 import time
 import signal
+from types import SimpleNamespace
 import unittest
 
 
@@ -17,6 +18,27 @@ SPEC.loader.exec_module(menu_run)
 
 
 class MenuRunTests(unittest.TestCase):
+    def test_partial_recorder_line_does_not_block_and_is_reassembled(self):
+        reader, writer = os.pipe()
+        with os.fdopen(reader) as stdout:
+            process = SimpleNamespace(stdout=stdout)
+            lines = []
+            try:
+                os.write(writer, b"Capture partial")
+                started = time.monotonic()
+                with menu_run.wall_clock_deadline(1):
+                    menu_run.read_available(process, lines)
+                self.assertLess(time.monotonic() - started, 0.5)
+                self.assertEqual(lines, [])
+                os.write(writer, b" armed\nnext")
+                menu_run.read_available(process, lines)
+                self.assertEqual(lines, ["Capture partial armed"])
+            finally:
+                os.close(writer)
+            menu_run.read_available(process, lines)
+            menu_run.read_available(process, lines)
+            self.assertEqual(lines, ["Capture partial armed", "next"])
+
     def test_deadline_interrupts_a_blocked_capture_and_runs_finally(self):
         cleaned = []
         started = time.monotonic()

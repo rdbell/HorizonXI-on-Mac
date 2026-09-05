@@ -194,16 +194,26 @@ def ensure_window_tool() -> Path | None:
 def read_available(process: subprocess.Popen[str], sink: list[str], timeout: float = 0.0) -> None:
     if process.stdout is None:
         return
+    pending = getattr(process, "_menu_output_pending", b"")
     while True:
         ready, _, _ = select.select([process.stdout], [], [], timeout)
         timeout = 0.0
         if not ready:
+            process._menu_output_pending = pending
             return
-        line = process.stdout.readline()
-        if not line:
+        # A readable pipe can hold only part of a line. TextIO.readline would
+        # block waiting for the newline, including during cleanup after SIGALRM
+        # has been disarmed. Read only the bytes the pipe already has.
+        chunk = os.read(process.stdout.fileno(), 65536)
+        pending += chunk
+        while b"\n" in pending or (not chunk and pending):
+            raw, _, pending = pending.partition(b"\n")
+            line = raw.decode("utf-8", errors="replace").rstrip("\r")
+            sink.append(line)
+            print(f"  recorder: {line}", flush=True)
+        if not chunk:
+            process._menu_output_pending = b""
             return
-        sink.append(line.rstrip("\n"))
-        print(f"  recorder: {line.rstrip()}", flush=True)
 
 
 def fps_rows(path: Path) -> list[dict[str, float]]:

@@ -26,6 +26,25 @@ addon.link    = 'https://github.com/danielalanbates/HorizonXI-on-Mac';
 
 require('common');
 local chat = require('chat');
+local ffi = require('ffi');
+ffi.cdef[[
+    int __stdcall QueryPerformanceCounter(int64_t *);
+    int __stdcall QueryPerformanceFrequency(int64_t *);
+    void __stdcall GetSystemTimeAsFileTime(uint64_t *);
+]];
+local qpc = ffi.new('int64_t[1]');
+local frequency = ffi.new('int64_t[1]');
+local filetime = ffi.new('uint64_t[1]');
+ffi.C.QueryPerformanceFrequency(frequency);
+local frequency_hz = tonumber(frequency[0]);
+local function clock_s()
+    ffi.C.QueryPerformanceCounter(qpc);
+    return tonumber(qpc[0]) / frequency_hz;
+end
+ffi.C.GetSystemTimeAsFileTime(filetime);
+local started = clock_s();
+local epoch_started = tonumber(filetime[0]) / 10000000 - 11644473600;
+local function epoch_s(now) return epoch_started + now - started; end
 
 -- Each step is { delay_seconds, command_or_function, label }. Commands starting with '!' are
 -- LandSandBoat GM commands sent as chat; '/' commands go to Ashita. Zone ids: North Gustaberg
@@ -40,22 +59,22 @@ local chat = require('chat');
 local scenarios = {
     -- The settled-city baseline: two fixed vantages in Bastok at uncapped FPS.
     city = {
-        { 0,  '!godmode',                        'godmode' },
+        { 1,  '!addtime 0',                      'clock offset reset' },
         { 1,  '!perftime 12',                    'clock pinned to noon' },
         { 2,  '/fps 0',                          'fps uncapped' },
         { 2,  '/drawdistance setworld 20',       'draw distance max' },
         { 2,  '/drawdistance setmob 20',         'entity draw max' },
-        { 3,  '!pos -104.018 9.359 81.411 235',  'zone bastok markets' },
-        { 6,  'pin 1.5708',                      'heading pinned' },
-        { 20, 'settle',                          'city settled' },
-        { 20, '!pos -201.904 1.928 -194.828 234','zone bastok mines' },
+        { 3,  '!pos -201.904 1.928 -194.828 235',  'zone bastok markets' },
         { 6,  'pin 4.7124',                      'heading pinned' },
+        { 20, 'settle',                          'city settled' },
+        { 20, '!pos -104.018 9.359 81.411 234','zone bastok mines' },
+        { 6,  'pin 1.5708',                      'heading pinned' },
         { 20, 'settle',                          'mines settled' },
         { 20, 'done',                            'done' },
     },
     -- Outdoors at a fixed vantage, then weather, then a crowd of mobs around the player.
     field = {
-        { 0,  '!godmode',                        'godmode' },
+        { 1,  '!addtime 0',                      'clock offset reset' },
         { 1,  '!perftime 12',                    'clock pinned to noon' },
         { 2,  '/fps 0',                          'fps uncapped' },
         { 2,  '/drawdistance setworld 20',       'draw distance max' },
@@ -67,8 +86,8 @@ local scenarios = {
         { 15, 'settle',                          'weather settled' },
         { 3,  'spawn 40',                        'spawn 40 mobs' },
         { 30, 'settle',                          'crowd settled' },
-        { 3,  '!pos -104.018 9.359 81.411 235',  'zone bastok markets' },
-        { 6,  'pin 1.5708',                      'heading pinned' },
+        { 3,  '!pos -201.904 1.928 -194.828 235',  'zone bastok markets' },
+        { 6,  'pin 4.7124',                      'heading pinned' },
         { 20, 'settle',                          'city after crowd' },
         { 10, 'done',                            'done' },
     },
@@ -90,7 +109,7 @@ local state = {
 local function mark(label, extra)
     local zone = AshitaCore:GetMemoryManager():GetParty():GetMemberZone(0);
     local line = string.format('{"epoch": %.3f, "label": "%s", "zone": %d%s}',
-        os.time() + (os.clock() % 1), (label:gsub('"', "'")), zone, extra or '');
+        epoch_s(clock_s()), (label:gsub('"', "'")), zone, extra or '');
     if (state.markers ~= nil) then
         local f = io.open(state.markers, 'a');
         if (f ~= nil) then f:write(line, '\n'); f:close(); end
@@ -148,7 +167,7 @@ local function step()
     end
     -- Each step's delay is the pause *before* it runs, so schedule the next one now.
     local nxt = sc[state.index + 1];
-    if (nxt ~= nil) then state.next_at = os.clock() + nxt[1]; end
+    if (nxt ~= nil) then state.next_at = clock_s() + nxt[1]; end
 end
 
 local function start(name)
@@ -158,13 +177,13 @@ local function start(name)
         return;
     end
     state.running = sc; state.index = 0;
-    state.next_at = os.clock() + sc[1][1];
+    state.next_at = clock_s() + sc[1][1];
     mark('scenario start: ' .. name);
 end
 
 ashita.events.register('load', 'perfscene_load', function ()
     if (state.markers ~= nil) then
-        mark('addon loaded');
+        mark('addon loaded', string.format(', "jit_enabled": %s', tostring(jit and jit.status() or false)));
     end
 end);
 
@@ -191,16 +210,66 @@ ashita.events.register('d3d_present', 'perfscene_present', function ()
         state.in_world = true;
         mark(first and 'in world' or 'zoned', string.format(', "zone_id": %d', zone));
         if (first) then
-            state.world_at = os.clock();
+            state.world_at = clock_s();
         end
     end
     if (state.in_world and state.auto ~= nil and state.running == nil and not state.auto_done) then
-        if (os.clock() - state.world_at >= state.start) then
+        if (clock_s() - state.world_at >= state.start) then
             state.auto_done = true;
             start(state.auto);
         end
     end
-    if (state.running ~= nil and os.clock() >= state.next_at) then
+    if (state.running ~= nil and clock_s() >= state.next_at) then
         step();
     end
 end);
+
+-- Renderer-independent benchmark counter. QueryPerformanceCounter is monotonic wall time.
+local out_path=os.getenv('PERFSCENE_FPS');
+local out=out_path and io.open(out_path,'w') or nil;
+local last=started; local previous=started; local count=0; local frame_ms={};
+if out then out:write('elapsed,epoch,fps,frames,seconds,zone,p50_ms,p95_ms,p99_ms,max_ms,jit_enabled\n'); out:flush(); end
+ashita.events.register('d3d_present','benchmark_fps',function()
+  if not out then return end
+  count=count+1; local now=clock_s(); local dt=now-last;
+  frame_ms[count]=(now-previous)*1000; previous=now;
+  if dt>=1 then
+    local zone=AshitaCore:GetMemoryManager():GetParty():GetMemberZone(0);
+    table.sort(frame_ms);
+    out:write(string.format('%.6f,%.6f,%.6f,%d,%.6f,%d,%.6f,%.6f,%.6f,%.6f,%d\n',
+      now-started,epoch_s(now),count/dt,count,dt,zone,
+      frame_ms[math.ceil(count*0.50)],frame_ms[math.ceil(count*0.95)],
+      frame_ms[math.ceil(count*0.99)],frame_ms[count],jit and jit.status() and 1 or 0));
+    out:flush();
+    frame_ms={};
+    count=0;last=now;
+  end
+end);
+ashita.events.register('unload','benchmark_fps_cleanup',function() if out then out:close();out=nil;end end);
+
+-- Menu-only experiment: the exact pointer walk used by Ashita's existing fps addon.
+-- The game process owns this value; nothing is patched on disk. Reapply only if a
+-- menu transition restores a nonzero divisor. Never change it after entering a zone.
+local menu_uncap=os.getenv('PERFSCENE_MENU_UNCAP')=='1';
+local divisor_slot=nil; local next_divisor_check=started+2;
+local divisor_out=menu_uncap and out_path and io.open(out_path:gsub('common%-fps.csv$','menu-divisor.csv'),'w') or nil;
+if divisor_out then divisor_out:write('epoch,before,after\n');divisor_out:flush();end
+ashita.events.register('d3d_present','benchmark_menu_uncap',function()
+  if not menu_uncap or clock_s()<next_divisor_check then return end
+  next_divisor_check=clock_s()+1;
+  if AshitaCore:GetMemoryManager():GetParty():GetMemberZone(0)~=0 then return end
+  if not divisor_slot then
+    local signature=ashita.memory.find(0,0,'81EC000100003BC174218B0D',0,0);
+    if not signature or signature==0 then return end
+    divisor_slot=ashita.memory.read_uint32(signature+0x0C);
+  end
+  if not divisor_slot or divisor_slot==0 then return end
+  local object=ashita.memory.read_uint32(divisor_slot);
+  if not object or object==0 then return end
+  local before=ashita.memory.read_uint32(object+0x30);
+  if before~=0 then ashita.memory.write_uint32(object+0x30,0);end
+  if divisor_out then
+    divisor_out:write(string.format('%.6f,%d,%d\n',epoch_s(clock_s()),before,ashita.memory.read_uint32(object+0x30)));divisor_out:flush();
+  end
+end);
+ashita.events.register('unload','benchmark_menu_uncap_cleanup',function() if divisor_out then divisor_out:close();divisor_out=nil;end end);

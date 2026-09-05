@@ -46,6 +46,45 @@ recorder and subprocess waits, to 180 seconds by default. A deadline exits with 
 Cleanup runs afterwards with its own subprocess timeouts so the sidecar can finalize its
 counters; optional profile analysis has a separate 300-second limit.
 
+## Local renderer comparisons
+
+`renderer-run.py` reuses the bounded menu driver and requires the installed local Docker
+world, loopback login, and `hxitest` account. It confirms Hxitest and a single registered
+character through OCR before entering an optional scenario. All five server containers must
+already be running. It does not restart them.
+
+```sh
+python3 scripts/harness/renderer-run.py --output /path/outside/git/dxvk-minimal
+python3 scripts/harness/renderer-run.py --output /path/outside/git/mtld3d-minimal \
+  --renderer-bundle /path/to/mtld3d-v0.8.0 --dump
+python3 scripts/harness/renderer-run.py --output /path/outside/git/dxvk-city \
+  --scenario city --menu-sample 0 --limit 420 --capture-seconds 390
+```
+
+The default boot script loads only Addons, fps, drawdistance, and perfscene. Add individual
+plugins with `--load-plugin`, individual addons with `--load-addon`, or use `--boot-file`
+for a frozen copy of the full boot configuration. The user's default script is preserved.
+The launcher's existing LuaJIT crash guard still applies; the counter records `jit_enabled`
+so a JIT assumption cannot silently change the comparison.
+
+The runner snapshots renderer files, boot scripts, registry hives, local account storage,
+and the selected account preferences. Its `private/` directory has mode 0700 and must never
+be published. On normal completion it restores the saved file states and preferences and
+checks Docker IDs/start times. `--restore OUTPUT` repeats that recovery after an interrupted
+parent, and refuses to run while game or Wine processes remain.
+
+Candidate launchers are separate signed copies. Loaded D3D8/D3D9 hashes must match their
+resources. `--dump` presses F12 once at character selection for mtld3d's three-frame log.
+Game and capture limits cannot exceed 420 seconds. The regular driver performs cleanup
+afterwards, including the sidecar's eight-second finalization window.
+
+`common-fps.csv` measures Ashita's `d3d_present` event with QueryPerformanceCounter across
+backends. Each second includes the frame count, elapsed time, zone, and frame-time p50,
+p95, p99 and maximum. Percentiles describe individual one-second windows, not a pooled
+whole-run percentile. Screenshots and `renderer-loaded-files.json` retain the rendering
+and binary evidence. A faster scene with missing geometry or shading is an invalid
+performance comparison.
+
 ## Offline fault benchmark
 
 `fault-bench.py` runs a Windows benchmark under the installed Wine runtime, without the x87
