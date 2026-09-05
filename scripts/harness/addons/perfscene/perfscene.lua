@@ -11,6 +11,7 @@ Environment (set by the launcher for one run, read through os.getenv):
   PERFSCENE_MARKERS   file to append JSON-lines markers to (required, otherwise idle)
   PERFSCENE_SCENARIO  scenario name from the table below (default: city)
   PERFSCENE_START     seconds after zone-in before the first step (default 8)
+  PERFSCENE_FRAMES    optional CSV of individual frame durations
 
 Commands:
   /perfscene run <name>    start a scenario by hand
@@ -106,6 +107,41 @@ for _, s in ipairs(scenarios.city) do
     scenarios.town[#scenarios.town + 1] = { delay, command, label };
 end
 
+local effect_spells = {
+    { 'Blaze Spikes', 249 }, { 'Ice Spikes', 250 }, { 'Shock Spikes', 251 },
+    { 'Stoneskin', 54 }, { 'Blink', 53 }, { 'Aquaveil', 55 },
+};
+scenarios.effects = {
+    { 1, "!exec xi.commands.perftime = dofile('scripts/commands/perftime.lua')", 'clock command refreshed' },
+    { 1, '!perftime 12', 'clock pinned to noon' },
+    { 2, '/fps 0', 'fps uncapped' },
+    { 2, world_distance_command, 'world draw distance set' },
+    { 2, entity_distance_command, 'entity draw distance set' },
+    { 2, '!changejob RDM 99', 'effects job requested' },
+    { 3, '!addallspells', 'effects spells requested' },
+    { 12, '!exec player:setPos(39,0,-49,128,234)', 'zone bastok mines' },
+    { 6, 'home', 'camera reset requested' },
+    { 15, 'effects_ready', 'effects idle settled' },
+    { 20, 'settle', 'effects idle end' },
+};
+for round = 1, 3 do
+    local prefix = 'effects round ' .. round;
+    local steps = {
+        { 3, '!reset', prefix .. ' recasts reset' },
+        { 3, '!exec player:setMP(player:getMaxMP())', prefix .. ' MP restored' },
+        -- Blink, Stoneskin, Aquaveil and Chainspell. Keep GM lines under the chat packet limit.
+        { 3, '!exec for _,e in ipairs({36,37,39,48}) do player:delStatusEffect(e) end', prefix .. ' buffs cleared' },
+        { 1, 'settle', prefix .. ' start' },
+        { 1, '/ja "Chainspell" <me>', prefix .. ' Chainspell' },
+    };
+    for _, spell in ipairs(effect_spells) do
+        steps[#steps + 1] = { 3, '/ma "' .. spell[1] .. '" <me>', prefix .. ' ' .. spell[1] };
+    end
+    steps[#steps + 1] = { 8, 'settle', prefix .. ' end' };
+    for _, s in ipairs(steps) do scenarios.effects[#scenarios.effects + 1] = s; end
+end
+scenarios.effects[#scenarios.effects + 1] = { 10, 'done', 'done' };
+
 local state = {
     running   = nil,     -- scenario table
     index     = 0,
@@ -133,6 +169,8 @@ local function mark(label, extra)
         local raw = gametime.get_game_time_raw();
         position = position .. string.format(', "vana_hour": %d, "vana_minute": %d',
             gametime.get_game_hours(raw), gametime.get_game_minutes(raw));
+        position = position .. string.format(', "main_job": %d, "main_level": %d',
+            mem:GetPlayer():GetMainJob(), mem:GetPlayer():GetMainJobLevel());
         -- Reuse the loaded drawdistance addon's signature and read both effective values.
         if not draw_distance_code then
             draw_distance_code = ashita.memory.find(0, 0, '8BC1487408D80D', 0, 0);
@@ -181,7 +219,17 @@ local function step()
         return;
     end
     local cmd, label = s[2], s[3];
-    if (cmd == 'settle') then
+    if (cmd == 'effects_ready') then
+        local player = AshitaCore:GetMemoryManager():GetPlayer();
+        local ready = player:GetMainJob() == 5 and player:GetMainJobLevel() == 99;
+        for _, spell in ipairs(effect_spells) do ready = ready and player:HasSpell(spell[2]); end
+        if not ready or state.zone ~= 234 then
+            state.running = nil;
+            mark('scenario failed', ', "reason": "RDM99, required spells, or Mines zone not confirmed"');
+            return;
+        end
+        mark(label, ', "required_spells_confirmed": true');
+    elseif (cmd == 'settle') then
         mark(label);
     elseif (cmd == 'done') then
         mark(label);
@@ -199,6 +247,16 @@ local function step()
     else
         send(cmd);
         mark(label, string.format(', "command": "%s"', (cmd:gsub('"', "'"))));
+        if sc == scenarios.effects then
+            for _, spell in ipairs(effect_spells) do
+                if cmd == '/ma "' .. spell[1] .. '" <me>' then
+                    state.pending_spell = spell[2];
+                    state.pending_deadline = clock_s() + 15;
+                    state.next_at = math.huge;
+                    return;
+                end
+            end
+        end
     end
     -- Each step's delay is the pause *before* it runs, so schedule the next one now.
     local nxt = sc[state.index + 1];
@@ -211,7 +269,11 @@ local function start(name)
         print(chat.header(addon.name):append(chat.error('unknown scenario: ' .. tostring(name))));
         return;
     end
-    state.running = sc; state.index = 0;
+    if name == 'effects' and AshitaCore:GetMemoryManager():GetParty():GetMemberName(0) ~= 'Hxitest' then
+        mark('scenario failed', ', "reason": "effects scenario requires local Hxitest"');
+        return;
+    end
+    state.running = sc; state.index = 0; state.pending_spell = nil;
     state.next_at = clock_s() + sc[1][1];
     mark('scenario start: ' .. name);
 end
@@ -220,6 +282,26 @@ ashita.events.register('load', 'perfscene_load', function ()
     if (state.markers ~= nil) then
         mark('addon loaded', string.format(', "jit_enabled": %s', tostring(jit and jit.status() or false)));
     end
+    if os.getenv('PERFSCENE_ENFORCE_NX') == '1' then
+        -- Matched diagnostic for Wine's execute-everywhere fallback after legacy DLL loads.
+        -- Explicitly executable code pages remain executable; ordinary writable data does not.
+        ffi.cdef[[
+            long __stdcall NtQueryInformationProcess(void*, unsigned long, void*, unsigned long, unsigned long*);
+            long __stdcall NtSetInformationProcess(void*, unsigned long, void*, unsigned long);
+        ]];
+        local nt = ffi.load('ntdll');
+        local process = ffi.cast('void*', -1);
+        local before, after, flags = ffi.new('unsigned long[1]'), ffi.new('unsigned long[1]'), ffi.new('unsigned long[1]', 9);
+        local queried = nt.NtQueryInformationProcess(process, 34, before, 4, nil);
+        local status = nt.NtSetInformationProcess(process, 34, flags, 4);
+        local verified = nt.NtQueryInformationProcess(process, 34, after, 4, nil);
+        mark('NX diagnostic', string.format(', "before": %d, "after": %d, "query_status": %d, "set_status": %d',
+            before[0], after[0], queried, status));
+        if queried ~= 0 or status ~= 0 or verified ~= 0 or after[0] ~= 9 then
+            state.auto_done = true;
+            mark('scenario failed', ', "reason": "NX diagnostic could not confirm ProcessExecuteFlags=9"');
+        end
+    end
 end);
 
 ashita.events.register('command', 'perfscene_command', function (e)
@@ -227,7 +309,8 @@ ashita.events.register('command', 'perfscene_command', function (e)
     if (#args == 0 or args[1] ~= '/perfscene') then return; end
     e.blocked = true;
     if (#args >= 3 and args[2] == 'run') then start(args[3]);
-    elseif (#args >= 2 and args[2] == 'stop') then state.running = nil; mark('scenario stopped');
+    elseif (#args >= 2 and args[2] == 'stop') then
+        state.running = nil; state.pending_spell = nil; mark('scenario stopped');
     elseif (#args >= 2 and args[2] == 'list') then
         for k, _ in pairs(scenarios) do print(chat.header(addon.name):append(chat.message(k))); end
     end
@@ -257,17 +340,53 @@ ashita.events.register('d3d_present', 'perfscene_present', function ()
     if (state.running ~= nil and clock_s() >= state.next_at) then
         step();
     end
+    if state.pending_spell and clock_s() >= state.pending_deadline then
+        state.running = nil;
+        state.pending_spell = nil;
+        mark('scenario failed', ', "reason": "spell completion timed out after 15 seconds"');
+    end
+end);
+
+-- Observe the local actor's action response without modifying or injecting packets.
+-- The first result is sufficient for these single-target self buffs.
+ashita.events.register('packet_in', 'perfscene_effect_actions', function(e)
+    if state.running ~= scenarios.effects or e.id ~= 0x028 or #e.data < 30 then return; end
+    local function bits(offset, count) return ashita.bits.unpack_be(e.data_raw, 0, offset, count); end
+    local own_id = AshitaCore:GetMemoryManager():GetParty():GetMemberServerId(0);
+    if bits(40, 32) ~= own_id or bits(72, 6) == 0 or bits(182, 4) == 0 then return; end
+    mark('effect action', string.format(
+        ', "category": %d, "action_id": %d, "self_target": %s, "animation": %d, "message": %d, "param": %d',
+        bits(82, 4), bits(86, 17), tostring(bits(150, 32) == own_id),
+        bits(191, 12), bits(230, 10), bits(213, 17)));
+    if bits(82, 4) == 4 and bits(86, 17) == state.pending_spell then
+        state.pending_spell = nil;
+        if bits(230, 10) ~= 230 then
+            state.running = nil;
+            mark('scenario failed', ', "reason": "spell completed without applying its buff"');
+            return;
+        end
+        local next_step = state.running[state.index + 1];
+        if next_step then state.next_at = clock_s() + next_step[1]; end
+    end
 end);
 
 -- Renderer-independent benchmark counter. QueryPerformanceCounter is monotonic wall time.
 local out_path=os.getenv('PERFSCENE_FPS');
 local out=out_path and io.open(out_path,'w') or nil;
+local frames_path=os.getenv('PERFSCENE_FRAMES');
+local frames_out=frames_path and io.open(frames_path,'w') or nil;
+if frames_out then frames_out:write('epoch,frame_ms,zone\n'); end
 local last=started; local previous=started; local count=0; local frame_ms={};
 if out then out:write('elapsed,epoch,fps,frames,seconds,zone,p50_ms,p95_ms,p99_ms,max_ms,jit_enabled\n'); out:flush(); end
 ashita.events.register('d3d_present','benchmark_fps',function()
   if not out then return end
   count=count+1; local now=clock_s(); local dt=now-last;
-  frame_ms[count]=(now-previous)*1000; previous=now;
+  frame_ms[count]=(now-previous)*1000;
+  if frames_out then
+    frames_out:write(string.format('%.6f,%.6f,%d\n', epoch_s(now), frame_ms[count],
+      AshitaCore:GetMemoryManager():GetParty():GetMemberZone(0)));
+  end
+  previous=now;
   if dt>=1 then
     local zone=AshitaCore:GetMemoryManager():GetParty():GetMemberZone(0);
     table.sort(frame_ms);
@@ -276,11 +395,15 @@ ashita.events.register('d3d_present','benchmark_fps',function()
       frame_ms[math.ceil(count*0.50)],frame_ms[math.ceil(count*0.95)],
       frame_ms[math.ceil(count*0.99)],frame_ms[count],jit and jit.status() and 1 or 0));
     out:flush();
+    if frames_out then frames_out:flush(); end
     frame_ms={};
     count=0;last=now;
   end
 end);
-ashita.events.register('unload','benchmark_fps_cleanup',function() if out then out:close();out=nil;end end);
+ashita.events.register('unload','benchmark_fps_cleanup',function()
+  if out then out:close();out=nil;end
+  if frames_out then frames_out:close();frames_out=nil;end
+end);
 
 -- Menu-only experiment: the exact pointer walk used by Ashita's existing fps addon.
 -- The game process owns this value; nothing is patched on disk. Reapply only if a

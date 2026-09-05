@@ -87,8 +87,8 @@ struct PerformanceDiagnosticsTest {
                "did not select the low-overhead guest sample rate")
         expect(standard.environment["X87_SAMPLE_REPORT"] == "10",
                "did not select ten-second sample windows")
-        expect(standard.environment["X87_GUEST_RANGE"] == "0x10000-0x800000000000",
-               "did not discover across the full guest address space")
+        expect(standard.environment["X87_GUEST_RANGE"] == "0x10000-0x100000000",
+               "discovery includes the 64-bit window thread")
         expect(standard.environment["X87_SAMPLE_STICKY"] == "1",
                "did not keep sampling the discovered game thread")
         expect(standard.environment["DXVK_DRAW_PROBE"] == nil,
@@ -117,6 +117,13 @@ struct PerformanceDiagnosticsTest {
                "disabled x87 throughput logging with the guest sampler")
         expect(noSample.environment["X87_SAMPLE"] == nil,
                "enabled the guest-PC sampler in standard-nosample mode")
+
+        try writeRequest(support: support, game: game, session: "pinned")
+        let pinned = PerformanceDiagnostics.consume(
+            for: game, gameDirectoryWine: "C:\\HorizonXI",
+            guestRange: "0x10000000-0x10bdf000", applicationSupport: support, now: 1_000)
+        expect(pinned?.environment["X87_GUEST_RANGE"] == "0x10000000-0x10bdf000",
+               "overwrote an explicit guest discovery range")
 
         try writeRequest(support: support, game: game, session: "deep", level: "deep")
         guard let deep = PerformanceDiagnostics.consume(

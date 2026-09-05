@@ -17,7 +17,7 @@ import statistics
 
 SETTLED_ZONES = {"city settled": 235, "mines settled": 234, "field settled": 106,
                  "weather settled": 106, "crowd settled": 106, "city after crowd": 235,
-                 "mines plaza settled": 234}
+                 "mines plaza settled": 234, "effects idle settled": 234}
 
 
 def shader_compile_summary(logs: list[str]) -> dict | None:

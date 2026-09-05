@@ -52,6 +52,23 @@ def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def tree_digest(root: Path) -> str:
+    """Include file bytes, modes, empty directories and symlink targets in rollback checks."""
+    entries = []
+    for path in [root, *sorted(root.rglob("*"))]:
+        entry = [str(path.relative_to(root)), stat.S_IMODE(path.lstat().st_mode)]
+        if path.is_symlink():
+            entry += ["symlink", str(path.readlink())]
+        elif path.is_file():
+            entry += ["file", digest(path)]
+        elif path.is_dir():
+            entry += ["directory"]
+        else:
+            raise RuntimeError("Unsupported file type in configuration backup")
+        entries.append(entry)
+    return hashlib.sha256(json.dumps(entries).encode()).hexdigest()
+
+
 def counter_is_advancing(path: Path, now: float) -> bool:
     try:
         with path.open() as handle:
@@ -103,6 +120,23 @@ def set_background(text: str, size: int) -> str:
     return "".join(lines)
 
 
+def match_graphics(text: str, source: str) -> str:
+    """Copy only numeric graphics settings, preserving the local login and boot script."""
+    values = graphics_values(source)
+    if not {"0001", "0002", "0003", "0004"} <= values.keys() or not values.keys() <= graphics_values(text).keys():
+        raise RuntimeError("Graphics profiles have missing or incompatible numeric keys")
+    section = False
+    lines = []
+    for line in text.splitlines(keepends=True):
+        if line.strip().startswith("["):
+            section = line.strip().lower() == "[ffxi.registry]"
+        match = re.match(r"^(\s*(\d{4})\s*=\s*)\d+", line) if section else None
+        if match and match[2] in values:
+            line = match[1] + str(values[match[2]]) + line[match.end():]
+        lines.append(line)
+    return "".join(lines)
+
+
 def docker_state() -> list[dict]:
     ids = checked(["docker", "ps", "--filter", "name=lsb-local-", "-q"]).split()
     if len(ids) != 5:
@@ -121,7 +155,7 @@ class Snapshot:
 
     def save(self, game: Path) -> None:
         self.private.mkdir(mode=0o700, parents=True, exist_ok=False)
-        paths = [game / "config/boot/lsb-docker.ini", game / "scripts/perfscene.txt",
+        paths = [game / "config", game / "scripts/perfscene.txt",
                  game / "scripts/default.txt", game / "addons/perfscene/perfscene.lua",
                  game / "bootloader/mtld3d_shaders.bin",
                  Path.home() / "Library/Application Support/HorizonXI-on-Mac/accounts.json"]
@@ -141,6 +175,12 @@ class Snapshot:
             entry = {"path": str(path)}
             if path.is_symlink():
                 entry.update(kind="symlink", target=str(path.readlink()))
+            elif path.is_dir():
+                backup = self.private / f"tree-{index}"
+                shutil.copytree(path, backup, symlinks=True)
+                entry.update(kind="directory", backup=backup.name, sha256=tree_digest(backup))
+                if tree_digest(path) != entry["sha256"]:
+                    raise RuntimeError("Configuration changed during backup")
             elif path.is_file():
                 backup = self.private / f"file-{index}"
                 shutil.copy2(path, backup)
@@ -164,9 +204,19 @@ class Snapshot:
         for entry in entries:
             if entry["kind"] == "file" and digest(self.private / entry["backup"]) != entry["sha256"]:
                 raise RuntimeError("Rollback snapshot checksum mismatch")
+            if entry["kind"] == "directory" and tree_digest(self.private / entry["backup"]) != entry["sha256"]:
+                raise RuntimeError("Rollback configuration checksum mismatch")
         for entry in entries:
             path = Path(entry["path"])
-            if entry["kind"] == "file":
+            if entry["kind"] == "directory":
+                if path.is_symlink() or path.is_file():
+                    path.unlink()
+                elif path.exists():
+                    shutil.rmtree(path)
+                shutil.copytree(self.private / entry["backup"], path, symlinks=True)
+                if tree_digest(path) != entry["sha256"]:
+                    raise RuntimeError("Restored configuration checksum mismatch")
+            elif entry["kind"] == "file":
                 if path.is_symlink():
                     path.unlink()
                 path.parent.mkdir(parents=True, exist_ok=True)
@@ -175,7 +225,10 @@ class Snapshot:
                 if digest(path) != entry["sha256"]:
                     raise RuntimeError("Restored file checksum mismatch")
             else:
-                path.unlink(missing_ok=True)
+                if path.is_dir() and not path.is_symlink():
+                    shutil.rmtree(path)
+                else:
+                    path.unlink(missing_ok=True)
                 if entry["kind"] == "symlink":
                     path.symlink_to(entry["target"])
         prefs = plistlib.loads((self.private / "preferences.plist").read_bytes())
@@ -220,11 +273,14 @@ def pin_local_account(game: Path) -> None:
 
 
 def stage_app(options: argparse.Namespace) -> Path:
-    if not options.renderer_bundle and not options.converter:
+    if not options.renderer_bundle and not options.converter and not options.launcher_binary:
         return menu.APP
     app = options.output / "candidate.app"
     checked(["ditto", str(menu.APP), str(app)], timeout=120)
     resources = app / "Contents/Resources"
+    if options.launcher_binary:
+        info = plistlib.loads((app / "Contents/Info.plist").read_bytes())
+        shutil.copy2(options.launcher_binary, app / "Contents/MacOS" / info["CFBundleExecutable"])
     if options.renderer_bundle:
         shutil.copy2(options.renderer_bundle / "native/i386-windows/d3d9.dll",
                      resources / "dxvk-1.10.3-x32-d3d9-horizonxi.dll")
@@ -240,6 +296,8 @@ def main() -> int:
     parser.add_argument("--output", type=Path)
     parser.add_argument("--restore", type=Path)
     parser.add_argument("--renderer-bundle", type=Path)
+    parser.add_argument("--launcher-binary", type=Path,
+                        help="test a built launcher in a staged app copy")
     parser.add_argument("--shader-cache", type=Path,
                         help="seed mtld3d with a frozen shader cache for a matched comparison")
     parser.add_argument("--installed-mtld3d", action="store_true",
@@ -256,13 +314,16 @@ def main() -> int:
     parser.add_argument("--load-addon", action="append", default=[])
     parser.add_argument("--background", type=int, choices=(512, 1024, 2048, 4096),
                         help="temporary square background dimensions; keeps other quality settings")
+    parser.add_argument("--graphics-profile", type=Path,
+                        help="match a saved profile's numeric graphics settings in the local profile")
     parser.add_argument("--draw-distance", type=float, default=20,
                         help="world and entity distance for the scenario, default stress setting 20")
     parser.add_argument("--menu-sample", type=float, default=15)
     parser.add_argument("--dump", action="store_true", help="F12 dump at character selection")
     parser.add_argument("--dump-scene", help="F12 dump at a named scene screenshot, such as city-settled")
     options, forwarded = parser.parse_known_args()
-    if options.installed_mtld3d and (options.renderer_bundle or options.converter or options.dxmt_bundle):
+    if options.installed_mtld3d and (options.renderer_bundle or options.converter or options.dxmt_bundle
+                                   or options.launcher_binary):
         parser.error("--installed-mtld3d cannot replace renderer resources")
     if options.installed_mtld3d and any(any(key in arg for key in
             ("WINEDLLPATH", "WINEDLLOVERRIDES", "MTLD3D_", "RUST_LOG")) for arg in forwarded):
@@ -300,6 +361,8 @@ def main() -> int:
             if self.args.world != WORLD or self.args.game_dir != menu.DEFAULT_GAME or self.args.profile != "lsb-docker.ini":
                 raise RuntimeError("Renderer runs are restricted to the installed local Hxitest profile")
             pin_local_account(self.game_dir)
+            if options.launcher_binary:
+                self.record["launcher_binary_sha256"] = digest(options.launcher_binary)
             if options.shader_cache:
                 shutil.copy2(options.shader_cache, self.game_dir / "bootloader/mtld3d_shaders.bin")
                 self.record["shader_cache_seed_sha256"] = digest(options.shader_cache)
@@ -319,6 +382,8 @@ def main() -> int:
                 checked(["defaults", "write", menu.APP_BUNDLE_ID, "perf.settings", "-data",
                          json.dumps(perf).encode().hex()])
             profile = self.game_dir / "config/boot/lsb-docker.ini"
+            if options.graphics_profile:
+                profile.write_text(match_graphics(profile.read_text(), options.graphics_profile.read_text()))
             if options.background:
                 profile.write_text(set_background(profile.read_text(), options.background))
             self.record["graphics_requested"] = graphics_values(profile.read_text())
@@ -406,7 +471,10 @@ def main() -> int:
                     window = json.loads(checked([str(self.window_tool), "find", str(self.game_pid)]))
                     screen = self.session_dir / ("ocr-" + label.replace(" ", "-") + ".png")
                     checked(["screencapture", "-x", "-l", str(window["window_id"]), str(screen)], timeout=10)
-                    seen = re.sub(r"\s+", " ", checked([str(OCR_TOOL), str(screen)], timeout=10).lower())
+                    ocr_args = [str(OCR_TOOL), str(screen)]
+                    if label == "character list":
+                        ocr_args.append("--character-list")
+                    seen = re.sub(r"\s+", " ", checked(ocr_args, timeout=10).lower())
                     active = counter_is_advancing(self.session_dir / "common-fps.csv", time.time())
                     matches = matches + 1 if active and scene_text_matches(label, seen) else 0
                     if matches >= 2:

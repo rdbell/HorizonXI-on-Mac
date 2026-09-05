@@ -89,6 +89,9 @@ parent, and refuses to run while game or Wine processes remain.
 
 Candidate launchers are separate signed copies. Loaded D3D8/D3D9 hashes must match their
 resources, and mtld3d's loaded shim and Unix library must match the candidate bundle too.
+`--launcher-binary /path/to/HorizonXILauncher` replaces the executable in that copy and
+records its hash. The installed application stays intact. `--graphics-profile` copies only
+numeric graphics settings from a saved boot profile, preserving the local connection details.
 `--dump` presses F12 once at character selection for mtld3d's three-frame log.
 `--dump-scene city-settled` captures the first town view instead. The runner saves the
 renderer log after the game exits, before a later launch can rotate it away.
@@ -132,6 +135,41 @@ python3 scripts/harness/guest-scene-report.py /path/outside/git/mtld3d-city \
 The bundle is optional. Renderer symbols are used only when a binary's hash matches the
 loaded-file record. If the installed DLL has since been restored and no matching bundle is
 available, the report keeps module offsets instead of assigning functions from another build.
+
+### Repeated battle effects
+
+The local `effects` scenario prepares Hxitest as RDM99 with all spells, waits in Bastok Mines,
+then runs three Chainspell rounds. Each round casts Blaze Spikes, Ice Spikes, Shock Spikes,
+Stoneskin, Blink and Aquaveil on the character. It resets recasts, restores MP, and removes
+the prior Blink, Stoneskin, Aquaveil and Chainspell effects before the round. It waits for
+each spell's server completion and another three seconds before requesting the next spell.
+A missing completion ends the scenario after 15 seconds; a no-effect response fails it.
+
+```sh
+python3 scripts/harness/renderer-run.py \
+  --output /path/outside/git/effects-full \
+  --renderer-bundle /Applications/FFXI-on-Mac.app/Contents/Resources/mtld3d \
+  --shader-cache /path/to/frozen/mtld3d_shaders.bin \
+  --boot-file /path/to/frozen/default.txt \
+  --graphics-profile /path/to/saved/graphics.ini \
+  --renderer-config 'color.hdr.enable=false;render.scale=1;present.maxFps=0;render.mergePasses=true;render.submitDraws=0' \
+  --scenario effects --level standard-nosample --limit 420 --capture-seconds 400 \
+  --menu-sample 0 --hold 2 --env 'PERFSCENE_FRAMES={session}\frame-times.csv'
+python3 scripts/harness/effects-report.py /path/outside/git/effects-full
+```
+
+The report uses individual frame durations and keeps whole frames that overlap phase
+boundaries. A complete round requires one successful Chainspell response and all six buffs
+applied once. Check the renderer problems and screenshots as well as the phase validity.
+The entire game configuration tree is backed up and restored, including addon settings
+created during a test. Private backups and boot scripts must stay outside Git.
+
+For profiling, use `--level standard` with a launcher containing the guest-range correction.
+The old full-address-space default could follow AppKit's window event thread while missing
+the game thread. Discovery now excludes 64-bit addresses; `X87_GUEST_RANGE` can narrow it
+further. Confirm the actual sampled modules and thread, since Windows DLLs can relocate and
+their preferred PE image bases do not prove where they loaded. A high sample-coverage
+percentage alone does not establish that the intended thread was sampled.
 
 ## Offline fault benchmark
 
@@ -187,8 +225,8 @@ The standard capture includes:
   are grouped into named low-FPS windows with their fault rate and footprint change;
 - five-second thread CPU, system memory, and system-wide GPU utilization snapshots; network byte
   totals, loaded-file snapshots, and binary hashes;
-- a 1 kHz x87sidecar guest-PC profile of the real game thread, split into ten-second windows and
-  correlated with the DXVK frame-rate log. Broad discovery finds the busiest guest-running thread,
+- a 1 kHz x87sidecar guest-PC profile, split into ten-second windows and
+  correlated with the DXVK frame-rate log. Discovery within 32-bit addresses selects a guest thread,
   and sticky sampling keeps following it through DLLs, Rosetta code, syscalls, and long stalls. The
   summary reports coverage and separate hotspots for slow and recovered windows;
 - the launcher logs with common username, password, token, and secret forms redacted;

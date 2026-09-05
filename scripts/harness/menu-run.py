@@ -372,6 +372,9 @@ class MenuRun:
                 log(f"marker: {marker.get('label')}" + (
                     f" zone={marker['zone']}" if "zone" in marker else ""))
                 marker_label = marker.get("label", "")
+                if marker_label == "scenario failed":
+                    self.event("scenario failed", reason=marker.get("reason", "addon validation failed"))
+                    return False
                 if marker_label == "camera reset requested":
                     reset = run([str(self.window_tool), "home", str(self.game_pid)], timeout=10)
                     if reset.returncode:
@@ -726,7 +729,7 @@ def main() -> int:
                              "an explicit local --scenario")
     parser.add_argument("--scenario", default="",
                         help="local test world only: log the test character in and run this "
-                             "perfscene scenario (city, city_long, town, field); implies --characters")
+                             "perfscene scenario (city, city_long, town, field, effects); implies --characters")
     parser.add_argument("--sample-at", default="",
                         help="native /usr/bin/sample start offsets in seconds after the game "
                              "process appears, comma-separated; passed to the recorder")

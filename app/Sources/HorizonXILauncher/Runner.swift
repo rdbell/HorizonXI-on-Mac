@@ -612,7 +612,9 @@ final class Runner: ObservableObject {
             let x87Enabled = useX87 && !x87DisabledForDiagnostics
             var env = perf.environment(for: install, x87: x87Enabled)
             if let capture = PerformanceDiagnostics.consume(
-                for: install.gameDir, gameDirectoryWine: install.gameDirWine) {
+                for: install.gameDir, gameDirectoryWine: install.gameDirWine,
+                guestRange: env["X87_GUEST_RANGE"]
+                    ?? ProcessInfo.processInfo.environment["X87_GUEST_RANGE"]) {
                 for (key, value) in capture.environment { env[key] = value }
                 log("==> performance capture \(capture.session) enabled (\(capture.level))")
                 log("    \(capture.directory.path)")

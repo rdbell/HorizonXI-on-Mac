@@ -35,6 +35,7 @@ enum PerformanceDiagnostics {
     static func consume(
         for gameDirectory: URL,
         gameDirectoryWine: String,
+        guestRange: String? = nil,
         applicationSupport: URL? = nil,
         now: TimeInterval = Date().timeIntervalSince1970
     ) -> Capture? {
@@ -98,7 +99,7 @@ enum PerformanceDiagnostics {
             // Sample the guest x86 program counter without suspending the game thread. Wine
             // starts one sidecar for the injector and another for the client; the patched
             // sidecar expands `%p` to its target pid so those profiles cannot overwrite each
-            // other. Discover across the full guest address space, choose the thread seen
+            // other. Discover within the 32-bit guest address space, choose the thread seen
             // running guest code most often, then keep that thread through DLL calls, Rosetta
             // runtime code, syscalls, and stalls. One kHz costs about 1% of one core and
             // ten-second windows let the recorder compare loading stalls with the same scene
@@ -109,7 +110,9 @@ enum PerformanceDiagnostics {
             environment["X87_SAMPLE_HZ"] = "1000"
             environment["X87_SAMPLE_REPORT"] = "10"
             environment["X87_SAMPLE_WINDOWS"] = "1"
-            environment["X87_GUEST_RANGE"] = "0x10000-0x800000000000"
+            // Including 64-bit Wine/AppKit code can latch the window event thread forever.
+            // A diagnostic override can narrow discovery further to the game's main DLL.
+            environment["X87_GUEST_RANGE"] = guestRange ?? "0x10000-0x100000000"
             environment["X87_SAMPLE_STICKY"] = "1"
         }
 
