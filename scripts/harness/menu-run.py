@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+from contextlib import contextmanager
 import json
 import os
 from pathlib import Path
@@ -74,6 +75,32 @@ MENU_SCENE = ("main menu", lambda row: row["fps"] >= 30 and 500 <= row["draws"] 
 CHARACTERS_SCENE = ("character list", lambda row: row["fps"] >= 30 and row["draws"] >= 1200)
 # The world itself is recognised by the perfscene addon's marker, not by draw counts.
 WORLD_TIMEOUT = 90
+
+
+@contextmanager
+def wall_clock_deadline(seconds: float):
+    """Interrupt a blocking phase, including subprocess and recorder waits.
+
+    The timer only covers the game phase. Cleanup keeps its existing individual
+    subprocess deadlines so a timeout does not interrupt sidecar finalization.
+    """
+    if seconds <= 0:
+        raise ValueError("wall-clock deadline must be positive")
+    previous = signal.getsignal(signal.SIGALRM)
+    previous_timer = signal.getitimer(signal.ITIMER_REAL)
+    if previous_timer[0] or previous_timer[1]:
+        raise RuntimeError("another real-time deadline is already active")
+
+    def expired(_signum, _frame):
+        raise TimeoutError(f"game phase exceeded {seconds:g} seconds")
+
+    signal.signal(signal.SIGALRM, expired)
+    signal.setitimer(signal.ITIMER_REAL, seconds)
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous)
 
 
 def log(message: str) -> None:
@@ -637,6 +664,9 @@ class MenuRun:
             self.screenshot("end")
             return 0
         finally:
+            # Once game execution is over, the global timer must not interrupt
+            # the two-phase cleanup. Each cleanup operation has its own timeout.
+            signal.setitimer(signal.ITIMER_REAL, 0)
             self.record["returns_sent"] = self.returns_sent
             if process_exists(self.game_pid):
                 self.screenshot("final")
@@ -702,6 +732,8 @@ def main() -> int:
     if args.scenario:
         args.characters = True
     args.max_returns = 0 if args.no_return else (4 if args.scenario else 2 if args.characters else 1)
+    if args.limit <= 0:
+        parser.error("--limit must be positive")
     if not args.game_dir.is_dir():
         parser.error(f"game directory does not exist: {args.game_dir}")
     if not RECORDER.is_file():
@@ -717,7 +749,11 @@ def main() -> int:
     signal.signal(signal.SIGINT, interrupted)
     signal.signal(signal.SIGTERM, interrupted)
     try:
-        return runner.execute()
+        with wall_clock_deadline(args.limit):
+            return runner.execute()
+    except TimeoutError as error:
+        log(str(error))
+        return 124
     except KeyboardInterrupt:
         log("interrupted; cleanup already ran")
         return 130

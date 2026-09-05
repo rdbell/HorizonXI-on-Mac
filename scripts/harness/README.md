@@ -41,8 +41,10 @@ One-launch diagnostic overrides go through `--env NAME=value`, repeatable. Only 
 just before the launch, and they are removed on every exit path. `--x87-profile` sets
 `X87_PROFILE` to `x87-block-%p.prof` inside the capture directory and, when an analyzer path is
 given, writes `x87-block-analysis.txt` from the complete game profile. `--no-return` stops at the
-rules screen for a pure boot measurement. Total wall time is bounded by `--limit`, 180 seconds by
-default.
+rules screen for a pure boot measurement. `--limit` bounds the game phase, including blocked
+recorder and subprocess waits, to 180 seconds by default. A deadline exits with status 124.
+Cleanup runs afterwards with its own subprocess timeouts so the sidecar can finalize its
+counters; optional profile analysis has a separate 300-second limit.
 
 ## Offline fault benchmark
 

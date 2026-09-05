@@ -4,6 +4,8 @@ import importlib.util
 import os
 from pathlib import Path
 import tempfile
+import time
+import signal
 import unittest
 
 
@@ -15,6 +17,27 @@ SPEC.loader.exec_module(menu_run)
 
 
 class MenuRunTests(unittest.TestCase):
+    def test_deadline_interrupts_a_blocked_capture_and_runs_finally(self):
+        cleaned = []
+        started = time.monotonic()
+        previous = signal.getsignal(signal.SIGALRM)
+        with self.assertRaises(TimeoutError):
+            with menu_run.wall_clock_deadline(0.05):
+                try:
+                    time.sleep(5)
+                finally:
+                    cleaned.append(True)
+        self.assertEqual(cleaned, [True])
+        self.assertLess(time.monotonic() - started, 1)
+        self.assertEqual(signal.getitimer(signal.ITIMER_REAL), (0.0, 0.0))
+        self.assertEqual(signal.getsignal(signal.SIGALRM), previous)
+
+    def test_finished_capture_cancels_its_deadline(self):
+        with menu_run.wall_clock_deadline(0.05):
+            pass
+        time.sleep(0.06)
+        self.assertEqual(signal.getitimer(signal.ITIMER_REAL), (0.0, 0.0))
+
     def test_override_accepts_only_diagnostic_variables(self):
         self.assertEqual(menu_run.parse_override("X87_STOCK_HASH_LIST=abc,def"),
                          ("X87_STOCK_HASH_LIST", "abc,def"))
