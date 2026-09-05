@@ -18,6 +18,15 @@ def window(end, seconds=1, fps=120, zone=235):
 
 
 class RendererReportTests(unittest.TestCase):
+    def test_clock_and_zone_setup_fail_before_a_scene_can_be_accepted(self):
+        marker = {"label": "city settled", "zone": 235, "epoch": 136,
+                  "world_distance": 20, "entity_distance": 20,
+                  "vana_hour": 12, "vana_minute": 15}
+        self.assertIsNone(report.world_scene_problem(marker, 20, 100))
+        self.assertIn("expected zone", report.world_scene_problem({**marker, "zone": 234}, 20, 100))
+        self.assertIn("noon scenario", report.world_scene_problem({**marker, "vana_hour": 16}, 20, 100))
+        self.assertIn("not recorded", report.world_scene_problem({**marker, "vana_hour": None}, 20, 100))
+
     def fixture(self, root, distances, counters=True):
         session = root / "session"
         session.mkdir()

@@ -29,6 +29,10 @@ SPEC = importlib.util.spec_from_file_location("menu_run", HERE / "menu-run.py")
 menu = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
 SPEC.loader.exec_module(menu)
+REPORT_SPEC = importlib.util.spec_from_file_location("renderer_report", HERE / "renderer-report.py")
+reporting = importlib.util.module_from_spec(REPORT_SPEC)
+assert REPORT_SPEC.loader is not None
+REPORT_SPEC.loader.exec_module(reporting)
 WORLD = "Local LSB (Docker)"
 USER = "hxitest"
 PREFERENCE_KEYS = ("server.selected", "account.user", "account.user." + WORLD, "account.remember")
@@ -273,6 +277,7 @@ def main() -> int:
             if options.background:
                 profile.write_text(set_background(profile.read_text(), options.background))
             self.record["graphics_requested"] = graphics_values(profile.read_text())
+            self.record["clock_requested_hour"] = 12
             if not super().preflight():
                 return False
             if not self.args.scenario and not self.install_addon():
@@ -353,6 +358,14 @@ def main() -> int:
 
         def screenshot(self, label):
             super().screenshot(label)
+            if label.replace("-", " ") in reporting.SETTLED_ZONES:
+                markers = [json.loads(line) for line in self.markers_path().read_text().splitlines()]
+                marker = next(row for row in reversed(markers) if row["label"] == label.replace("-", " "))
+                clock_epoch = next((row["epoch"] for row in markers
+                                    if row["label"] == "clock pinned to noon"), None)
+                problem = reporting.world_scene_problem(marker, options.draw_distance, clock_epoch)
+                if clock_epoch is None or problem:
+                    raise RuntimeError(problem or "Clock setup marker is missing")
             if label == options.dump_scene:
                 checked([str(self.window_tool), "f12", str(self.game_pid)])
                 self.event("renderer F12 dump requested", scene=label)

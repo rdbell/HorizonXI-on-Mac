@@ -27,6 +27,7 @@ addon.link    = 'https://github.com/danielalanbates/HorizonXI-on-Mac';
 require('common');
 local chat = require('chat');
 local ffi = require('ffi');
+local gametime = require('ffxi.time');
 ffi.cdef[[
     int __stdcall QueryPerformanceCounter(int64_t *);
     int __stdcall QueryPerformanceFrequency(int64_t *);
@@ -58,7 +59,7 @@ local entity_distance_command = '/drawdistance setmob ' .. tostring(requested_di
 local scenarios = {
     -- The settled-city baseline: two fixed vantages in Bastok at uncapped FPS.
     city = {
-        { 1,  '!addtime 0',                      'clock offset reset' },
+        { 1,  "!exec xi.commands.perftime = dofile('scripts/commands/perftime.lua')", 'clock command refreshed' },
         { 1,  '!perftime 12',                    'clock pinned to noon' },
         { 2,  '/fps 0',                          'fps uncapped' },
         { 2,  world_distance_command,            'world draw distance set' },
@@ -73,7 +74,7 @@ local scenarios = {
     },
     -- Outdoors at a fixed vantage, then weather, then a crowd of mobs around the player.
     field = {
-        { 1,  '!addtime 0',                      'clock offset reset' },
+        { 1,  "!exec xi.commands.perftime = dofile('scripts/commands/perftime.lua')", 'clock command refreshed' },
         { 1,  '!perftime 12',                    'clock pinned to noon' },
         { 2,  '/fps 0',                          'fps uncapped' },
         { 2,  world_distance_command,            'world draw distance set' },
@@ -129,6 +130,9 @@ local function mark(label, extra)
         position = string.format(', "x": %.3f, "y": %.3f, "z": %.3f, "yaw": %.4f',
             entity:GetLocalPositionX(index), entity:GetLocalPositionY(index),
             entity:GetLocalPositionZ(index), entity:GetLocalPositionYaw(index));
+        local raw = gametime.get_game_time_raw();
+        position = position .. string.format(', "vana_hour": %d, "vana_minute": %d',
+            gametime.get_game_hours(raw), gametime.get_game_minutes(raw));
         -- Reuse the loaded drawdistance addon's signature and read both effective values.
         if not draw_distance_code then
             draw_distance_code = ashita.memory.find(0, 0, '8BC1487408D80D', 0, 0);
@@ -181,6 +185,9 @@ local function step()
         mark(label);
     elseif (cmd == 'done') then
         mark(label);
+        -- Measurement intervals end at this marker. Restore the server's normal
+        -- clock after them; a forward reset can end the test session.
+        send('!addtime 0');
         state.running = nil;
         return;
     elseif (cmd:sub(1, 6) == 'spawn ') then

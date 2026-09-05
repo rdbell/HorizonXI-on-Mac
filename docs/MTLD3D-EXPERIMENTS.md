@@ -226,3 +226,22 @@ run never left Mines, so its interval labelled Markets is invalid.
 
 Apply both experimental patches after the published material, alignment, fixed-function
 diagnostic, and readback-timing patches. They each apply to that common base independently.
+
+## Reliable benchmark clock setup
+
+LSB uses `earth_time::now()` for both the Vana'diel clock and session expiry. The earlier
+`!addtime 0` / forward `!perftime 12` sequence could expire Hxitest immediately, leaving a
+rendering client in the old zone with no server traffic. Those captures are invalid. The
+command also remained cached after editing its bind-mounted Lua file.
+
+`perftime` now preserves the existing offset and moves backward to noon. The scenario
+refreshes that one command before calling it and records the client's game hour and minute.
+It aborts at a settled scene if the zone, draw distance, or noon schedule is wrong. Reports
+apply the same checks. Completed scenarios restore the normal server clock after the final
+measurement marker; the forward reset can end the test session, so it belongs after timing.
+
+The command passed 216 hour/minute/offset cases and two invalid-hour cases. A bounded live
+run confirmed Markets at 12:15 and Mines at 12:50 with continuing server traffic. No Docker
+container was restarted. On this machine the single-file Docker bind retained the original
+file length after an in-place edit, so the live Lua file was padded to that length and its
+complete bytes verified inside the container. Its source in this repository needs no padding.

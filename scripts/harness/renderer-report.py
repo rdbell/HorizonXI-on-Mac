@@ -19,6 +19,27 @@ SETTLED_ZONES = {"city settled": 235, "mines settled": 234, "field settled": 106
                  "mines plaza settled": 234}
 
 
+def world_scene_problem(marker: dict, distance: float | None,
+                        clock_epoch: float | None = None) -> str | None:
+    expected = SETTLED_ZONES.get(marker.get("label"))
+    if expected is None:
+        return None
+    if marker.get("zone") != expected:
+        return "scene did not reach the expected zone"
+    if distance is not None and any(marker.get(key) is None
+            or abs(marker[key] - distance) > 0.001
+            for key in ("world_distance", "entity_distance")):
+        return "effective draw distance differs from the request"
+    if clock_epoch is not None:
+        if marker.get("vana_hour") is None or marker.get("vana_minute") is None:
+            return "client game clock was not recorded"
+        expected_minutes = (720 + (marker["epoch"] - clock_epoch) * 25 / 60) % 1440
+        observed = marker["vana_hour"] * 60 + marker["vana_minute"]
+        if abs((observed - expected_minutes + 720) % 1440 - 720) > 3:
+            return "client game clock differs from the noon scenario schedule"
+    return None
+
+
 def summarize(rows: list[dict], start: float, end: float, zone: int) -> dict:
     selected = [r for r in rows if r["epoch"] - r["seconds"] >= start
                 and r["epoch"] <= end and r["zone"] == zone]
@@ -61,7 +82,8 @@ def intervals(record: dict, markers: list[dict]) -> list[dict]:
                            "start": marker["epoch"] + 2, "end": markers[index + 1]["epoch"],
                            "position": {key: marker.get(key) for key in ("x", "y", "z", "yaw")},
                            "draw_distance": {key: marker.get(key) for key in
-                                             ("world_distance", "entity_distance")}})
+                                             ("world_distance", "entity_distance")},
+                           "clock": {key: marker.get(key) for key in ("vana_hour", "vana_minute")}})
     return result
 
 
@@ -99,13 +121,19 @@ def report(output: Path) -> dict:
         raise ValueError("frame counters contain non-positive intervals")
     markers_path = session / "perfscene-markers.jsonl"
     markers = [json.loads(line) for line in markers_path.read_text().splitlines()] if markers_path.exists() else []
+    clock_epoch = next((marker["epoch"] for marker in markers
+                        if marker["label"] == "clock pinned to noon"), None)
     for phase in intervals(record, markers):
         summary = summarize(rows, phase["start"], phase["end"], phase["zone"])
         requested = record.get("draw_distance_requested")
-        if phase["zone"] and requested is not None:
-            if any(value is None or abs(value - requested) > 0.001
-                   for value in phase["draw_distance"].values()):
-                summary.update(valid=False, reason="effective draw distance differs from the request")
+        if phase["zone"]:
+            marker = next(row for row in markers if row["label"] == phase["name"])
+            problem = world_scene_problem(marker, requested,
+                clock_epoch if record.get("clock_requested_hour") == 12 else None)
+            if record.get("clock_requested_hour") == 12 and clock_epoch is None:
+                problem = "clock setup marker is missing"
+            if problem:
+                summary.update(valid=False, reason=problem)
         result["scenes"].append({**phase, **summary})
     return result
 
