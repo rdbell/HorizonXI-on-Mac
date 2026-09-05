@@ -1,0 +1,444 @@
+diff --git a/mtld3d.conf b/mtld3d.conf
+index e1462f8..e7f0987 100644
+--- a/mtld3d.conf
++++ b/mtld3d.conf
+@@ -197,6 +197,10 @@
+ # preserved, at the cost of extra GPU store/load traffic at each split.
+ # render.submitDraws = 0
+ 
++# Experimental: combine single-sample passes when texture dependencies allow it.
++# Copies, clears, resolves, and visibility queries retain their ordering.
++# render.mergePasses = false
++
+ 
+ #########
+ # Depth #
+diff --git a/windows/core/src/config.rs b/windows/core/src/config.rs
+index d7b9a76..a4f818f 100644
+--- a/windows/core/src/config.rs
++++ b/windows/core/src/config.rs
+@@ -144,6 +144,10 @@ pub struct Mtld3dConfig {
+     /// depth and does not present. Small values add render-pass store/load
+     /// traffic. Default: `0`. File key: `render.submitDraws`.
+     pub render_submit_draws: u32,
++    /// Merge independent single-sample passes. Experimental, default false.
++    ///
++    /// File key: `render.mergePasses`.
++    pub render_merge_passes: bool,
+     /// A newly bound same-size depth-stencil texture inherits the previous one's contents.
+     ///
+     /// D3D9-era drivers commonly backed all equal-size depth-stencil
+@@ -316,6 +320,7 @@ impl Default for Mtld3dConfig {
+             skip_shaders: Vec::new(),
+             query_flush_immediate: false,
+             render_submit_draws: 0,
++            render_merge_passes: false,
+             depth_alias_same_size: false,
+             buffer_ignore_lock_bounds: false,
+             vbib_retention_cap_bytes: 512 * 1024 * 1024,
+@@ -464,6 +469,7 @@ pub fn log_options(cfg: &Mtld3dConfig) {
+         target: crate::LOG_TARGET,
+         "config: render.submitDraws = {}", cfg.render_submit_draws
+     );
++    info!(target: crate::LOG_TARGET, "config: render.mergePasses = {}", cfg.render_merge_passes);
+     info!(
+         target: crate::LOG_TARGET,
+         "config: depth.aliasSameSize = {}", cfg.depth_alias_same_size
+@@ -552,6 +558,7 @@ fn apply(cfg: &mut Mtld3dConfig, source: &str, key: &str, value: &str) {
+             Err(_) => log::warn!(target: crate::LOG_TARGET,
+                 "{source}: invalid render.submitDraws {value:?}, expected a nonnegative integer"),
+         },
++        "render.mergePasses" => assign_bool(source, key, value, &mut cfg.render_merge_passes),
+         "depth.aliasSameSize" => assign_bool(source, key, value, &mut cfg.depth_alias_same_size),
+         "buffer.ignoreLockBounds" => {
+             assign_bool(source, key, value, &mut cfg.buffer_ignore_lock_bounds);
+diff --git a/windows/core/src/config/tests.rs b/windows/core/src/config/tests.rs
+index 347c1f6..f9913f0 100644
+--- a/windows/core/src/config/tests.rs
++++ b/windows/core/src/config/tests.rs
+@@ -194,6 +194,12 @@ fn buffer_ignore_lock_bounds_defaults_off_and_round_trips() {
+     assert!(!cfg.buffer_ignore_lock_bounds);
+ }
+ 
++#[test]
++fn merge_passes_defaults_off_and_accepts_an_explicit_override() {
++    assert!(!parse(None, "", None).render_merge_passes);
++    assert!(parse(None, "render.mergePasses = true\n", None).render_merge_passes);
++}
++
+ #[test]
+ fn cursor_scale_auto_keyword_case_insensitive() {
+     let cfg = parse(None, "cursor.scale = Auto\n", None);
+diff --git a/windows/core/src/passes.rs b/windows/core/src/passes.rs
+index e41b60d..94cad74 100644
+--- a/windows/core/src/passes.rs
++++ b/windows/core/src/passes.rs
+@@ -5555,3 +5555,5 @@ impl LastBoundCache {
+ 
+ #[cfg(test)]
+ mod tests;
++
++mod merge;
+diff --git a/windows/core/src/passes/merge.rs b/windows/core/src/passes/merge.rs
+new file mode 100644
+index 0000000..15a8a46
+--- /dev/null
++++ b/windows/core/src/passes/merge.rs
+@@ -0,0 +1,157 @@
++//! Conservative scheduling of independent single-sample render passes.
++
++use super::{
++    ColorLoad, Command, CommandType, DepthLoad, FxHashMap, FxHashSet, MTLTextureKind, MetalHandle,
++    Pass, PassState, StencilLoad,
++};
++
++struct Access {
++    reads: FxHashSet<u64>,
++    writes: FxHashSet<u64>,
++    movable: bool,
++}
++
++impl Access {
++    fn new(
++        pass: &Pass,
++        twins: &FxHashMap<MetalHandle<MTLTextureKind>, MetalHandle<MTLTextureKind>>,
++    ) -> Self {
++        let mut result = Self {
++            reads: FxHashSet::default(),
++            writes: [pass.color_texture.raw(), pass.depth_texture.raw()]
++                .into_iter()
++                .filter(|h| *h != 0)
++                .collect(),
++            movable: pass.leading_blits.is_empty()
++                && !pass.has_counting_visibility
++                && pass.extra_color.iter().all(|a| !a.is_bound())
++                && pass.color_msaa_texture.is_null()
++                && pass.color_resolve_texture.is_null()
++                && pass.depth_resolve_texture.is_null(),
++        };
++        for command in &pass.commands {
++            match CommandType::from_repr(command.cmd) {
++                Some(CommandType::SetFragmentTexture | CommandType::SetVertexTexture) => {
++                    if command.param_b != 0 {
++                        // SAFETY: both texture-bind commands carry an MTLTexture handle in param_b.
++                        let handle = unsafe { MetalHandle::new(command.param_b) };
++                        result
++                            .reads
++                            .insert(twins.get(&handle).unwrap_or(&handle).raw());
++                    }
++                }
++                // D3D9 shaders only read buffers. Uploads are either already ordered
++                // before all passes or in leading_blits, which is a barrier above.
++                Some(
++                    CommandType::SetRenderPipelineState
++                    | CommandType::SetViewport
++                    | CommandType::SetVertexBytes
++                    | CommandType::DrawPrimitives
++                    | CommandType::SetDepthStencilState
++                    | CommandType::SetCullMode
++                    | CommandType::SetFragmentSamplerState
++                    | CommandType::SetVertexBytesAt
++                    | CommandType::SetFragmentBytesAt
++                    | CommandType::SetScissorRect
++                    | CommandType::SetVertexBuffer
++                    | CommandType::DrawIndexedPrimitives
++                    | CommandType::SetBlendColor
++                    | CommandType::SetDepthBias
++                    | CommandType::DrawIndexedPrimitivesUp
++                    | CommandType::SetStencilReference
++                    | CommandType::SetFragmentNullTexture
++                    | CommandType::SetVertexSamplerState
++                    | CommandType::SetVertexNullTexture
++                    | CommandType::SetFragmentBuffer
++                    | CommandType::PushDebugGroup
++                    | CommandType::PopDebugGroup,
++                ) => {}
++                Some(CommandType::SetVisibilityResultMode) | None => result.movable = false,
++            }
++        }
++        // Sampling an attachment can require a completed earlier render pass.
++        result.movable &= result.reads.is_disjoint(&result.writes);
++        result
++    }
++
++    fn independent_of(&self, other: &Self) -> bool {
++        self.movable
++            && other.movable
++            && self.writes.is_disjoint(&other.writes)
++            && self.reads.is_disjoint(&other.writes)
++            && self.writes.is_disjoint(&other.reads)
++    }
++}
++
++fn compatible(first: &Pass, next: &Pass) -> bool {
++    first.color_texture == next.color_texture
++        && first.color_srgb_texture == next.color_srgb_texture
++        && first.color_subresource == next.color_subresource
++        && first.color_size == next.color_size
++        && first.color_format == next.color_format
++        && first.depth_texture == next.depth_texture
++        && first.depth_level == next.depth_level
++        && first.depth_is_sampleable == next.depth_is_sampleable
++        && first.viewport == next.viewport
++        && (next.color_texture.is_null() || next.color_load == ColorLoad::Load)
++        && (next.depth_texture.is_null()
++            || (next.depth_load == DepthLoad::Load && next.stencil_load == StencilLoad::Load))
++}
++
++impl PassState {
++    /// Merge later draws into an earlier pass only across independent texture accesses.
++    ///
++    /// Each original pass keeps its draw order. Clears, copies, resolves, visibility
++    /// commands, attachment feedback, and unknown commands prevent unsafe movement.
++    /// Run before load/store finalization, which must see the resulting pass order.
++    pub fn merge_independent_draw_passes(&mut self) {
++        let before = self.passes.len();
++        let mut accesses: Vec<_> = self
++            .passes
++            .iter()
++            .map(|p| Access::new(p, &self.srgb_twin_to_base))
++            .collect();
++        let mut index = 1;
++        while index < self.passes.len() {
++            let mut target = None;
++            if accesses[index].movable {
++                // A fixed lookback bounds scheduling overhead on pathological frames.
++                for earlier in (index.saturating_sub(16)..index).rev() {
++                    if accesses[earlier].movable
++                        && compatible(&self.passes[earlier], &self.passes[index])
++                    {
++                        target = Some(earlier);
++                        break;
++                    }
++                    if !accesses[index].independent_of(&accesses[earlier]) {
++                        break;
++                    }
++                }
++            }
++            let Some(target) = target else {
++                index += 1;
++                continue;
++            };
++            let mut next = self.passes.remove(index);
++            let next_access = accesses.remove(index);
++            let first = &mut self.passes[target];
++            // LastBoundCache suppresses these fresh-encoder defaults. Recreate
++            // the old pass boundary's state before replaying its commands.
++            first.commands.extend([
++                Command::set_blend_color(1.0, 1.0, 1.0, 1.0),
++                Command::set_depth_bias(0.0, 0.0),
++                Command::set_stencil_reference(0),
++            ]);
++            let offset = first.commands.len();
++            first.commands.append(&mut next.commands);
++            first.color_clear_quad_ranges.extend(
++                next.color_clear_quad_ranges
++                    .into_iter()
++                    .map(|(start, end)| (start + offset, end + offset)),
++            );
++            first.color_writes_observed |= next.color_writes_observed;
++            accesses[target].reads.extend(next_access.reads);
++        }
++        log::trace!(target: "mtld3d::pass_merge", "passes_before={before} passes_after={}", self.passes.len());
++    }
++}
+diff --git a/windows/core/src/passes/tests.rs b/windows/core/src/passes/tests.rs
+index c450bab..15edd06 100644
+--- a/windows/core/src/passes/tests.rs
++++ b/windows/core/src/passes/tests.rs
+@@ -153,6 +153,115 @@ fn dummy_draw() -> Command {
+     Command::draw_primitives(mtld3d_shared::mtl::PrimitiveType::Triangle, 0, 3)
+ }
+ 
++fn independent_pass_sequence() -> PassState {
++    let mut state = fresh();
++    state.clear_color(0, 0, 0, 1.0f32.to_bits());
++    state.clear_depth(1.0f32.to_bits());
++    state.emit_command(dummy_draw());
++    state.set_color_render_target(tex(0x3000), 640, 480, RT_FORMAT, RenderScale::IDENTITY);
++    state.set_depth_stencil_attachment(MetalHandle::NULL, (0, 0), false, false);
++    state.emit_command(dummy_draw());
++    state.set_color_render_target(backbuffer(), 640, 480, BB_FORMAT, RenderScale::IDENTITY);
++    state.set_depth_stencil_attachment(depth(), BB_SIZE, false, false);
++    state.emit_command(dummy_draw());
++    state.end_current_pass("test");
++    state
++}
++
++#[test]
++fn independent_draw_passes_merge_and_reset_implicit_encoder_state() {
++    let mut state = independent_pass_sequence();
++    assert_eq!(state.passes.len(), 3);
++    state.merge_independent_draw_passes();
++    assert_eq!(state.passes.len(), 2);
++    let commands = &state.passes[0].commands;
++    let draw_at: Vec<_> = commands
++        .iter()
++        .enumerate()
++        .filter(|(_, c)| c.cmd == CommandType::DrawPrimitives as u32)
++        .map(|(i, _)| i)
++        .collect();
++    assert_eq!(draw_at.len(), 2);
++    for kind in [
++        CommandType::SetBlendColor,
++        CommandType::SetDepthBias,
++        CommandType::SetStencilReference,
++    ] {
++        assert!(
++            commands[draw_at[0] + 1..draw_at[1]]
++                .iter()
++                .any(|c| c.cmd == kind as u32)
++        );
++    }
++}
++
++#[test]
++fn independent_merge_keeps_texture_read_write_dependencies() {
++    for vertex in [false, true] {
++        for read_by_middle in [false, true] {
++            for srgb in [false, true] {
++                let mut state = independent_pass_sequence();
++                let (index, texture) = if read_by_middle {
++                    (
++                        1,
++                        if srgb {
++                            backbuffer_srgb()
++                        } else {
++                            backbuffer()
++                        },
++                    )
++                } else {
++                    if srgb {
++                        state.register_srgb_twin(tex(0x3001), tex(0x3000));
++                    }
++                    (2, if srgb { tex(0x3001) } else { tex(0x3000) })
++                };
++                let command = if vertex {
++                    Command::set_vertex_texture(texture.raw(), 0)
++                } else {
++                    Command::set_fragment_texture(texture.raw(), 0)
++                };
++                state.passes[index].commands.insert(1, command);
++                state.merge_independent_draw_passes();
++                assert_eq!(
++                    state.passes.len(),
++                    3,
++                    "vertex={vertex} middle={read_by_middle} srgb={srgb}"
++                );
++            }
++        }
++    }
++}
++
++#[test]
++fn independent_merge_stops_at_clears_queries_blits_and_shared_depth() {
++    for barrier in 0..6 {
++        let mut state = independent_pass_sequence();
++        match barrier {
++            0 => {
++                state.passes[2].color_load = ColorLoad::Clear {
++                    r: 0,
++                    g: 0,
++                    b: 0,
++                    a: 0,
++                }
++            }
++            1 => state.passes[2].depth_load = DepthLoad::Clear { value: 0 },
++            2 => state.passes[1].has_counting_visibility = true,
++            3 => state.passes[1]
++                .leading_blits
++                .push(BlitCommand::generate_mipmaps(tex(0x4000).raw())),
++            4 => state.passes[1].depth_texture = depth(),
++            5 => state.passes[2]
++                .commands
++                .insert(1, Command::set_fragment_texture(backbuffer().raw(), 0)),
++            _ => unreachable!(),
++        }
++        state.merge_independent_draw_passes();
++        assert_eq!(state.passes.len(), 3, "barrier={barrier}");
++    }
++}
++
+ fn unpack_scissor(cmd: &Command) -> (u32, u32, u32, u32) {
+     assert_eq!(cmd.cmd, CommandType::SetScissorRect as u32);
+     let x = cmd.param_a;
+diff --git a/windows/d3d9/src/encoder.rs b/windows/d3d9/src/encoder.rs
+index 4441efb..c902e2f 100644
+--- a/windows/d3d9/src/encoder.rs
++++ b/windows/d3d9/src/encoder.rs
+@@ -9466,6 +9466,9 @@ fn trailing_blit_descriptor(trailing_blits: &[BlitCommand]) -> PassDescriptor {
+ /// Rule G so the cull picks up the strip.
+ fn apply_pass_rules(enc: &mut FrameEncoder, frame_continues: bool) {
+     enc.pass_state.coalesce_clear_only_passes();
++    if crate::config::CONFIG.render_merge_passes {
++        enc.pass_state.merge_independent_draw_passes();
++    }
+     enc.pass_state.finalize_load_actions();
+     enc.pass_state.finalize_store_actions(frame_continues);
+     enc.pass_state.strip_dead_color_in_clear_only_passes();
+diff --git a/windows/tests/tests/render_target.rs b/windows/tests/tests/render_target.rs
+index c48b2bd..89e0d82 100644
+--- a/windows/tests/tests/render_target.rs
++++ b/windows/tests/tests/render_target.rs
+@@ -226,6 +226,61 @@ fn render_to_texture_then_sample() {
+     assert_eq!(h.clear_texture(0), 0, "unbind RT texture");
+ }
+ 
++#[test]
++fn alternating_independent_targets_preserve_draw_order_and_depth() {
++    let h = Harness::new();
++    let backbuffer = h.render_target(0);
++    let depth = h.create_depth_stencil_surface(640, 480, D3DFMT_D24S8);
++    assert_eq!(h.set_depth_stencil_surface(&depth), 0);
++    let texture = h.create_texture(
++        640,
++        480,
++        1,
++        D3DUSAGE_RENDERTARGET,
++        D3DFMT_A8R8G8B8,
++        D3DPOOL_DEFAULT,
++    );
++    let surface = texture.surface_level(0);
++    assert_eq!(h.set_render_state(D3DRS_LIGHTING, 0), 0);
++    h.select_diffuse_stage(0);
++    assert_eq!(h.set_fvf(D3DFVF_XYZ | D3DFVF_DIFFUSE), 0);
++    assert_eq!(h.set_render_state(D3DRS_ZENABLE, 1), 0);
++    assert_eq!(h.set_render_state(D3DRS_ZWRITEENABLE, 1), 0);
++    assert_eq!(h.set_render_state(D3DRS_ZFUNC, D3DCMP_LESS), 0);
++    assert_eq!(
++        h.clear(D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER, BLACK, 1.0, 0),
++        0
++    );
++    let mut near = fullscreen_triangle(RED);
++    for vertex in &mut near {
++        vertex.z = 0.25;
++    }
++    assert_eq!(h.draw_primitive_up(D3DPT_TRIANGLELIST, 1, &near), 0);
++    assert_eq!(h.set_render_target(0, &surface), 0);
++    assert_eq!(h.clear_depth_stencil_surface(), 0);
++    draw_fill(&h, GREEN);
++    assert_eq!(h.set_render_target(0, &backbuffer), 0);
++    assert_eq!(h.set_depth_stencil_surface(&depth), 0);
++    let mut far = fullscreen_triangle(BLUE);
++    for vertex in &mut far {
++        vertex.z = 0.75;
++    }
++    assert_eq!(h.draw_primitive_up(D3DPT_TRIANGLELIST, 1, &far), 0);
++    assert_eq!(h.set_render_target(0, &surface), 0);
++    assert_eq!(h.clear_depth_stencil_surface(), 0);
++    draw_fill(&h, WHITE);
++    assert_eq!(
++        read_surface_pixel(&h, &backbuffer, 320, 240),
++        RED,
++        "the later farther draw remains behind the earlier red draw"
++    );
++    assert_eq!(
++        read_surface_pixel(&h, &surface, 320, 240),
++        WHITE,
++        "the second independent-target draw remains last"
++    );
++}
++
+ #[test]
+ fn depth_test_near_occludes_far() {
+     let h = Harness::with_depth();

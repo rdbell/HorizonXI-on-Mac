@@ -14,6 +14,17 @@ SPEC.loader.exec_module(renderer)
 
 
 class RendererRunTests(unittest.TestCase):
+    def test_menu_detection_accepts_footer_when_pointer_obscures_selection(self):
+        observed = ("FINAL FANTASY XI\nSelectCgaracter\nCreate Character\n"
+                    "Delete Character\nConfig\nBack\nSelect a character to log on with.")
+        self.assertTrue(renderer.scene_text_matches("main menu", observed))
+        self.assertTrue(renderer.scene_text_matches("main menu",
+            "Select Character\nCreate Character\nDelete Character"))
+        self.assertFalse(renderer.scene_text_matches("main menu",
+            "Create Character\nDelete Character\nSelect a race."))
+        self.assertFalse(renderer.scene_text_matches("main menu", "Select Character"))
+        self.assertFalse(renderer.scene_text_matches("character list", observed))
+
     def test_background_override_preserves_other_settings_and_sections(self):
         original = ("[boot]\r\ncommand = private fixture\r\n0003 = 12\r\n"
                     "[ffxi.registry]\r\n0003 = 4096 ; width\r\n0004 = 4096\r\n"

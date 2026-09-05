@@ -101,6 +101,7 @@ These are single runs and need repeats. The 2048 result is a resolution-sensitiv
 its modest Markets gain suggests CPU work remains a better lead than reducing pixel count.
 No sample establishes stable 120 FPS. Even the faster 2048 tunnel run spent 5.87 percent of
 measured time below 120 FPS.
+These early comparisons also predate the client-clock validation described below.
 
 ## Packed buffer-lock outputs aborted the debug renderer
 
@@ -245,3 +246,62 @@ run confirmed Markets at 12:15 and Mines at 12:50 with continuing server traffic
 container was restarted. On this machine the single-file Docker bind retained the original
 file length after an in-place edit, so the live Lua file was padded to that length and its
 complete bytes verified inside the container. Its source in this repository needs no padding.
+
+## Independent render-pass merging
+
+The Markets dump contains 3,317 draws and 231 consecutive draw-target groups. Most alternate
+between the scene and an intermediate target. The intermediate never samples the scene,
+and only six groups sample the intermediate. This suggested that some passes could share a
+Metal encoder without changing the order of dependent draws.
+
+`patches/mtld3d-0.8.0-pass-merge.patch` adds `render.mergePasses`, disabled by default.
+Apply it after the material, alignment, fixed-function diagnostic, readback-timing,
+early-submission, and GPU-timing patches. The patch was checked by reconstructing the exact
+candidate source tree. It includes the new `windows/core/src/passes/merge.rs` module.
+
+The scheduler tracks fragment and vertex texture reads, sRGB aliases, color and depth
+attachments, and intervening writes. It preserves draw order within a target and refuses
+queries, leading copies, resolves, multiple color targets, attachment feedback, and unknown
+commands. Compatible later passes can move across independent passes within a 16-pass
+lookback. Implicit blend, depth-bias, and stencil defaults are restored at each former pass
+boundary. Load/store rules run after merging.
+
+`make check` passed. All 1,039 core/types tests, 203 shared/native tests, and 446 rendering
+tests per architecture passed. The first x86_64 rendering run hit a Rosetta EmulateForward
+exception in a resource-refcount test, reached its 60-second timeout, and skipped four
+tests. A focused retry passed that case and every skipped case. One initial fixture error
+was corrected before the completed run. Full Wine conformance has not been repeated for
+this scheduling change.
+
+The immutable production bundle is `mtld3d-pass-merge-production`, with D3D9 SHA-256
+`5c50f730f02ef38aee0b6bec847ae559e91d1dfc179de5f9895615f1ae3abdcf`.
+Its source archive uses a temporary Git index so newly added source files are included
+without modifying the working checkout's index.
+
+The first enabled run, `mtld3d-merge-on-city-01`, measured 43.171 FPS in Markets and
+99.720 FPS in the entrance tunnel across complete 56.7- and 57.3-second intervals.
+Both screenshots rendered correctly. Effective distance 20, the noon schedule, zones,
+loaded renderer hashes, all 43 restored file states/preferences, and unchanged Docker
+identities were verified. The final screenshot also confirms that `!addtime 0` restored
+normal server time after measurement. No stable 120 FPS result was reached.
+
+The first same-binary disabled control stopped at the main-menu OCR timeout. Its pointer
+obscured the highlighted Select Character text, while frame counters kept advancing. The
+runner now accepts the corresponding footer together with Create Character and Delete
+Character. The character-list and live-counter checks remain required. A regression covers
+the exact observed OCR error and rejects incomplete or unrelated menus.
+
+The corrected control, `mtld3d-merge-off-city-02`, completed with the same binary, boot,
+graphics, positions, clock schedule, and draw distance. It measured 34.528 FPS Markets and
+94.922 FPS tunnel. Both scenes passed screenshot review; restoration and final clock reset
+were verified again. The enabled run was 25.0 percent faster in Markets and 5.1 percent in
+the tunnel. This is one sequential pair, not a repeated performance guarantee. In the tunnel,
+merging's minimum one-second FPS was worse, 79.716 versus 84.055, as was the worst per-window
+p99, 49.901 versus 42.412 ms. The option remains disabled pending repeats and wider scenes.
+The numerical reports are preserved in
+[benchmarks/2026-09-05-pass-merge.json](benchmarks/2026-09-05-pass-merge.json).
+
+The downloaded dgVoodoo 2.79.3 and 2.81.3 archives are retained locally for a future isolated
+smoke test. They came from the
+[masterotaku preservation mirror](https://github.com/masterotaku/dgVoodoo-binaries), with
+URLs and archive hashes recorded. They have not been executed or adopted as a game renderer.

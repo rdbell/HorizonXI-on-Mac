@@ -60,6 +60,19 @@ def counter_is_advancing(path: Path, now: float) -> bool:
         return False
 
 
+def scene_text_matches(label: str, text: str) -> bool:
+    seen = re.sub(r"\s+", " ", text).lower()
+    expected = {"rules": ("accept", "decline", "rules of conduct"),
+                "main menu": ("create character", "delete character"),
+                "character list": ("hxitest", "no. of characters registered: 1", "play.")}[label]
+    if not all(word in seen for word in expected):
+        return False
+    # The mouse can obscure the highlighted button. Its footer identifies the
+    # same selection without requiring OCR to read through the pointer.
+    return label != "main menu" or any(word in seen for word in
+        ("select character", "select a character to log on with"))
+
+
 def graphics_values(text: str) -> dict[str, int]:
     """Read numeric graphics keys without retaining the boot command or credentials."""
     values = {}
@@ -333,9 +346,6 @@ def main() -> int:
 
         def wait_for_scene(self, scene, timeout):
             label = scene[0]
-            expected = {"rules": ("accept", "decline", "rules of conduct"),
-                        "main menu": ("select character", "create character", "delete character"),
-                        "character list": ("hxitest", "no. of characters registered: 1", "play.")}[label]
             deadline = min(time.monotonic() + timeout, self.started + self.args.limit)
             matches = 0
             while time.monotonic() < deadline and menu.process_exists(self.game_pid):
@@ -346,7 +356,7 @@ def main() -> int:
                     checked(["screencapture", "-x", "-l", str(window["window_id"]), str(screen)], timeout=10)
                     seen = re.sub(r"\s+", " ", checked([str(OCR_TOOL), str(screen)], timeout=10).lower())
                     active = counter_is_advancing(self.session_dir / "common-fps.csv", time.time())
-                    matches = matches + 1 if active and all(text in seen for text in expected) else 0
+                    matches = matches + 1 if active and scene_text_matches(label, seen) else 0
                     if matches >= 2:
                         self.event("scene confirmed by OCR", scene=label)
                         return True
