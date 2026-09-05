@@ -1,0 +1,384 @@
+diff --git a/windows/core/src/convert.rs b/windows/core/src/convert.rs
+index d021cf0..bb69a11 100644
+--- a/windows/core/src/convert.rs
++++ b/windows/core/src/convert.rs
+@@ -1169,11 +1169,6 @@ bitflags::bitflags! {
+         /// Drives whether the FF VS emit needs the indexed-palette input
+         /// attribute (slot 13).
+         const DECLARED_INDICES = 1 << 4;
+-        /// The vertex format came from `SetVertexDeclaration`, not `SetFVF`.
+-        ///
+-        /// A COLORVERTEX material source pointing at a vertex colour the
+-        /// declaration omits reads 0 (FVF instead falls back to the material).
+-        const USES_VERTEX_DECL = 1 << 5;
+         /// Vertex declaration has a PSIZE element (per-vertex point size).
+         const HAS_PSIZE = 1 << 6;
+     }
+@@ -1187,11 +1182,6 @@ impl FfVsLayout {
+     }
+     #[inline]
+     #[must_use]
+-    pub const fn uses_vertex_decl(&self) -> bool {
+-        self.flags.contains(FfVsLayoutFlags::USES_VERTEX_DECL)
+-    }
+-    #[inline]
+-    #[must_use]
+     pub const fn has_psize(&self) -> bool {
+         self.flags.contains(FfVsLayoutFlags::HAS_PSIZE)
+     }
+@@ -1223,9 +1213,8 @@ impl FfVsLayout {
+ ///
+ /// Panics if `tex_coord_count` exceeds the `u8` range (clamped to ≤8 by the
+ /// loop, so unreachable).
+-pub fn ff_vs_layout_from_elements(elements: &[D3DVERTEXELEMENT9], uses_decl: bool) -> FfVsLayout {
++pub fn ff_vs_layout_from_elements(elements: &[D3DVERTEXELEMENT9]) -> FfVsLayout {
+     let mut flags = FfVsLayoutFlags::empty();
+-    flags.set(FfVsLayoutFlags::USES_VERTEX_DECL, uses_decl);
+     let mut max_texcoord_index: Option<u8> = None;
+     let mut tex_coord_dims = [0u8; 8];
+     let mut declared_weights_count = 0u8;
+diff --git a/windows/core/src/convert/tests.rs b/windows/core/src/convert/tests.rs
+index 35fca49..3f8e90c 100644
+--- a/windows/core/src/convert/tests.rs
++++ b/windows/core/src/convert/tests.rs
+@@ -727,7 +727,7 @@ fn resolve_attrs_drops_streams_past_the_slot_table() {
+     let resolved = resolve_attrs_for_ff(&elems);
+     assert_eq!(resolved.attrs.len(), 1);
+     assert_eq!(resolved.used_streams, 0b1);
+-    let layout = ff_vs_layout_from_elements(&elems, true);
++    let layout = ff_vs_layout_from_elements(&elems);
+     assert!(
+         !layout.has_color0(),
+         "dropped element leaves no flag behind"
+@@ -811,7 +811,7 @@ fn ff_vs_layout_clamps_tex_coord_count_to_8() {
+             usage_index: 12,
+         },
+     ];
+-    let layout = ff_vs_layout_from_elements(&elements, false);
++    let layout = ff_vs_layout_from_elements(&elements);
+     assert_eq!(layout.tex_coord_count, 8);
+ }
+ 
+@@ -828,13 +828,13 @@ fn ff_vs_layout_in_spec_usage_index_7_yields_8() {
+             usage_index: 7,
+         },
+     ];
+-    let layout = ff_vs_layout_from_elements(&elements, false);
++    let layout = ff_vs_layout_from_elements(&elements);
+     assert_eq!(layout.tex_coord_count, 8);
+ }
+ 
+ #[test]
+ fn ff_vs_layout_single_tex0_yields_1() {
+-    let layout = ff_vs_layout_from_elements(&[pos3(), tex0(12)], false);
++    let layout = ff_vs_layout_from_elements(&[pos3(), tex0(12)]);
+     assert_eq!(layout.tex_coord_count, 1);
+ }
+ 
+diff --git a/windows/core/src/dxso/ff.rs b/windows/core/src/dxso/ff.rs
+index 00692df..9182d68 100644
+--- a/windows/core/src/dxso/ff.rs
++++ b/windows/core/src/dxso/ff.rs
+@@ -106,12 +106,6 @@ bitflags::bitflags! {
+         // Bit 10 was DIFFUSE_DECLARED_UNBOUND: a COLOR0 on a stream nothing
+         // feeds now reaches the shader as zeros through the stream's
+         // constant layout, so the plain HAS_COLOR0 path covers it.
+-        /// The vertex format came from `SetVertexDeclaration`, not `SetFVF`.
+-        ///
+-        /// A COLORVERTEX material source pointing at a vertex colour the
+-        /// declaration omits reads 0, whereas FVF falls back to the material
+-        /// colour.
+-        const USES_VERTEX_DECL = 1 << 11;
+         /// `D3DRS_NORMALIZENORMALS` is enabled.
+         ///
+         /// The FF VS then renormalizes the eye-space normal after the
+@@ -246,11 +240,6 @@ impl FfVsKey {
+     }
+     #[inline]
+     #[must_use]
+-    pub const fn uses_vertex_decl(&self) -> bool {
+-        self.flags.contains(FfVsFlags::USES_VERTEX_DECL)
+-    }
+-    #[inline]
+-    #[must_use]
+     pub const fn lighting_enabled(&self) -> bool {
+         self.flags.contains(FfVsFlags::LIGHTING_ENABLED)
+     }
+@@ -1004,7 +993,6 @@ fn emit_vs(out: &mut String, vs: &FfVsKey, entry: &str) {
+         mat_flags.set(MatColorFlags::COLOR_VERTEX, vs.color_vertex());
+         mat_flags.set(MatColorFlags::HAS_COLOR0, vs.has_color0());
+         mat_flags.set(MatColorFlags::HAS_COLOR1, vs.has_color1());
+-        mat_flags.set(MatColorFlags::USES_DECL, vs.uses_vertex_decl());
+         let mat_diffuse = resolve_mat(vs.diffuse_source, 10, mat_flags);
+         let mat_ambient = resolve_mat(vs.ambient_source, 11, mat_flags);
+         let mat_specular = resolve_mat(vs.specular_source, 12, mat_flags);
+@@ -1365,11 +1353,6 @@ bitflags::bitflags! {
+         const HAS_COLOR0 = 1 << 1;
+         /// The vertex carries a `COLOR1` (specular) channel.
+         const HAS_COLOR1 = 1 << 2;
+-        /// The draw uses a vertex declaration (not a legacy FVF).
+-        ///
+-        /// An absent colour reads 0 rather than falling back to the material
+-        /// constant.
+-        const USES_DECL = 1 << 3;
+     }
+ }
+ 
+@@ -1378,6 +1361,8 @@ bitflags::bitflags! {
+ /// The field (0 = `MCS_MATERIAL`, 1 = `MCS_COLOR1`, 2 = `MCS_COLOR2`) selects
+ /// the expression that feeds the FF lighting math. When `D3DRS_COLORVERTEX` is
+ /// false, the override is ignored and the material constant is always used.
++/// An omitted colour semantic also falls back to the material; a declared
++/// colour on an unbound stream reaches the shader input as zero instead.
+ fn resolve_mat(source: u8, mat_slot: u32, flags: MatColorFlags) -> String {
+     if flags.contains(MatColorFlags::COLOR_VERTEX) {
+         if source == 1 && flags.contains(MatColorFlags::HAS_COLOR0) {
+@@ -1386,12 +1371,6 @@ fn resolve_mat(source: u8, mat_slot: u32, flags: MatColorFlags) -> String {
+         if source == 2 && flags.contains(MatColorFlags::HAS_COLOR1) {
+             return "in.v3".to_string();
+         }
+-        if (source == 1 || source == 2) && flags.contains(MatColorFlags::USES_DECL) {
+-            // A vertex declaration that omits the requested COLOR reads 0 — only
+-            // the legacy FVF path falls back to the material colour for an
+-            // absent vertex colour source.
+-            return "float4(0.0)".to_string();
+-        }
+         if source > 2 {
+             mtld3d_shared::log_once_warn!(target: super::LOG_TARGET, "dxso FF: unknown material source {source} → MCS_MATERIAL");
+         }
+diff --git a/windows/core/src/ff_state.rs b/windows/core/src/ff_state.rs
+index 9eab569..68edc8f 100644
+--- a/windows/core/src/ff_state.rs
++++ b/windows/core/src/ff_state.rs
+@@ -1743,7 +1743,6 @@ fn build_vs_flags(
+     let mut flags = FfVsFlags::empty();
+     flags.set(FfVsFlags::HAS_NORMAL, layout.has_normal());
+     flags.set(FfVsFlags::HAS_COLOR0, layout.has_color0());
+-    flags.set(FfVsFlags::USES_VERTEX_DECL, layout.uses_vertex_decl());
+     flags.set(FfVsFlags::HAS_COLOR1, layout.has_color1());
+     flags.set(FfVsFlags::LIGHTING_ENABLED, lighting_enabled);
+     // D3DRS_NORMALIZENORMALS only affects a lit draw with a normal — gate the
+diff --git a/windows/core/src/shader_cache.rs b/windows/core/src/shader_cache.rs
+index dd195b7..ce56804 100644
+--- a/windows/core/src/shader_cache.rs
++++ b/windows/core/src/shader_cache.rs
+@@ -269,7 +269,10 @@ use crate::shader_compile_stats::CompileBucket;
+ /// bound to a volume or cube texture emits `texture3d<float>` /
+ /// `texturecube<float>` and a `.xyz` coordinate whatever its `dcl_<dim>` said,
+ /// which is new MSL and a new programmable-VS disk-key input.
+-pub const SHADER_CACHE_SCHEMA_VERSION: u32 = 67;
++///
++/// `68` falls back to material constants for omitted vertex colour semantics
++/// in fixed-function lighting and removes the declaration-origin key bit.
++pub const SHADER_CACHE_SCHEMA_VERSION: u32 = 68;
+ 
+ /// File magic.
+ ///
+diff --git a/windows/d3d9/src/device.rs b/windows/d3d9/src/device.rs
+index 9f0ab21..234b09e 100644
+--- a/windows/d3d9/src/device.rs
++++ b/windows/d3d9/src/device.rs
+@@ -10353,10 +10353,7 @@ fn emit_snapshot_deltas(obj: &Direct3DDevice9) {
+         let decl_ptr = dev.vertex_decl();
+         let (resolved, vdecl_hash, ff_vs_layout) = if decl_ptr.is_null() {
+             let (elements, _fvf_stride) = fvf_to_elements(fvf);
+-            // `fvf == 0` only when the format came from SetVertexDeclaration
+-            // (SetFVF always carries D3DFVF_XYZ); a real declaration reads 0
+-            // for an omitted COLORVERTEX source, FVF falls back to material.
+-            let layout = convert::ff_vs_layout_from_elements(&elements, fvf == 0);
++            let layout = convert::ff_vs_layout_from_elements(&elements);
+             // Pre-transformed (POSITIONT/XYZRHW) layouts bypass a bound VS —
+             // D3D9 runs the FF pre-transformed path regardless, even when a
+             // VS is still bound — so the attrs must resolve for the FF VS too.
+@@ -10372,7 +10369,7 @@ fn emit_snapshot_deltas(obj: &Direct3DDevice9) {
+             // SAFETY: non-null check passed; refcount holds it live.
+             let decl = unsafe { &*decl_ptr };
+             let elements = decl.inner().elements();
+-            let layout = convert::ff_vs_layout_from_elements(elements, fvf == 0);
++            let layout = convert::ff_vs_layout_from_elements(elements);
+             // See the FVF arm: POSITIONT bypasses a bound VS.
+             let resolved = if bound_vertex_shader.is_null() || layout.has_rhw() {
+                 resolve_attrs_for_ff(elements)
+@@ -11479,7 +11476,7 @@ extern "system" fn device_set_vertex_declaration(this: *mut c_void, decl: *mut c
+         // unconditionally.
+         let new_rhw = !new.is_null()
+             // SAFETY: non-null checked; the slot adopted a ref above.
+-            && convert::ff_vs_layout_from_elements(unsafe { (*new).inner().elements() }, true)
++            && convert::ff_vs_layout_from_elements(unsafe { (*new).inner().elements() })
+                 .has_rhw();
+         if new_rhw || dev.cached_ff_vs_layout.has_rhw() {
+             mask |= SnapshotDirty::VS_CONST | SnapshotDirty::VARIANT;
+diff --git a/windows/tests/COVERAGE.md b/windows/tests/COVERAGE.md
+index 54ec575..ef2c931 100644
+--- a/windows/tests/COVERAGE.md
++++ b/windows/tests/COVERAGE.md
+@@ -51,7 +51,7 @@ test file lands with its row in the same change.
+ | `texture_stages.rs` | COLOROP round-trip; MODULATE/ADD/SELECTARG2; TFACTOR arg source; sampling a locked A16B16G16R16F texture. |
+ | `shaders.rs` | hand-assembled VS/PS; PS-constant colour; VS-constant translation; float-constant setters (in-range accept + out-of-range/`-1` → `INVALIDCALL`); integer/bool constant round trips; a `vs_2_0` static `if b0` branch driven by `SetVertexShaderConstantB` (TRUE and FALSE arms, no shader rebind); the same `if b0` in a `ps_3_0` driven by `SetPixelShaderConstantB`; a `ps_3_0` `rep i0` loop count driven by `SetPixelShaderConstantI` (4 iterations vs 0); a `ps_2_0` writing `oDepth` still drawing with no depth buffer bound (the depth export is dropped for that pass); `GetFunction` returning the creating bytecode (size query, round trip, undersized buffer, null size pointer) for both shader kinds and for a shader-model 1 program; a `ps_3_0` sampler reading the texture kind the application bound rather than the one its `dcl` names, over all four combinations of a 2D and a volume texture with a `dcl_2d` and a `dcl_volume` slot; a `ps_2_0` whose only `c0` read is `def`-declared keeping its literal colour across a `SetPixelShaderConstantF` upload; three draws in one pass alternating that program with one that does read `c0`, pinning that the reader still sees a row set between the draws; a `vs_3_0` whose only relative constant read (`c[a0.x + 0]`, the row index itself uploaded in `c0`) sits in a subroutine reached through `call`, drawing the colour uploaded twenty rows past anything the instruction stream names; a `vs_3_0` vertex texture fetch reading the texture bound at `D3DVERTEXTEXTURESAMPLER0` with `texldl`, and the same fetch declared `dcl_volume` over a 2D binding, pinning that the sampler argument and its coordinate follow the bound texture kind rather than the declaration. |
+ | `vertex_decl.rs` | `CreateVertexDeclaration` drives an FF draw; `GetVertexDeclaration` round-trip; a two-stream declaration through the FF pipeline; a declared stream with nothing bound reads zeros (bound and UP draws). |
+-| `transforms_ff.rs` | Set/Get/MultiplyTransform; FF diffuse passthrough; alpha test; Set/Get material + light + LightEnable. |
++| `transforms_ff.rs` | Set/Get/MultiplyTransform; FF diffuse passthrough; alpha test; Set/Get material + light + LightEnable; omitted declaration colors fall back to all four material sources, while declared colors on unbound streams read zero. |
+ | `render_target.rs` | Render-to-texture + sample; A16B16G16R16F render target create and draw/readback round trip; depth occlusion; auto depth-stencil Get/Set; `GetDepthStencilSurface` answering with the surface `SetDepthStencilSurface` bound (pointer identity against an app-created surface, a save/bind-other/restore leaving that surface bound, `D3DERR_NOTFOUND` and a null out-pointer once depth is unbound); CreateDepthStencilSurface; backbuffer desc; StretchRect 1:1 accept; a full-surface depth→depth StretchRect, its copy read back by depth-testing two quads against the destination and the filtered form accepted as well; StretchRect between two rects of one surface (a disjoint copy, and an overlapping shift whose result is the source as it stood before the copy); StretchRect format conversion (R5G6B5 into X8R8G8B8 through the scaling render quad, YUY2/UYVY decode into the backbuffer and, on the CPU path, into an offscreen-plain surface, including a source sub-rectangle converted into a destination level smaller than the source level); INTZ sampleable-depth dual-use (render-as-depth → sample) via both the FF and a programmable PS; a depth texture's content surviving a `CreateDepthStencilSurface` bind and a `Present` before it is sampled (the store action a texture-backed depth bind's `is_sampleable` keeps); the INTZ texture sampled while it is still the bound depth attachment (the encoder copies it first); `GetRenderTargetData` read-back into a SYSTEMMEM offscreen surface (`Surface::GetDevice` + `CreateOffscreenPlainSurface` + `LockRect`, pixels matched against the private export); `GetRenderTargetData` and `GetFrontBufferData` into level 0 of a `D3DPOOL_SYSTEMMEM` / `D3DPOOL_SCRATCH` texture, read back through `LockRect`, plus the destinations both reject (a GPU-resident level, another extent, another byte layout); a 33x4 R5G6B5 read-back pinning that the blit writes its rows at the pitch the destination's `LockRect` reports, not the tight one (an odd width in a 16-bit format is where the two differ); `StretchRect` into a lockable DEFAULT offscreen plain read back through `LockRect` (whole surface and a sub-rect that leaves the rest alone), with a `D3DLOCK_DISCARD` lock after such a blit keeping the pixels it wrote instead of the blitted ones, `StretchRect` from a render target into a render-target texture level read back through `GetDC`/`GetPixel` over staging a lock seeded with another colour, the same round trip through `LockRect` for the two copies that take the render quad instead of the 1:1 blit (a 64x64 render target scaled into a 32x32 render-target texture level, and a same-size R5G6B5 offscreen plain converted into an A8R8G8B8 one), the same blit into face 3 of a DEFAULT render-target cube read back through that face's `GetDC` with a differently filled face 0 left alone, a `ColorFill` of two cube faces each reading its own colour back through its own `GetDC`, `GetRenderTargetData` from a render-target cube's face-3 surface and from that face's level 1 reading each subresource's own fill while face 0 keeps its own, a scaling `StretchRect` into face 3 of a DEFAULT render-target cube sampled back along that face's direction with a differently filled face 0 left alone, a scaling `StretchRect` out of a cube face onto the back buffer carrying that face's colour, a 1:1 same-format `StretchRect` out of face 3 into a 2D render target carrying face 3's colour rather than face 0's, a 1:1 same-format `StretchRect` from face 1 onto face 3 of one cube at the same rectangle carrying face 1's colour (both endpoints resolve to one Metal texture, where equal rectangles on two faces are still a real copy), the scaling form of that pair landing the whole of face 1 in face 3's top-left quarter through the scratch detour and leaving the rest of face 3 alone, and the surface-class restriction that keeps a render-target source out of an offscreen-plain destination (standalone `CreateRenderTarget`, render-target texture level, and the reverse direction accepted); surface-op contracts (ColorFill/CreateRenderTarget` rejecting an unmappable format, `GetRenderTargetData`/`GetFrontBufferData` refusing a non-SYSTEMMEM destination, `CreateOffscreenPlainSurface` taking `D3DPOOL_DEFAULT` and refusiong `D3DPOOL_MANAGED`); a fresh DEFAULT offscreen plain served out of its own staging (a read-only lock before anything wrote it, a `LockRect` write and the `LockRect` read after it, and a `ColorFill` of a plain no lock has touched); `GetDC` on a DEFAULT offscreen plain reading the `ColorFill` before it, with GDI's `SetPixel` through the DC reaching both the staging a later `LockRect` maps and the Metal texture a 1:1 `StretchRect` into the back buffer reads; `ColorFill` of a sub-rect and of an over-the-edge rect on a lockable DEFAULT offscreen-plain surface, read back inside and outside through `LockRect`; `ColorFill` of a DEFAULT offscreen plain in each of A1R5G5B5, X1R5G5B5, A4R4G4B4, L8 and A8 read back through `LockRect` as that format's own packing of the fill colour, over a seed the fill has to replace; `ColorFill` of a bound render target erasing an earlier draw and blending under a later `SRCALPHA` one; `ColorFill` into level 0 of an `AUTOGENMIPMAP` render-target texture regenerating the chain (a sample pinned to level 4 through `D3DSAMP_MAXMIPLEVEL` reads the fill colour, not the seeded chain); a lockable `CreateRenderTarget` surface staying coherent with its CPU staging in every direction (a whole-surface and a sub-rect `ColorFill`, a `Clear` and a draw all read back through `LockRect`, and a `GetDC` that shows the GPU's pixels with GDI's own drawing reaching the colour texture at `ReleaseDC`, and the same `GetDC` round trip on a 33x4 R5G6B5 surface, whose odd row length puts the last row out of reach of a DIB over a tighter store); a lockable `CreateRenderTarget` surface created at the back buffer's own size keeping the extent D3D9 reports rather than inheriting `render.scale`, with the bind-and-`Clear`, the `ColorFill`, the `LockRect` read-back and the `UnlockRect` upload all probed on the far corner a scaled texture would not reach; a depth texture with a mip chain (per-level `GetLevelDesc`, level 1 bound as the depth attachment beside the back buffer and gating a farther draw); a rect-bounded depth `Clear` touching only its rects; a full-surface depth→depth `StretchRect` feeding a later depth test; `StretchRect` addressing an upper mip level on both the source and the destination, on the scaling and the 1:1 path; `Clear(D3DCLEAR_ZBUFFER)` rejected once no depth-stencil is bound and accepted for an offscreen target with a custom depth surface; `CreateRenderTarget` reporting a DEFAULT-pool `D3DUSAGE_RENDERTARGET` surface (against a DEFAULT offscreen-plain surface reporting no usage), accepting A32B32G32R32F and rejecting an unmappable format; a DEFAULT-pool render target bound, drawn into and read back; 1:1 `StretchRect` between two DEFAULT render targets, from a rendered target into the backbuffer across a `Present`, and into a backbuffer with a pending `Clear` (the copy lands last); `SetRenderTarget` snapping the viewport and scissor to the new target; a float-texture sample rendered into an A32B32G32R32F target; depth surviving a mid-frame readback flush (the far group still fails LESS against the primed near depth); the RESZ resolve (`D3DRS_POINTSIZE` = `0x7FA05000` with the destination INTZ texture at stage 0) copying the bound depth-stencil into that texture, read back by sampling the destination, and the `RESZ` pseudo-format probe answering `D3D_OK`; the `oDepth` depth restore, a `ps_3_0` writing sampled INTZ depth into the bound depth buffer and gating a later sprite z-test, with a colour-writing twin painting the sampled depth back as grayscale; INTZ carrying a working stencil plane (a REPLACE mark gating a later EQUAL draw); and, under `depth.aliasSameSize`, a same-size depth-stencil rebind whose z-test sees the contents rendered through the other surface; `GetDC` on a DEFAULT offscreen plain rejected while its own `LockRect` is outstanding, and accepted once it is released; 64 rounds of create, bind, depth-test and release of a standalone `CreateDepthStencilSurface` surface, one per frame, each round's depth test proving its own fresh texture and the run proving the retirement of the previous one lands after the frame that drew with it.` on the standalone backbuffer, ``; a non-lockable A16B16G16R16F render target locked read-only reporting the pitch its own format asks for (eight bytes per texel), with the last texel of the last row inside the staging; `LockRect` and `UnlockRect` on a non-lockable `CreateRenderTarget` surface both rejected with the caller's `D3DLOCKED_RECT` left untouched, and the same surface created lockable lockinge |
+ | `render_scale.rs` | Every assertion in *reported* coordinates, so the whole file must pass unchanged under `make test SCALE=0.75`: the scissor confining a whole-target clear; `Clear` with `pRects`, and those rects intersected with the scissor; the viewport bounding a whole-target colour clear, and bounding the colour plane of a combined `TARGET | ZBUFFER` clear; a whole-target depth clear bounded to the viewport, read back through the depth test, including that it writes `Clear`'s raw Z rather than one remapped through the viewport's `MinZ`; rebinding the back buffer by surface keeping its coordinate space; a back-buffer readback carrying the frame's alpha rather than an opaque one; a game-created render target passing through untouched; a resizing `Reset` reporting and clipping in the new size; `ColorFill` of a sub-rect of a render-target texture created at the reported back-buffer size, and of a sub-rect of that target's mip level 1 read back by sampling the level; `ColorFill` of a sub-rect of a standalone `CreateRenderTarget` surface at that size, copied onto the back buffer with `StretchRect`; and a point's diameter, which D3D9 states in the reported space and Metal consumes in the rasterized one, keeping its reported extent; a `D3DUSAGE_DEPTHSTENCIL` texture created at the reported back-buffer size charged the mip chain its Metal levels hold rather than the one its descriptor reports, while a texture of another size keeps costing what it asked for; and a `CreateRenderTarget` and a `CreateDepthStencilSurface` surface at that size each charged the texture their Metal create holds and refunded it on release, while a target of another size keeps costing what it asked for (those three tests pin `render.scale=0.5` themselves, since none of those quantities is observable at the identity). |
+ | `implicit_surface.rs` | The device-owned implicit surfaces: `GetRenderTarget(0)` and `GetBackBuffer(0)` handing back one cached object that survives its refcount reaching zero and resolves its extent live across a resizing `Reset`; the cached implicit depth-stencil; `GetDC` on a non-lockable back buffer rejected with the caller's out `HDC` untouched, and on a `D3DPRESENTFLAG_LOCKABLE_BACKBUFFER` one reading the pixels the GPU painted and carrying GDI's own drawing back into the back buffer at `ReleaseDC`, with no `Present` in between, both at the extent D3D9 reports and, with `render.scale` pinned below 1.0 in the test's own process, through the resample the write-back needs when the back buffer is rasterized smaller. |
+diff --git a/windows/tests/tests/transforms_ff.rs b/windows/tests/tests/transforms_ff.rs
+index 3455b4a..9f52709 100644
+--- a/windows/tests/tests/transforms_ff.rs
++++ b/windows/tests/tests/transforms_ff.rs
+@@ -2,12 +2,16 @@
+ 
+ use mtld3d_tests::{Harness, LitVertex, PosVertex, SpecularVertex, Vertex};
+ use mtld3d_types::{
+-    D3DCMP_GREATER, D3DCOLORVALUE, D3DFVF_DIFFUSE, D3DFVF_NORMAL, D3DFVF_SPECULAR, D3DFVF_XYZ,
+-    D3DLIGHT_DIRECTIONAL, D3DLIGHT_POINT, D3DLIGHT_SPOT, D3DLIGHT9, D3DMATERIAL9, D3DMCS_MATERIAL,
+-    D3DPT_TRIANGLELIST, D3DRS_ALPHAFUNC, D3DRS_ALPHAREF, D3DRS_ALPHATESTENABLE, D3DRS_AMBIENT,
+-    D3DRS_AMBIENTMATERIALSOURCE, D3DRS_EMISSIVEMATERIALSOURCE, D3DRS_LIGHTING, D3DRS_LOCALVIEWER,
+-    D3DRS_SPECULARENABLE, D3DTA_ALPHAREPLICATE, D3DTA_DIFFUSE, D3DTA_SPECULAR, D3DTS_PROJECTION,
+-    D3DTS_TEXTURE0, D3DTS_VIEW, D3DTS_WORLD, D3DTSS_COLORARG1, D3DVECTOR,
++    D3DCMP_GREATER, D3DCOLORVALUE, D3DDECL_END, D3DDECLMETHOD_DEFAULT, D3DDECLTYPE_D3DCOLOR,
++    D3DDECLTYPE_FLOAT3, D3DDECLUSAGE_COLOR, D3DDECLUSAGE_NORMAL, D3DDECLUSAGE_POSITION,
++    D3DFVF_DIFFUSE, D3DFVF_NORMAL, D3DFVF_SPECULAR, D3DFVF_XYZ, D3DLIGHT_DIRECTIONAL,
++    D3DLIGHT_POINT, D3DLIGHT_SPOT, D3DLIGHT9, D3DMATERIAL9, D3DMCS_COLOR1, D3DMCS_COLOR2,
++    D3DMCS_MATERIAL, D3DPT_TRIANGLELIST, D3DRS_ALPHAFUNC, D3DRS_ALPHAREF, D3DRS_ALPHATESTENABLE,
++    D3DRS_AMBIENT, D3DRS_AMBIENTMATERIALSOURCE, D3DRS_COLORVERTEX, D3DRS_DIFFUSEMATERIALSOURCE,
++    D3DRS_EMISSIVEMATERIALSOURCE, D3DRS_LIGHTING, D3DRS_LOCALVIEWER, D3DRS_SPECULARENABLE,
++    D3DRS_SPECULARMATERIALSOURCE, D3DTA_ALPHAREPLICATE, D3DTA_DIFFUSE, D3DTA_SPECULAR,
++    D3DTS_PROJECTION, D3DTS_TEXTURE0, D3DTS_VIEW, D3DTS_WORLD, D3DTSS_COLORARG1, D3DVECTOR,
++    D3DVERTEXELEMENT9,
+ };
+ 
+ #[rustfmt::skip]
+@@ -20,6 +24,133 @@ const IDENTITY: [f32; 16] = [
+ 
+ const BLUE: u32 = 0xFF00_00FF;
+ 
++fn lit_color_declaration(h: &Harness, declare_colors: bool) {
++    let mut elements = vec![
++        D3DVERTEXELEMENT9 {
++            stream: 0,
++            offset: 0,
++            type_: D3DDECLTYPE_FLOAT3,
++            method: D3DDECLMETHOD_DEFAULT,
++            usage: D3DDECLUSAGE_POSITION,
++            usage_index: 0,
++        },
++        D3DVERTEXELEMENT9 {
++            stream: 0,
++            offset: 12,
++            type_: D3DDECLTYPE_FLOAT3,
++            method: D3DDECLMETHOD_DEFAULT,
++            usage: D3DDECLUSAGE_NORMAL,
++            usage_index: 0,
++        },
++    ];
++    if declare_colors {
++        for usage_index in 0..2 {
++            elements.push(D3DVERTEXELEMENT9 {
++                stream: u16::from(usage_index) + 1,
++                offset: 0,
++                type_: D3DDECLTYPE_D3DCOLOR,
++                method: D3DDECLMETHOD_DEFAULT,
++                usage: D3DDECLUSAGE_COLOR,
++                usage_index,
++            });
++        }
++    }
++    elements.push(D3DDECL_END);
++    let decl = h.create_vertex_declaration(&elements);
++    assert_eq!(h.set_vertex_declaration(&decl), 0);
++    assert_eq!(h.set_stream_source_null(1, 0, 0), 0);
++    assert_eq!(h.set_stream_source_null(2, 0, 0), 0);
++}
++
++fn check_declared_material_sources(declare_colors: bool) {
++    let h = Harness::new();
++    lit_color_declaration(&h, declare_colors);
++    for state in [D3DTS_WORLD, D3DTS_VIEW, D3DTS_PROJECTION] {
++        assert_eq!(h.set_transform(state, &IDENTITY), 0);
++    }
++    for (state, value) in [
++        (D3DRS_LIGHTING, 1),
++        (D3DRS_COLORVERTEX, 1),
++        (D3DRS_LOCALVIEWER, 0),
++        (D3DRS_SPECULARENABLE, 1),
++        (D3DRS_AMBIENT, 0xFFFF_FFFF),
++    ] {
++        assert_eq!(h.set_render_state(state, value), 0);
++    }
++    h.select_diffuse_stage(0);
++    let white = D3DCOLORVALUE {
++        r: 1.0,
++        g: 1.0,
++        b: 1.0,
++        a: 1.0,
++    };
++    let light = D3DLIGHT9 {
++        type_: D3DLIGHT_DIRECTIONAL,
++        diffuse: white,
++        specular: white,
++        direction: D3DVECTOR {
++            x: 0.0,
++            y: 0.0,
++            z: 1.0,
++        },
++        ..D3DLIGHT9::default()
++    };
++    assert_eq!(h.set_light(0, &light), 0);
++    assert_eq!(h.light_enable(0, true), 0);
++    let tri = [(0.0, 0.5), (0.5, -0.5), (-0.5, -0.5)].map(|(x, y)| LitVertex {
++        x,
++        y,
++        z: 0.5,
++        nx: 0.0,
++        ny: 0.0,
++        nz: -1.0,
++    });
++    let material_sources = [
++        D3DRS_DIFFUSEMATERIALSOURCE,
++        D3DRS_AMBIENTMATERIALSOURCE,
++        D3DRS_SPECULARMATERIALSOURCE,
++        D3DRS_EMISSIVEMATERIALSOURCE,
++    ];
++    for source in [D3DMCS_COLOR1, D3DMCS_COLOR2] {
++        for state in material_sources {
++            assert_eq!(h.set_render_state(state, source), 0);
++        }
++        for component in 0..4 {
++            let mut material = D3DMATERIAL9::default();
++            material.diffuse.a = 1.0;
++            material.power = 1.0;
++            let selected = match component {
++                0 => &mut material.diffuse,
++                1 => &mut material.ambient,
++                2 => &mut material.specular,
++                _ => &mut material.emissive,
++            };
++            selected.r = 1.0;
++            assert_eq!(h.set_material(&material), 0);
++            h.render_once(BLUE, |d| {
++                assert_eq!(d.draw_primitive_up(D3DPT_TRIANGLELIST, 1, &tri), 0);
++            });
++            let expected = if declare_colors { 0 } else { 0xFFFF_0000 };
++            assert_eq!(h.read_pixel(10, 10), BLUE, "corner remains clear");
++            assert_eq!(
++                h.read_pixel(320, 280),
++                expected,
++                "source {source}, material component {component}, declared {declare_colors}"
++            );
++        }
++    }
++}
++
++#[test]
++fn lit_decl_omitted_colors_fall_back_to_material() {
++    check_declared_material_sources(false);
++}
++
++#[test]
++fn lit_decl_unbound_colors_read_zero() {
++    check_declared_material_sources(true);
++}
++
+ const fn solid_triangle(color: u32) -> [Vertex; 3] {
+     [
+         Vertex {
