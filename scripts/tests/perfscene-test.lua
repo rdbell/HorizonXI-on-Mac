@@ -1,3 +1,4 @@
+package.path = 'scripts/harness/addons/perfscene/?.lua;' .. package.path
 -- Run from the repository root with luajit scripts/tests/perfscene-test.lua.
 local original_getenv, original_print = os.getenv, print;
 local clock, commands, labels, handlers, name, job, level, learned, packets, respond;

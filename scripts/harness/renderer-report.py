@@ -127,6 +127,7 @@ def report(output: Path) -> dict:
     record = json.loads((session / "menu-run.json").read_text())
     result = {"run": output.name, "session": session.name, "problems": [], "scenes": [],
               "boot_sha256": record.get("boot_sha256"),
+              "perfscene_source_sha256": record.get("perfscene_source_sha256"),
               "shader_cache_seed_sha256": record.get("shader_cache_seed_sha256"),
               "renderer_sha256": record.get("renderer_verified"),
               "graphics": record.get("graphics_at_launch"),

@@ -78,11 +78,13 @@ def counter_is_advancing(path: Path, now: float) -> bool:
         return False
 
 
-def scene_text_matches(label: str, text: str) -> bool:
+def scene_text_matches(label: str, text: str, sole_local_character: bool = False) -> bool:
     seen = re.sub(r"\s+", " ", text).lower()
     expected = {"rules": ("accept", "decline", "rules of conduct"),
                 "main menu": ("create character", "delete character"),
                 "character list": ("hxitest", "no. of characters registered: 1", "play.")}[label]
+    if label == "character list" and sole_local_character:
+        expected = ("hxitest", "select a character to play.")
     if not all(word in seen for word in expected):
         return False
     # The mouse can obscure the highlighted button. Its footer identifies the
@@ -156,7 +158,7 @@ class Snapshot:
     def save(self, game: Path) -> None:
         self.private.mkdir(mode=0o700, parents=True, exist_ok=False)
         paths = [game / "config", game / "scripts/perfscene.txt",
-                 game / "scripts/default.txt", game / "addons/perfscene/perfscene.lua",
+                 game / "scripts/default.txt", game / "addons/perfscene",
                  game / "bootloader/mtld3d_shaders.bin",
                  Path.home() / "Library/Application Support/HorizonXI-on-Mac/accounts.json"]
         directories = (game, game / "bootloader", game / "SquareEnix/PlayOnlineViewer",
@@ -417,6 +419,8 @@ def main() -> int:
                 boot = boot.rstrip() + "\n/addon load perfscene\n"
             (self.game_dir / "scripts/perfscene.txt").write_text(boot)
             self.record["boot_sha256"] = hashlib.sha256(boot.encode()).hexdigest()
+            self.record["perfscene_source_sha256"] = {path.name: digest(path)
+                for path in menu.ADDON_SOURCE.glob("*.lua")}
             self.record["minimal_plugins"] = options.boot_file is None
             return True
 
@@ -476,7 +480,19 @@ def main() -> int:
                         ocr_args.append("--character-list")
                     seen = re.sub(r"\s+", " ", checked(ocr_args, timeout=10).lower())
                     active = counter_is_advancing(self.session_dir / "common-fps.csv", time.time())
-                    matches = matches + 1 if active and scene_text_matches(label, seen) else 0
+                    sole_local = False
+                    if label == "character list" and active and not scene_text_matches(label, seen) and all(
+                            word in seen for word in ("hxitest", "select a character to play.")):
+                        # Some full-addon menu layouts clip the count off the right edge.
+                        # Retain the single-character guard with the actual local account row.
+                        rows = checked(["docker", "exec", "lsb-local-database-1", "mariadb",
+                            "-uroot", "-proot", "xidb", "-N", "-e",
+                            "SELECT c.charname FROM chars c JOIN accounts a ON c.accid=a.id "
+                            "WHERE a.login='hxitest'"]).splitlines()
+                        sole_local = rows == ["Hxitest"]
+                        if sole_local:
+                            self.record["character_identity_database_confirmed"] = True
+                    matches = matches + 1 if active and scene_text_matches(label, seen, sole_local) else 0
                     if matches >= 2:
                         self.event("scene confirmed by OCR", scene=label)
                         return True

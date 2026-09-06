@@ -31,9 +31,9 @@ def durations(values: list[float]) -> dict:
             for name, p in (("p50_ms", 0.5), ("p95_ms", 0.95), ("p99_ms", 0.99), ("max_ms", 1))}}
 
 
-def frame_summary(rows: list[dict], start: float, end: float) -> dict:
+def frame_summary(rows: list[dict], start: float, end: float, zone: int = 234) -> dict:
     # Keep boundary frames whole, including a long frame crossing the final marker.
-    selected = [r for r in rows if r["zone"] == 234 and r["epoch"] > start
+    selected = [r for r in rows if r["zone"] == zone and r["epoch"] > start
                 and r["epoch"] - r["frame_ms"] / 1000 < end]
     values = [r["frame_ms"] for r in selected]
     result = durations(values)
@@ -43,7 +43,7 @@ def frame_summary(rows: list[dict], start: float, end: float) -> dict:
     gaps = [right["epoch"] - right["frame_ms"] / 1000 - left["epoch"]
             for left, right in zip(selected, selected[1:])]
     covered = (selected[0]["epoch"] - selected[0]["frame_ms"] / 1000 <= start + 0.01
-               and selected[-1]["epoch"] >= end - 0.01 and max(gaps, default=0) < 0.01)
+               and selected[-1]["epoch"] >= end - 0.01 and max((abs(gap) for gap in gaps), default=0) < 0.001)
     return {**result, "valid": covered, "fps": round(len(values) / seconds, 3),
             "measured_seconds": round(seconds, 3),
             "frames_over_50ms": sum(v > 50 for v in values),

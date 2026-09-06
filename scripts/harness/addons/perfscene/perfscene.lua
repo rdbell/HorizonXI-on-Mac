@@ -142,6 +142,11 @@ for round = 1, 3 do
 end
 scenarios.effects[#scenarios.effects + 1] = { 10, 'done', 'done' };
 
+local stress_module = require('stress');
+for name, steps in pairs(stress_module.scenarios(world_distance_command, entity_distance_command)) do
+    scenarios[name] = steps;
+end
+
 local state = {
     running   = nil,     -- scenario table
     index     = 0,
@@ -208,6 +213,8 @@ local function spawn_crowd(n)
     send(string.format('!perfcrowd %d', n));
 end
 
+local stress = stress_module.attach({state=state, mark=mark, send=send, now=clock_s});
+
 local function step()
     local sc = state.running;
     if (sc == nil) then return; end
@@ -219,7 +226,11 @@ local function step()
         return;
     end
     local cmd, label = s[2], s[3];
-    if (cmd == 'effects_ready') then
+    local handled, waiting = stress.command(cmd, label);
+    if waiting then return; end
+    if handled then
+        if not state.running then return; end
+    elseif (cmd == 'effects_ready') then
         local player = AshitaCore:GetMemoryManager():GetPlayer();
         local ready = player:GetMainJob() == 5 and player:GetMainJobLevel() == 99;
         for _, spell in ipairs(effect_spells) do ready = ready and player:HasSpell(spell[2]); end
@@ -235,7 +246,8 @@ local function step()
         mark(label);
         -- Measurement intervals end at this marker. Restore the server's normal
         -- clock after them; a forward reset can end the test session.
-        send('!addtime 0');
+        if stress.is_active() then stress.stop();
+        else send('!addtime 0'); end
         state.running = nil;
         return;
     elseif (cmd:sub(1, 6) == 'spawn ') then
@@ -269,10 +281,11 @@ local function start(name)
         print(chat.header(addon.name):append(chat.error('unknown scenario: ' .. tostring(name))));
         return;
     end
-    if name == 'effects' and AshitaCore:GetMemoryManager():GetParty():GetMemberName(0) ~= 'Hxitest' then
-        mark('scenario failed', ', "reason": "effects scenario requires local Hxitest"');
+    if (name == 'effects' or stress_module.is_scenario(name)) and AshitaCore:GetMemoryManager():GetParty():GetMemberName(0) ~= 'Hxitest' then
+        mark('scenario failed', ', "reason": "stress/effects scenario requires local Hxitest"');
         return;
     end
+    stress.start(name);
     state.running = sc; state.index = 0; state.pending_spell = nil;
     state.next_at = clock_s() + sc[1][1];
     mark('scenario start: ' .. name);
@@ -310,7 +323,7 @@ ashita.events.register('command', 'perfscene_command', function (e)
     e.blocked = true;
     if (#args >= 3 and args[2] == 'run') then start(args[3]);
     elseif (#args >= 2 and args[2] == 'stop') then
-        state.running = nil; state.pending_spell = nil; mark('scenario stopped');
+        stress.stop(); state.running = nil; state.pending_spell = nil; mark('scenario stopped');
     elseif (#args >= 2 and args[2] == 'list') then
         for k, _ in pairs(scenarios) do print(chat.header(addon.name):append(chat.message(k))); end
     end
@@ -337,6 +350,7 @@ ashita.events.register('d3d_present', 'perfscene_present', function ()
             start(state.auto);
         end
     end
+    stress.tick();
     if (state.running ~= nil and clock_s() >= state.next_at) then
         step();
     end
@@ -346,6 +360,10 @@ ashita.events.register('d3d_present', 'perfscene_present', function ()
         mark('scenario failed', ', "reason": "spell completion timed out after 15 seconds"');
     end
 end);
+
+ashita.events.register('packet_in', 'perfscene_stress_actions', stress.packet);
+ashita.events.register('text_in', 'perfscene_stress_audit', stress.text);
+ashita.events.register('unload', 'perfscene_stress_cleanup', stress.stop);
 
 -- Observe the local actor's action response without modifying or injecting packets.
 -- The first result is sufficient for these single-target self buffs.

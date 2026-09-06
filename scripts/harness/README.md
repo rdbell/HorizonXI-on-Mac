@@ -329,3 +329,97 @@ An Ashita Lua addon that logs frame rate, zone and rendered-entity count to CSV 
 agnostic, so it measures pathways that have no DXVK in them. **It does not currently load**:
 Ashita.dll in this install is interface 4.16 and every bundled plugin, including the `Addons`
 Lua host, is 4.15, so the plugin manager rejects them all. Kept for when that is fixed.
+
+### Repeatable city and AoE stress suite
+
+`stress-suite.py` extends `renderer-run.py`. It refuses to start with an existing game,
+launcher or Wine process, uses Local LSB/Hxitest only, and never restarts Docker. The plan
+prints without mutation unless `--execute` is passed:
+
+```sh
+python3 scripts/harness/stress-suite.py
+python3 scripts/harness/stress-suite.py --execute \
+  --output /path/outside/git/stress-baseline \
+  --graphics-profile "$HOME/Games/FFXI/HorizonXI/config/boot/horizonxi.ini"
+```
+
+The default uses a frozen copy of the full `scripts/default.txt` boot script. `--minimal`
+is a separately labeled addon-cost probe. `--background 2048` changes only the background
+size, retaining the window/menu settings. Without `--graphics-profile`, the saved **local**
+profile's graphics are used; do not assume they match the personal server profile.
+The same shader-cache seed is restored before **every** scenario. First encounters and
+repeated appearances remain separate phases; this is not a claim that the driver cache is
+cold. Keep the same seed, graphics profile, boot script and installed renderer for repeats.
+
+| Scenario | Workload |
+| --- | --- |
+| `crowd` | Mines baseline; 16, 32, 64 identical humanoid NPCs; 64 with seven fixed looks |
+| `arrivals` | Three identical 32-NPC arrival/removal cycles, each followed by a warm hold |
+| `camera` | 64-NPC crowd, four server-authoritative heading changes with Home reset and holds |
+| `aga8`, `aga24`, `aga40` | Stationary outdoor mob pack; idle hold; two rounds of ten Firaga casts under Chainspell |
+
+Use repeated `--scenario` options for a subset. Existing `town` and `effects` runs remain
+available through `renderer-run.py` for a second city viewpoint and the self-buff regression.
+The new city fixtures are **NPC rendering proxies**, not actual player clients. They do not
+model PC-only addon logic, equipment updates, player networking, or real player movement.
+Camera phases use discrete turns rather than a smooth camera sweep.
+
+Firaga runs prepare RDM99/**BLM49** and all spells. RDM alone cannot cast Firaga simply by
+learning it. Each round clears/reapplies Chainspell, restores MP and pack HP, uses
+`/targetnpc` and verifies that the selected target belongs to the fixture, and waits for each successful damage response plus three seconds before the next
+cast. LSB caps action packets at 15 targets. The client response must contain the expected
+`min(pack size, 15)` distinct fixture targets with positive damage. A separate server
+`MAGIC_USE` listener checks damage to every fixture mob before the cast is accepted.
+Reports retain both server hit counts and client packet target counts. Larger packs do
+not imply more than 15 spell targets are animated by the client. Missing responses stop the test after 15 seconds.
+These workloads deliberately isolate damage/effect/animation work: mobs cannot move,
+autoattack, cast, use TP moves or die. They use the retained Fafnir SQL template with a
+hornet model, level 1, and high HP, so they are synthetic targets, not normal hornet AI.
+
+Each individual game run is capped at **420 seconds**, with a 540-second outer process
+bound for launch/collection/rollback and a one-hour suite bound. The suite stops at the
+first invalid run. It installs a temporary `perfstress.lua` command into the existing map
+container and removes that file afterward. It refuses to overwrite an existing command.
+Fixtures use separate dynamic IDs, never relocate existing zone mobs, and have a maximum
+420-second lease. Normal completion, addon stop, and addon unload request immediate cleanup;
+the lease handles a killed client. Hxitest's test job/spells persist, as in the effects test.
+
+`stress-report.py RUN` produces per-phase FPS, pooled frame-time percentiles, worst frames,
+and counts over 50/100/500 ms. It includes whole frames crossing phase boundaries and rejects
+missing phases, target-count errors, missing Chainspell, gaps in frame data, wrong zones,
+draw-distance mismatches, and failed renderer/rollback checks. Exit status is nonzero for
+invalid runs. Detailed renderer timings are included only if captured; ordinary runs use
+`standard-nosample` and info-level renderer logging. Shader compilation totals are separate
+from frame durations. Host load/memory/pressure snapshots accompany each run; they are
+context, not a substitute for a matched quiet-host repeat.
+
+Client-resident entity counts are checked at phase boundaries, not claimed as actual
+visible pixel counts. **Review the settled screenshots for crowd visibility and correct
+rendering before accepting a comparison.** Inspect first-arrival versus repeated-arrival
+phases separately; do not average transitions together with settled throughput.
+
+Recovery after interruption:
+
+```sh
+python3 scripts/harness/renderer-run.py --restore /path/to/suite/SCENARIO
+python3 scripts/harness/stress-suite.py --restore-fixture /path/to/suite
+```
+
+The runner requires the game/Wine processes to be gone before restoring shared files.
+Private backups and boot snapshots belong outside Git. `--restore-fixture` checks the
+original container ID and installed command hash before removal. Expiry still clears
+entities if the command file has already been removed.
+
+For a renderer comparison, pass `--renderer-bundle` and `--renderer-config`; the candidate is
+staged through the existing signed-app workflow and its loaded hashes are verified. Use the
+same bundle on both sides when comparing a configuration option. `--level standard`,
+`--renderer-log`, `--env`, and `--dump-scene` support a separate diagnostic run. Diagnostic
+results must be labeled separately from ordinary timing runs. Any explicit guest sampling
+range must be checked against actual loaded modules before interpreting the profile.
+
+The Lua fixture and action-validation tests cover identity/zone restrictions, lease cleanup,
+spawn coordinates, existing target retention, response deadlines, optional action-packet
+fields, the 15-target packet cap, and full-pack server audits. Python checks cover workload
+completeness, frame continuity, cast order, Chainspell timing, snapshot restoration, and
+fixture ownership. Live validation results belong in the dated benchmark report; passing
+these tests alone does not establish in-game rendering or FPS.

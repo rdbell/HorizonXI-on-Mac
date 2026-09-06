@@ -316,7 +316,8 @@ class MenuRun:
         target = self.game_dir / "addons" / "perfscene"
         try:
             target.mkdir(parents=True, exist_ok=True)
-            shutil.copy(ADDON_SOURCE / "perfscene.lua", target / "perfscene.lua")
+            for source in ADDON_SOURCE.glob("*.lua"):
+                shutil.copy(source, target / source.name)
             scripts = self.game_dir / "scripts"
             default = (scripts / "default.txt").read_text(errors="replace")
             boot = scripts / "perfscene.txt"

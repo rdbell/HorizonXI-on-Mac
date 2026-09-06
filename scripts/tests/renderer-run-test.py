@@ -50,6 +50,12 @@ class RendererRunTests(unittest.TestCase):
         self.assertFalse(renderer.scene_text_matches("main menu", "Select Character"))
         self.assertFalse(renderer.scene_text_matches("character list", observed))
 
+    def test_clipped_character_count_requires_independent_identity(self):
+        clipped = "Hxitest No. of characters registered Select a character to play."
+        self.assertFalse(renderer.scene_text_matches("character list", clipped))
+        self.assertTrue(renderer.scene_text_matches("character list", clipped, True))
+        self.assertFalse(renderer.scene_text_matches("character list", "Other Select a character to play.", True))
+
     def test_background_override_preserves_other_settings_and_sections(self):
         original = ("[boot]\r\ncommand = private fixture\r\n0003 = 12\r\n"
                     "[ffxi.registry]\r\n0003 = 4096 ; width\r\n0004 = 4096\r\n"
