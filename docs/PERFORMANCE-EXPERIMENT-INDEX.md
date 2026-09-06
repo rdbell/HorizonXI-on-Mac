@@ -5,6 +5,11 @@ Read this before proposing or rerunning a performance experiment. Updated Septem
 capture has been audited. Linked reports retain methods, measurements, patches and limits.
 Game runs are currently paused at the user's request.
 
+Current user-approved baseline: [version 3.8 build 24 at 4096-square background](KNOWN-GOOD-2026-09-06.md).
+User reports common 100+ FPS, 120+ in light scenes, and rarely below 50 in crowded
+play. Preserve this app/configuration; these are play-test observations, not stress-suite
+percentiles. Reconcile workload differences before using synthetic results to change it.
+
 ## How to use this record
 
 - Distinguish **adopted**, **no demonstrated benefit**, **inconclusive**, **blocked**,
