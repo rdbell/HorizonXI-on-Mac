@@ -225,24 +225,27 @@ diff --git a/unix/unix/src/metal/command.rs b/unix/unix/src/metal/command.rs
 diff --git a/windows/core/src/config.rs b/windows/core/src/config.rs
 --- a/windows/core/src/config.rs
 +++ b/windows/core/src/config.rs
-@@ -148,6 +148,8 @@
+@@ -148,6 +148,10 @@
      ///
      /// File key: `render.mergePasses`.
      pub render_merge_passes: bool,
 +    /// Experimental render + readback in one synchronous command buffer.
 +    pub render_fuse_readback: bool,
++    /// Diagnostic: alternate fused readback every eight seconds.
++    pub render_fuse_readback_ab: bool,
      /// A newly bound same-size depth-stencil texture inherits the previous one's contents.
      ///
      /// D3D9-era drivers commonly backed all equal-size depth-stencil
-@@ -321,6 +323,7 @@
+@@ -321,6 +325,8 @@
              query_flush_immediate: false,
              render_submit_draws: 0,
              render_merge_passes: false,
 +            render_fuse_readback: false,
++            render_fuse_readback_ab: false,
              depth_alias_same_size: false,
              buffer_ignore_lock_bounds: false,
              vbib_retention_cap_bytes: 512 * 1024 * 1024,
-@@ -469,6 +472,7 @@
+@@ -469,6 +475,7 @@
          target: crate::LOG_TARGET,
          "config: render.submitDraws = {}", cfg.render_submit_draws
      );
@@ -250,10 +253,11 @@ diff --git a/windows/core/src/config.rs b/windows/core/src/config.rs
      info!(target: crate::LOG_TARGET, "config: render.mergePasses = {}", cfg.render_merge_passes);
      info!(
          target: crate::LOG_TARGET,
-@@ -558,6 +562,7 @@
+@@ -558,6 +565,8 @@
              Err(_) => log::warn!(target: crate::LOG_TARGET,
                  "{source}: invalid render.submitDraws {value:?}, expected a nonnegative integer"),
          },
++        "render.fuseReadbackAB" => assign_bool(source, key, value, &mut cfg.render_fuse_readback_ab),
 +        "render.fuseReadback" => assign_bool(source, key, value, &mut cfg.render_fuse_readback),
          "render.mergePasses" => assign_bool(source, key, value, &mut cfg.render_merge_passes),
          "depth.aliasSameSize" => assign_bool(source, key, value, &mut cfg.depth_alias_same_size),
@@ -341,7 +345,31 @@ diff --git a/windows/d3d9/src/encoder.rs b/windows/d3d9/src/encoder.rs
 diff --git a/windows/d3d9/src/surface.rs b/windows/d3d9/src/surface.rs
 --- a/windows/d3d9/src/surface.rs
 +++ b/windows/d3d9/src/surface.rs
-@@ -2799,8 +2799,6 @@
+@@ -2745,6 +2745,23 @@
+ /// read-back BEFORE the flush so the store-action optimiser (Rule D) keeps the
+ /// rendered content. A blit failure leaves the staging as-is (the zero-init /
+ /// prior content) — the lock still succeeds.
++/// Diagnostic within-run comparison, default off. Transition frames must be
++/// excluded by the report because a mode can change between reads in a frame.
++fn fused_readback_enabled() -> bool {
++    if !crate::config::CONFIG.render_fuse_readback_ab {
++        return crate::config::CONFIG.render_fuse_readback;
++    }
++    use std::sync::{OnceLock, atomic::{AtomicU64, Ordering}};
++    static START: OnceLock<std::time::Instant> = OnceLock::new();
++    static LAST: AtomicU64 = AtomicU64::new(u64::MAX);
++    let block = START.get_or_init(std::time::Instant::now).elapsed().as_secs() / 8;
++    let enabled = block % 2 != 0;
++    if LAST.swap(block, Ordering::Relaxed) != block {
++        log::info!(target: "mtld3d::readback", "readback_ab block={block} fused={enabled}");
++    }
++    enabled
++}
++
+ fn lockable_rt_readback_fill(inner: &mut SurfaceInner, bpp: u32) {
+     let timer = log::log_enabled!(target: "mtld3d::readback", log::Level::Trace)
+         .then(std::time::Instant::now);
+@@ -2799,8 +2816,6 @@
      // reads it right after. Mark it read-back BEFORE the flush so
      // `finalize_store_actions` keeps the rendered content.
      device_inner.push_op(Box::new(move |enc| enc.note_color_read_back(tex_handle)));
@@ -350,12 +378,12 @@ diff --git a/windows/d3d9/src/surface.rs b/windows/d3d9/src/surface.rs
      let mut params = BlitTextureToBufferParams {
          queue_handle: device_inner.queue_handle(),
          device_handle: device_inner.device_handle(),
-@@ -2824,10 +2822,18 @@
+@@ -2824,10 +2839,18 @@
          // uncompressed and a block row is a pixel row.
          block_height: 1,
      };
 -    let status = unix_call(&mut params);
-+    let fused = crate::config::CONFIG.render_fuse_readback;
++    let fused = fused_readback_enabled();
 +    let (status, flush_elapsed) = if fused {
 +        let status = device_inner.flush_with_readback(params);
 +        (status, timer.map(|start| start.elapsed()))
