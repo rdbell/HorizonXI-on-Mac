@@ -1,5 +1,8 @@
 # mtld3d performance experiments
 
+Start with the [experiment decision index](PERFORMANCE-EXPERIMENT-INDEX.md) for current
+outcomes, superseded conclusions, and conditions for retrying earlier experiments.
+
 The later battle-effect investigation and installed build 24 are documented in
 [BATTLE-EFFECTS-2026-09-05.md](BATTLE-EFFECTS-2026-09-05.md). It removes the reproduced
 Chainspell freezes by restoring normal data-page execution protection under Wine.

@@ -1,5 +1,8 @@
 # Where the frame time actually goes
 
+Start with the [experiment decision index](PERFORMANCE-EXPERIMENT-INDEX.md) for current
+outcomes, superseded conclusions, and conditions for retrying earlier experiments.
+
 Written 2026-08-11. This document replaces the performance model in `FINDINGS.md` and
 `BATCHING.md`. Those two described a renderer-bound game and proposed a draw-call batcher as the
 route to 30 fps. **That model was wrong**, and the measurements below say why. Read this before
