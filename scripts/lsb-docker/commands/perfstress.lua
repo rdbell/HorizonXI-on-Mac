@@ -17,7 +17,7 @@ xi.perfFixtures = xi.perfFixtures or {}
 local function remove(row)
     local entity = row.mob and GetMobByID(row.id) or GetNPCByID(row.id)
     if entity then
-        if row.mob then DespawnMob(row.id) else entity:setStatus(xi.status.DISAPPEAR) end
+        if row.mob then DespawnMob(row.id) else entity:hideNPC(600) end
     end
 end
 local function clear(owner)
@@ -63,7 +63,7 @@ commandObj.onTrigger = function(player, count, mode, lease)
         local params = {
             objtype = mob and xi.objType.MOB or xi.objType.NPC,
             name = string.format('Bench%02d', i), packetName = string.format('Bench%02d', i),
-            x = x + (col - 3.5) * spacing, y = y, z = z + 7 + row * spacing,
+            x = x + (count == 1 and 0 or (col - 3.5) * spacing), y = y, z = z + 7 + row * spacing,
             rotation = 192, releaseIdOnDisappear = true,
             look = mob and 272 or looks[mode == 'mixed' and ((i - 1) % #looks + 1) or 1],
             widescan = 0,

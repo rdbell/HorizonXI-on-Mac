@@ -12,7 +12,7 @@ for name,steps in pairs(plans) do
     if name:match('aga') then assert(casts==20) end
 end
 local clock,commands,marks,state,entities=0,{},{},{running={},index=1,zone=106},{}
-local own=42
+local own,selected=42,nil
 local entity={
     GetName=function(_,i) return entities[i] and entities[i].name end,
     GetServerId=function(_,i) return entities[i] and entities[i].id or 0 end,
@@ -20,7 +20,7 @@ local entity={
 }
 AshitaCore={GetMemoryManager=function() return {
     GetEntity=function() return entity end,
-    GetTarget=function() return {GetTargetIndex=function() return 1 end} end,
+    GetTarget=function() return {GetTargetIndex=function() return 1 end,SetTarget=function(_,i) selected=i end} end,
     GetParty=function() return {GetMemberServerId=function() return own end} end,
     GetPlayer=function() return {GetMainJob=function() return 5 end,GetMainJobLevel=function() return 99 end,
         GetSubJob=function() return 4 end,GetSubJobLevel=function() return 49 end,HasSpell=function() return true end} end,
@@ -47,6 +47,7 @@ for i=1,8 do entities[i]={name=string.format('Bench%02d',i),id=100+i} end
 local api=reset();api.start('aga8');api.command('fixture aga 8','setup')
 api.command('fixture_ready','ready');api.tick()
 assert(marks[#marks].label=='fixture confirmed')
+api.command('align_camera','camera target selected');assert(selected==1,'camera targeted outside the fixture')
 local sent=#commands
 api.command('target_pack','target')
 assert(#commands==sent,'retargeting toggled off an already valid target')

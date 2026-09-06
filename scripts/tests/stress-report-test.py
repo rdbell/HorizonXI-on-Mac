@@ -30,6 +30,21 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(phases[1]['casts'],10)
         self.assertEqual(phases[0]['fps'],20)
 
+    def test_city_population_definitions(self):
+        markers=[]
+        for i,(name,count) in enumerate(zip(r.EXPECTED['crowd'],(0,16,32,32))):
+            for label,epoch in [('stress phase start',10+i*40),('stress phase end',40+i*40)]:
+                markers.append(dict(label=label,epoch=epoch,phase=name,zone=234,expected_entities=count,
+                                    fixture_mode='city',world_distance=20,entity_distance=20,x=0,y=0,z=0))
+        markers.extend([dict(label='fixture confirmed',epoch=165,expected_entities=0),dict(label='done',epoch=166)])
+        frames=[dict(epoch=i/20,frame_ms=50,zone=234) for i in range(1,3401)]
+        phases,errors=r.phases(frames,markers,'crowd')
+        self.assertEqual(errors,[])
+        self.assertTrue(all(p['valid'] for p in phases))
+        markers[-3]['expected_entities']=64
+        phases,_=r.phases(frames,markers,'crowd')
+        self.assertFalse(phases[-1]['valid'])
+
     def test_missing_targets(self):
         f,m=self.fixture()
         next(x for x in m if x['label']=='stress cast completed')['hit_count']=7

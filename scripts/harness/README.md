@@ -353,16 +353,20 @@ cold. Keep the same seed, graphics profile, boot script and installed renderer f
 
 | Scenario | Workload |
 | --- | --- |
-| `crowd` | Mines baseline; 16, 32, 64 identical humanoid NPCs; 64 with seven fixed looks |
+| `crowd` | Mines baseline; 16 and 32 identical humanoid NPCs; 32 with seven fixed looks |
 | `arrivals` | Three identical 32-NPC arrival/removal cycles, each followed by a warm hold |
-| `camera` | 64-NPC crowd, four server-authoritative heading changes with Home reset and holds |
+| `camera` | 32-NPC crowd, four server-authoritative heading changes with Home reset and holds |
 | `aga8`, `aga24`, `aga40` | Stationary outdoor mob pack; idle hold; two rounds of ten Firaga casts under Chainspell |
 
 Use repeated `--scenario` options for a subset. Existing `town` and `effects` runs remain
 available through `renderer-run.py` for a second city viewpoint and the self-buff regression.
 The new city fixtures are **NPC rendering proxies**, not actual player clients. They do not
 model PC-only addon logic, equipment updates, player networking, or real player movement.
-Camera phases use discrete turns rather than a smooth camera sweep.
+City setup aligns the camera with a temporary fixture target using `/lockon`, then removes
+that target before measurement. The 32-NPC default stays below the observed client display
+limit. A 64-NPC probe received all records but activated only 36-38 models, so it is not a
+valid 64-model workload. Camera phases remain experimental: Home delivery does not prove
+that the client camera followed a server heading. Review every viewpoint before use.
 
 Firaga runs prepare RDM99/**BLM49** and all spells. RDM alone cannot cast Firaga simply by
 learning it. Each round clears/reapplies Chainspell, restores MP and pack HP, uses

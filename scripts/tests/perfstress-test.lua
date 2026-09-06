@@ -9,7 +9,7 @@ local zoneid=234
 local zone={getID=function() return zoneid end,insertDynamicEntity=function(_,p)
     nextid=nextid+1
     local id=nextid
-    local e={getID=function() return id end,setStatus=function() live[id]=nil end,
+    local e={getID=function() return id end,hideNPC=function() live[id]=nil end,
         timer=function(_,ms,f) timers[#timers+1]={ms,f} end}
     for _,name in ipairs({'setSpawn','setPos','setDropID','setMobMod','spawn','setAutoAttackEnabled','setMagicCastingEnabled',
                          'setMobAbilityEnabled','setBaseSpeed','setUnkillable','setMaxHP','setHP'}) do

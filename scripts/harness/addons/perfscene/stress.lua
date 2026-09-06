@@ -15,7 +15,7 @@ function M.scenarios(world, entities)
             {1, '/fps 0', 'fps uncapped'}, {1, world, 'world draw distance set'},
             {1, entities, 'entity draw distance set'},
             {2, aga and '!exec player:setPos(30,-1,60,192,106)'
-                    or '!exec player:setPos(39,0,-49,192,234)', 'stress zone requested'},
+                    or '!exec player:setPos(0,0,-90,192,234)', 'stress zone requested'},
             {8, '!setweather 0', 'clear weather requested'},
             {2, 'home', 'camera reset requested'},
             {2, 'fixture clear 0', 'fixture cleared'},
@@ -24,6 +24,14 @@ function M.scenarios(world, entities)
         local function phase(id, seconds)
             add(0.2, 'phase_start '..id, id..' settled')
             add(seconds, 'phase_end '..id, id..' end')
+        end
+        if not aga then
+            add(1, 'fixture city 1', 'camera anchor requested')
+            add(5, 'fixture_ready', 'camera anchor confirmed')
+            add(1, 'align_camera', 'camera target selected')
+            add(1, '/lockon', 'camera lock requested')
+            add(3, '/lockon', 'camera unlock requested')
+            add(1, 'fixture clear 0', 'camera anchor removed')
         end
         if aga then
             add(2, '!changejob RDM 99', 'RDM99 requested')
@@ -47,14 +55,14 @@ function M.scenarios(world, entities)
         elseif name == 'crowd' then
             add(3, 'fixture_ready', 'empty fixture confirmed')
             phase('empty', 30)
-            for _, count in ipairs({16, 32, 64}) do
+            for _, count in ipairs({16, 32}) do
                 add(1, 'fixture city '..count, 'identical crowd requested')
                 add(10, 'fixture_ready', 'crowd confirmed')
                 phase('identical-'..count, 30)
             end
-            add(1, 'fixture mixed 64', 'mixed crowd requested')
+            add(1, 'fixture mixed 32', 'mixed crowd requested')
             add(10, 'fixture_ready', 'mixed crowd confirmed')
-            phase('mixed-64', 30)
+            phase('mixed-32', 30)
         elseif name == 'arrivals' then
             for round = 1, 3 do
                 add(1, 'fixture clear 0', 'crowd removed')
@@ -66,14 +74,14 @@ function M.scenarios(world, entities)
                 phase('arrival-warm-'..round, 20)
             end
         else
-            add(1, 'fixture mixed 64', 'camera crowd requested')
+            add(1, 'fixture mixed 32', 'camera crowd requested')
             add(10, 'fixture_ready', 'camera crowd confirmed')
             phase('facing-crowd', 30)
             -- Server-authoritative headings with a camera reset at each stop.
             -- Deliberate discrete turns; no wall-clock key hold masquerading as a fixed path.
             for i, heading in ipairs({0, 64, 128, 192}) do
                 add(1, 'phase_start turn-'..i, 'turn-'..i..' start')
-                add(0.2, '!exec player:setPos(39,0,-49,'..heading..',234)', 'heading requested')
+                add(0.2, '!exec player:setPos(0,0,-90,'..heading..',234)', 'heading requested')
                 add(2, 'home', 'camera reset requested')
                 add(8, 'phase_end turn-'..i, 'turn-'..i..' end')
                 phase('heading-'..heading, 20)
@@ -186,6 +194,18 @@ function M.attach(ctx)
         elseif cmd:match('^phase_end ') then
             if not confirm() then fail('fixture population changed during phase')
             else mark('stress phase end',metadata(cmd:sub(11))); phase=nil end
+        elseif cmd=='align_camera' then
+            local mem=AshitaCore:GetMemoryManager()
+            if not confirm() then fail('camera anchor missing')
+            else
+                for index=0,2303 do
+                    if ids[mem:GetEntity():GetServerId(index)] then
+                        mem:GetTarget():SetTarget(index,true)
+                        break
+                    end
+                end
+                mark(label)
+            end
         elseif cmd=='target_pack' then
             local mem=AshitaCore:GetMemoryManager()
             local index=mem:GetTarget():GetTargetIndex(0)
@@ -208,7 +228,20 @@ function M.attach(ctx)
     end
     function api.tick()
         if not active then return end
-        if pending and now()>=deadline then fail('stress response timed out after 15 seconds'); return end
+        if pending and now()>=deadline then
+            if pending=='fixture' then
+                local _,count=residents()
+                local e=AshitaCore:GetMemoryManager():GetEntity()
+                for index=0,2303 do
+                    local name=e:GetName(index)
+                    if name and name:match('^Bench%d%d$') then
+                        mark('fixture entity diagnostic',string.format(', "entity_name": "%s", "entity_index": %d, "render_flags": %d',name,index,e:GetRenderFlags0(index)))
+                    end
+                end
+                fail(string.format('fixture timeout: expected %d resident entities, observed %d',expected,count))
+            else fail('stress response timed out after 15 seconds') end
+            return
+        end
         if pending=='fixture' and now()>=polls then
             polls=now()+0.5
             if confirm() then

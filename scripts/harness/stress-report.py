@@ -11,7 +11,7 @@ SPEC = importlib.util.spec_from_file_location('effects', Path(__file__).with_nam
 effects = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(effects)
 EXPECTED = {
-    'crowd': ['empty', 'identical-16', 'identical-32', 'identical-64', 'mixed-64'],
+    'crowd': ['empty', 'identical-16', 'identical-32', 'mixed-32'],
     'arrivals': [x for n in range(1, 4) for x in (f'arrival-{n}', f'arrival-warm-{n}')],
     'camera': ['facing-crowd'] + [x for n, h in enumerate((0,64,128,192), 1)
                                 for x in (f'turn-{n}', f'heading-{h}')],
@@ -56,7 +56,7 @@ def phases(frames, markers, scenario, distance=20):
         target_count = (int(scenario[3:]) if scenario.startswith('aga') else
                         0 if name=='empty' else
                         int(name.rsplit('-',1)[1]) if name.startswith('identical-') else
-                        32 if scenario=='arrivals' else 64)
+                        32)
         if end.get('expected_entities') != target_count:
             errors.append('phase population differs from scenario definition')
         if any(abs(start.get(k, math.inf)-end.get(k, -math.inf))>0.1 for k in ('x','y','z')):
