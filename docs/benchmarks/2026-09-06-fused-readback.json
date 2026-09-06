@@ -773,5 +773,45 @@
         }
       ]
     }
-  ]
+  ],
+  "resolution_diagnostic": {
+    "background": 1024,
+    "menu_unchanged": true,
+    "full_addons": true,
+    "trace_enabled": true,
+    "valid": true,
+    "restoration": {
+      "files_restored": 44,
+      "preferences_restored": true,
+      "docker_unchanged": true,
+      "related_processes": []
+    },
+    "phases": [
+      {
+        "name": "empty",
+        "fps": 37.438,
+        "p99_ms": 33.603,
+        "frames_over_100ms": 0
+      },
+      {
+        "name": "identical-16",
+        "fps": 25.627,
+        "p99_ms": 45.335,
+        "frames_over_100ms": 0
+      },
+      {
+        "name": "identical-32",
+        "fps": 20.031,
+        "p99_ms": 54.66,
+        "frames_over_100ms": 0
+      },
+      {
+        "name": "mixed-32",
+        "fps": 20.751,
+        "p99_ms": 53.443,
+        "frames_over_100ms": 0
+      }
+    ],
+    "caveat": "Separate launch; host drift prevents precise causal FPS attribution. Quality-changing diagnostic only."
+  }
 }

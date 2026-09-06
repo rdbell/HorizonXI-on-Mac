@@ -105,3 +105,39 @@ resolution and full addons, to distinguish high-resolution rendering/store cost
 from fixed synchronization latency. This is a quality-changing diagnostic, not a
 proposed user-setting change. After that, identify the game's consumer of the
 16x16 masks before considering changes to their rendering or update frequency.
+
+## Resolution diagnostic and paused handoff
+
+The 1024-square background diagnostic completed with full addons and unchanged
+menu resolution. FPS was 37.438 empty, 25.627 with 16 identical characters, 20.031
+with 32 identical, and 20.751 with 32 mixed. The 32-identical scene spent about
+12.01 ms/frame flushing and 13.01 ms/frame reading back, versus approximately
+12.45 and 18.61 in E's 4096-square off-mode windows. Sixteen times fewer background
+pixels reduced part of the readback wait but did not remove the bottleneck.
+Separate-launch drift prevents assigning an exact causal FPS gain. This setting
+was restored and is not a shipped optimization.
+
+User requested a pause after this run. No further benchmark launches are scheduled.
+The run restored 44 file states and preferences, removed the server fixture, and
+reported Docker unchanged. Its game PID was 9401. A separate game PID 28868 started
+after benchmark cleanup and was left untouched.
+
+Next steps, analysis first:
+
+1. Identify the FFXI caller and consumer of the freshly rewritten 16x16 surfaces.
+   The visibility-mask interpretation is inferred from draw/depth state, not proven
+   by caller disassembly. Do not cache or delay their pixels without this evidence.
+2. Split CPU encoder replay, native encoding, GPU execution, and wakeup latency
+   around representative readbacks. Use within-run controls where possible; a
+   shorter command-buffer count is not a reliable proxy for lower frame time.
+3. Reconcile the rest of the frame budget. At roughly 56 ms/frame, the measured
+   31 ms readback path does not explain all of the 8.33 ms target for 120 FPS.
+   Even an unrealistic removal of that entire path leaves about 25 ms. This is
+   rough budgeting, not a predicted speedup: queued rendering and overlap change
+   when synchronization changes. Keep addons fixed while profiling shared renderer
+   and runtime costs.
+
+A separate source-level lead is the launcher's LuaJITGuard and the documented
+`lj_mcode_patch` crash in Addons.dll. It disables JIT across addon entry points.
+Investigating the shared compiler/runtime fault fits the general-performance goal;
+this session did not change the guard or attempt to enable JIT.
