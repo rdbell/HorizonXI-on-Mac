@@ -1,0 +1,777 @@
+{
+  "experiment": "fused synchronous readback",
+  "runs": [
+    {
+      "name": "off-a",
+      "valid": true,
+      "restoration": {
+        "files_restored": 44,
+        "preferences_restored": true,
+        "docker_unchanged": true,
+        "related_processes": []
+      },
+      "network": false,
+      "inputs": {
+        "boot.txt": "966d6cb4530e010cc88ca67e965f84e005358cb365325b9ba6632a436bce8768",
+        "shaders.bin": "739984354253257c91f7eb1b895b0dc478123e4b412db99e0a3f807c7e1042ae"
+      },
+      "renderer_files": {
+        "native/i386-windows/d3d9.dll": "d015eebb37c4aa30f641659693d899be715e30c23cb527bffdaf89548a383e5d",
+        "wine/i386-windows/mtld3d.dll": "6618f35ca777b8c16d76e01e3261d2f17040b86ed7e88f34f6975d3ec6ac3701",
+        "wine/x86_64-unix/mtld3d.so": "b9b48faed4923fe6110a6105e4d882622be3b459ae9c908f3f8877319f0c88d6",
+        "prefix-markers/syswow64/mtld3d.dll": "a74c0363a54b92db5deb731533e27d1248b9e51bc770dac281f8925e518123dc",
+        "prefix-markers/system32/mtld3d.dll": "602de35e20ca24d8d44eddc4e7a1d24a428e80fedc8aa012666cb35caa24a1af"
+      },
+      "phases": [
+        {
+          "name": "empty",
+          "fps": 34.321,
+          "p50_ms": 29.035,
+          "p99_ms": 35.807,
+          "max_ms": 101.512,
+          "frames_over_100ms": 1
+        },
+        {
+          "name": "identical-16",
+          "fps": 23.512,
+          "p50_ms": 42.329,
+          "p99_ms": 49.571,
+          "max_ms": 67.468,
+          "frames_over_100ms": 0
+        },
+        {
+          "name": "identical-32",
+          "fps": 18.284,
+          "p50_ms": 54.256,
+          "p99_ms": 61.216,
+          "max_ms": 116.616,
+          "frames_over_100ms": 1
+        },
+        {
+          "name": "mixed-32",
+          "fps": 19.026,
+          "p50_ms": 52.441,
+          "p99_ms": 58.219,
+          "max_ms": 90.614,
+          "frames_over_100ms": 0
+        }
+      ],
+      "readback_errors": 0,
+      "nx_enforced": true
+    },
+    {
+      "name": "on-b",
+      "valid": true,
+      "restoration": {
+        "files_restored": 44,
+        "preferences_restored": true,
+        "docker_unchanged": true,
+        "related_processes": []
+      },
+      "network": false,
+      "inputs": {
+        "boot.txt": "966d6cb4530e010cc88ca67e965f84e005358cb365325b9ba6632a436bce8768",
+        "shaders.bin": "739984354253257c91f7eb1b895b0dc478123e4b412db99e0a3f807c7e1042ae"
+      },
+      "renderer_files": {
+        "native/i386-windows/d3d9.dll": "d015eebb37c4aa30f641659693d899be715e30c23cb527bffdaf89548a383e5d",
+        "wine/i386-windows/mtld3d.dll": "6618f35ca777b8c16d76e01e3261d2f17040b86ed7e88f34f6975d3ec6ac3701",
+        "wine/x86_64-unix/mtld3d.so": "b9b48faed4923fe6110a6105e4d882622be3b459ae9c908f3f8877319f0c88d6",
+        "prefix-markers/syswow64/mtld3d.dll": "a74c0363a54b92db5deb731533e27d1248b9e51bc770dac281f8925e518123dc",
+        "prefix-markers/system32/mtld3d.dll": "602de35e20ca24d8d44eddc4e7a1d24a428e80fedc8aa012666cb35caa24a1af"
+      },
+      "phases": [
+        {
+          "name": "empty",
+          "fps": 29.588,
+          "p50_ms": 33.578,
+          "p99_ms": 43.176,
+          "max_ms": 53.467,
+          "frames_over_100ms": 0
+        },
+        {
+          "name": "identical-16",
+          "fps": 18.138,
+          "p50_ms": 54.466,
+          "p99_ms": 73.809,
+          "max_ms": 84.743,
+          "frames_over_100ms": 0
+        },
+        {
+          "name": "identical-32",
+          "fps": 14.989,
+          "p50_ms": 66.766,
+          "p99_ms": 79.129,
+          "max_ms": 99.797,
+          "frames_over_100ms": 0
+        },
+        {
+          "name": "mixed-32",
+          "fps": 15.451,
+          "p50_ms": 62.841,
+          "p99_ms": 89.34,
+          "max_ms": 157.621,
+          "frames_over_100ms": 2
+        }
+      ],
+      "readback_errors": 0,
+      "nx_enforced": true
+    },
+    {
+      "name": "off-c",
+      "valid": true,
+      "restoration": {
+        "files_restored": 44,
+        "preferences_restored": true,
+        "docker_unchanged": true,
+        "related_processes": []
+      },
+      "network": false,
+      "inputs": {
+        "boot.txt": "966d6cb4530e010cc88ca67e965f84e005358cb365325b9ba6632a436bce8768",
+        "shaders.bin": "739984354253257c91f7eb1b895b0dc478123e4b412db99e0a3f807c7e1042ae"
+      },
+      "renderer_files": {
+        "native/i386-windows/d3d9.dll": "d015eebb37c4aa30f641659693d899be715e30c23cb527bffdaf89548a383e5d",
+        "wine/i386-windows/mtld3d.dll": "6618f35ca777b8c16d76e01e3261d2f17040b86ed7e88f34f6975d3ec6ac3701",
+        "wine/x86_64-unix/mtld3d.so": "b9b48faed4923fe6110a6105e4d882622be3b459ae9c908f3f8877319f0c88d6",
+        "prefix-markers/syswow64/mtld3d.dll": "a74c0363a54b92db5deb731533e27d1248b9e51bc770dac281f8925e518123dc",
+        "prefix-markers/system32/mtld3d.dll": "602de35e20ca24d8d44eddc4e7a1d24a428e80fedc8aa012666cb35caa24a1af"
+      },
+      "phases": [
+        {
+          "name": "empty",
+          "fps": 29.183,
+          "p50_ms": 34.115,
+          "p99_ms": 41.51,
+          "max_ms": 45.101,
+          "frames_over_100ms": 0
+        },
+        {
+          "name": "identical-16",
+          "fps": 20.297,
+          "p50_ms": 48.757,
+          "p99_ms": 59.8,
+          "max_ms": 63.649,
+          "frames_over_100ms": 0
+        },
+        {
+          "name": "identical-32",
+          "fps": 15.142,
+          "p50_ms": 64.247,
+          "p99_ms": 84.945,
+          "max_ms": 180.626,
+          "frames_over_100ms": 1
+        },
+        {
+          "name": "mixed-32",
+          "fps": 16.877,
+          "p50_ms": 59.284,
+          "p99_ms": 66.904,
+          "max_ms": 68.597,
+          "frames_over_100ms": 0
+        }
+      ],
+      "readback_errors": 0,
+      "nx_enforced": true
+    },
+    {
+      "name": "alternating-d",
+      "valid": true,
+      "restoration": {
+        "files_restored": 44,
+        "preferences_restored": true,
+        "docker_unchanged": true,
+        "related_processes": []
+      },
+      "network": false,
+      "inputs": {
+        "boot.txt": "966d6cb4530e010cc88ca67e965f84e005358cb365325b9ba6632a436bce8768",
+        "shaders.bin": "739984354253257c91f7eb1b895b0dc478123e4b412db99e0a3f807c7e1042ae"
+      },
+      "renderer_files": {
+        "native/i386-windows/d3d9.dll": "d015eebb37c4aa30f641659693d899be715e30c23cb527bffdaf89548a383e5d",
+        "wine/i386-windows/mtld3d.dll": "6618f35ca777b8c16d76e01e3261d2f17040b86ed7e88f34f6975d3ec6ac3701",
+        "wine/x86_64-unix/mtld3d.so": "b9b48faed4923fe6110a6105e4d882622be3b459ae9c908f3f8877319f0c88d6",
+        "prefix-markers/syswow64/mtld3d.dll": "a74c0363a54b92db5deb731533e27d1248b9e51bc770dac281f8925e518123dc",
+        "prefix-markers/system32/mtld3d.dll": "602de35e20ca24d8d44eddc4e7a1d24a428e80fedc8aa012666cb35caa24a1af"
+      },
+      "phases": [
+        {
+          "name": "empty",
+          "fps": 34.467,
+          "p50_ms": 28.966,
+          "p99_ms": 34.607,
+          "max_ms": 49.714,
+          "frames_over_100ms": 0
+        },
+        {
+          "name": "identical-16",
+          "fps": 23.215,
+          "p50_ms": 43.108,
+          "p99_ms": 49.971,
+          "max_ms": 64.16,
+          "frames_over_100ms": 0
+        },
+        {
+          "name": "identical-32",
+          "fps": 18.265,
+          "p50_ms": 54.52,
+          "p99_ms": 61.558,
+          "max_ms": 92.23,
+          "frames_over_100ms": 0
+        },
+        {
+          "name": "mixed-32",
+          "fps": 18.928,
+          "p50_ms": 52.753,
+          "p99_ms": 60.171,
+          "max_ms": 61.333,
+          "frames_over_100ms": 0
+        }
+      ],
+      "within_run": {
+        "valid": false,
+        "switch_count": 28,
+        "phases": [
+          {
+            "phase": "empty",
+            "modes": {
+              "false": {
+                "windows": [
+                  {
+                    "block": 10,
+                    "frames": 172,
+                    "seconds": 4.9775048989999995,
+                    "fps": 34.55546573837737
+                  },
+                  {
+                    "block": 12,
+                    "frames": 151,
+                    "seconds": 4.338972802,
+                    "fps": 34.80086345099888
+                  }
+                ],
+                "frames": 323,
+                "seconds": 9.316477701,
+                "fps": 34.66975506905686,
+                "p50_ms": 28.640699,
+                "p99_ms": 35.019299
+              },
+              "true": {
+                "windows": [
+                  {
+                    "block": 9,
+                    "frames": 159,
+                    "seconds": 4.625465898000001,
+                    "fps": 34.37491563147181
+                  },
+                  {
+                    "block": 11,
+                    "frames": 172,
+                    "seconds": 4.984581100000001,
+                    "fps": 34.50641017757741
+                  }
+                ],
+                "frames": 331,
+                "seconds": 9.610046998,
+                "fps": 34.44311979628052,
+                "p50_ms": 29.085901,
+                "p99_ms": 33.960801
+              }
+            },
+            "valid": true,
+            "fps_change_percent": -0.6536973576101723
+          },
+          {
+            "phase": "identical-16",
+            "modes": {
+              "false": {
+                "windows": [
+                  {
+                    "block": 14,
+                    "frames": 76,
+                    "seconds": 3.2953728989999997,
+                    "fps": 23.062640353406636
+                  },
+                  {
+                    "block": 16,
+                    "frames": 115,
+                    "seconds": 4.946906401000001,
+                    "fps": 23.246851805555313
+                  }
+                ],
+                "frames": 191,
+                "seconds": 8.2422793,
+                "fps": 23.17320161669358,
+                "p50_ms": 43.222699,
+                "p99_ms": 61.2517
+              },
+              "true": {
+                "windows": [
+                  {
+                    "block": 15,
+                    "frames": 115,
+                    "seconds": 4.944692098000001,
+                    "fps": 23.257262074318945
+                  },
+                  {
+                    "block": 17,
+                    "frames": 116,
+                    "seconds": 4.9780492,
+                    "fps": 23.302300829007475
+                  }
+                ],
+                "frames": 231,
+                "seconds": 9.922741298,
+                "fps": 23.279857154651378,
+                "p50_ms": 42.974701,
+                "p99_ms": 49.7378
+              }
+            },
+            "valid": true,
+            "fps_change_percent": 0.46025378677483353
+          },
+          {
+            "phase": "identical-32",
+            "modes": {
+              "false": {
+                "windows": [
+                  {
+                    "block": 20,
+                    "frames": 90,
+                    "seconds": 4.916390496,
+                    "fps": 18.306113005715158
+                  },
+                  {
+                    "block": 22,
+                    "frames": 91,
+                    "seconds": 4.9226495990000005,
+                    "fps": 18.485979586783095
+                  }
+                ],
+                "frames": 181,
+                "seconds": 9.839040095,
+                "fps": 18.396103507290363,
+                "p50_ms": 54.176001,
+                "p99_ms": 60.599899
+              },
+              "true": {
+                "windows": [
+                  {
+                    "block": 19,
+                    "frames": 36,
+                    "seconds": 1.9545191,
+                    "fps": 18.418853005836578
+                  },
+                  {
+                    "block": 21,
+                    "frames": 89,
+                    "seconds": 4.9337264009999995,
+                    "fps": 18.03910325914321
+                  }
+                ],
+                "frames": 125,
+                "seconds": 6.888245501,
+                "fps": 18.146856116242247,
+                "p50_ms": 54.9378,
+                "p99_ms": 63.351201
+              }
+            },
+            "valid": true,
+            "fps_change_percent": -1.354892306130695
+          },
+          {
+            "phase": "mixed-32",
+            "modes": {
+              "false": {
+                "windows": [
+                  {
+                    "block": 26,
+                    "frames": 93,
+                    "seconds": 4.935372598,
+                    "fps": 18.843562092492697
+                  }
+                ],
+                "frames": 93,
+                "seconds": 4.935372598,
+                "fps": 18.843562092492697,
+                "p50_ms": 52.9637,
+                "p99_ms": 61.120301
+              },
+              "true": {
+                "windows": [
+                  {
+                    "block": 25,
+                    "frames": 93,
+                    "seconds": 4.944202701,
+                    "fps": 18.809908416819177
+                  },
+                  {
+                    "block": 27,
+                    "frames": 95,
+                    "seconds": 4.984279901,
+                    "fps": 19.059924780897653
+                  }
+                ],
+                "frames": 188,
+                "seconds": 9.928482602,
+                "fps": 18.935421205464884,
+                "p50_ms": 52.800399999999996,
+                "p99_ms": 60.483599
+              }
+            },
+            "valid": false,
+            "fps_change_percent": 0.4874827409027116
+          }
+        ]
+      },
+      "readback_errors": 0,
+      "nx_enforced": true
+    },
+    {
+      "name": "alternating-e",
+      "valid": true,
+      "restoration": {
+        "files_restored": 44,
+        "preferences_restored": true,
+        "docker_unchanged": true,
+        "related_processes": []
+      },
+      "network": false,
+      "inputs": {
+        "boot.txt": "966d6cb4530e010cc88ca67e965f84e005358cb365325b9ba6632a436bce8768",
+        "shaders.bin": "739984354253257c91f7eb1b895b0dc478123e4b412db99e0a3f807c7e1042ae"
+      },
+      "renderer_files": {
+        "native/i386-windows/d3d9.dll": "d015eebb37c4aa30f641659693d899be715e30c23cb527bffdaf89548a383e5d",
+        "wine/i386-windows/mtld3d.dll": "6618f35ca777b8c16d76e01e3261d2f17040b86ed7e88f34f6975d3ec6ac3701",
+        "wine/x86_64-unix/mtld3d.so": "b9b48faed4923fe6110a6105e4d882622be3b459ae9c908f3f8877319f0c88d6",
+        "prefix-markers/syswow64/mtld3d.dll": "a74c0363a54b92db5deb731533e27d1248b9e51bc770dac281f8925e518123dc",
+        "prefix-markers/system32/mtld3d.dll": "602de35e20ca24d8d44eddc4e7a1d24a428e80fedc8aa012666cb35caa24a1af"
+      },
+      "phases": [
+        {
+          "name": "empty",
+          "fps": 33.774,
+          "p50_ms": 29.588,
+          "p99_ms": 35.373,
+          "max_ms": 64.969,
+          "frames_over_100ms": 0
+        },
+        {
+          "name": "identical-16",
+          "fps": 22.634,
+          "p50_ms": 43.994,
+          "p99_ms": 50.922,
+          "max_ms": 68.291,
+          "frames_over_100ms": 0
+        },
+        {
+          "name": "identical-32",
+          "fps": 17.64,
+          "p50_ms": 56.309,
+          "p99_ms": 64.449,
+          "max_ms": 87.758,
+          "frames_over_100ms": 0
+        },
+        {
+          "name": "mixed-32",
+          "fps": 18.291,
+          "p50_ms": 54.486,
+          "p99_ms": 61.044,
+          "max_ms": 63.88,
+          "frames_over_100ms": 0
+        }
+      ],
+      "within_run": {
+        "valid": false,
+        "switch_count": 28,
+        "phases": [
+          {
+            "phase": "empty",
+            "modes": {
+              "false": {
+                "windows": [
+                  {
+                    "block": 10,
+                    "frames": 170,
+                    "seconds": 4.961505003999999,
+                    "fps": 34.263796945270606
+                  },
+                  {
+                    "block": 12,
+                    "frames": 168,
+                    "seconds": 4.9890280030000005,
+                    "fps": 33.67389397272942
+                  }
+                ],
+                "frames": 338,
+                "seconds": 9.950533007,
+                "fps": 33.96802962838511,
+                "p50_ms": 29.54275,
+                "p99_ms": 35.4103
+              },
+              "true": {
+                "windows": [
+                  {
+                    "block": 9,
+                    "frames": 123,
+                    "seconds": 3.628975498,
+                    "fps": 33.89386345203701
+                  },
+                  {
+                    "block": 11,
+                    "frames": 168,
+                    "seconds": 4.963230202,
+                    "fps": 33.84892361678129
+                  }
+                ],
+                "frames": 291,
+                "seconds": 8.592205700000001,
+                "fps": 33.867904256528675,
+                "p50_ms": 29.540699,
+                "p99_ms": 34.860501
+              }
+            },
+            "valid": true,
+            "fps_change_percent": -0.29476355547207733
+          },
+          {
+            "phase": "identical-16",
+            "modes": {
+              "false": {
+                "windows": [
+                  {
+                    "block": 14,
+                    "frames": 50,
+                    "seconds": 2.217477999,
+                    "fps": 22.548138030026966
+                  },
+                  {
+                    "block": 16,
+                    "frames": 111,
+                    "seconds": 4.945365101999999,
+                    "fps": 22.445258885963646
+                  }
+                ],
+                "frames": 161,
+                "seconds": 7.162843101,
+                "fps": 22.47710828365386,
+                "p50_ms": 44.3541,
+                "p99_ms": 67.060299
+              },
+              "true": {
+                "windows": [
+                  {
+                    "block": 15,
+                    "frames": 114,
+                    "seconds": 4.991839001000001,
+                    "fps": 22.83727499568049
+                  },
+                  {
+                    "block": 17,
+                    "frames": 112,
+                    "seconds": 4.943221098,
+                    "fps": 22.65729122359398
+                  }
+                ],
+                "frames": 226,
+                "seconds": 9.935060099000001,
+                "fps": 22.747723491149056,
+                "p50_ms": 43.96815049999999,
+                "p99_ms": 49.6921
+              }
+            },
+            "valid": true,
+            "fps_change_percent": 1.203959175175573
+          },
+          {
+            "phase": "identical-32",
+            "modes": {
+              "false": {
+                "windows": [
+                  {
+                    "block": 20,
+                    "frames": 87,
+                    "seconds": 4.911378896,
+                    "fps": 17.713966249041764
+                  },
+                  {
+                    "block": 22,
+                    "frames": 88,
+                    "seconds": 4.9278344,
+                    "fps": 17.857742946881494
+                  }
+                ],
+                "frames": 175,
+                "seconds": 9.839213296,
+                "fps": 17.7859748269858,
+                "p50_ms": 56.101801,
+                "p99_ms": 62.0075
+              },
+              "true": {
+                "windows": [
+                  {
+                    "block": 21,
+                    "frames": 88,
+                    "seconds": 4.952713102,
+                    "fps": 17.7680390904258
+                  }
+                ],
+                "frames": 88,
+                "seconds": 4.952713102,
+                "fps": 17.7680390904258,
+                "p50_ms": 55.801050000000004,
+                "p99_ms": 61.099201
+              }
+            },
+            "valid": false,
+            "fps_change_percent": -0.10084202150555388
+          },
+          {
+            "phase": "mixed-32",
+            "modes": {
+              "false": {
+                "windows": [
+                  {
+                    "block": 26,
+                    "frames": 91,
+                    "seconds": 4.966638598,
+                    "fps": 18.322251197549285
+                  },
+                  {
+                    "block": 28,
+                    "frames": 26,
+                    "seconds": 1.403047001,
+                    "fps": 18.531096949331634
+                  }
+                ],
+                "frames": 117,
+                "seconds": 6.369685599,
+                "fps": 18.36825353175489,
+                "p50_ms": 54.545799,
+                "p99_ms": 59.151299
+              },
+              "true": {
+                "windows": [
+                  {
+                    "block": 25,
+                    "frames": 91,
+                    "seconds": 4.981806596999999,
+                    "fps": 18.266465834863883
+                  },
+                  {
+                    "block": 27,
+                    "frames": 91,
+                    "seconds": 4.925672799,
+                    "fps": 18.474633560409174
+                  }
+                ],
+                "frames": 182,
+                "seconds": 9.907479396000001,
+                "fps": 18.369959979273823,
+                "p50_ms": 54.183,
+                "p99_ms": 61.2179
+              }
+            },
+            "valid": true,
+            "fps_change_percent": 0.009290200159672857
+          }
+        ]
+      },
+      "readback_errors": 0,
+      "nx_enforced": true,
+      "diagnostic_wall_time_sums": [
+        {
+          "phase": "empty",
+          "fused": false,
+          "frames": 340,
+          "readbacks": 3033,
+          "readbacks_per_frame": 8.920588235294117,
+          "flush_ms_per_frame": 5.175111764705882,
+          "read_ms_per_frame": 8.844261764705882,
+          "standalone_encode_ms_per_frame": 0.4522264705882353,
+          "standalone_wait_ms_per_frame": 8.122876470588235
+        },
+        {
+          "phase": "empty",
+          "fused": true,
+          "frames": 271,
+          "readbacks": 2425,
+          "readbacks_per_frame": 8.948339483394834,
+          "flush_ms_per_frame": 14.040468634686347,
+          "read_ms_per_frame": 0.005542435424354244,
+          "standalone_encode_ms_per_frame": 0.0,
+          "standalone_wait_ms_per_frame": 0.0
+        },
+        {
+          "phase": "identical-16",
+          "fused": false,
+          "frames": 157,
+          "readbacks": 1853,
+          "readbacks_per_frame": 11.802547770700636,
+          "flush_ms_per_frame": 9.26607643312102,
+          "read_ms_per_frame": 14.15075796178344,
+          "standalone_encode_ms_per_frame": 0.6373821656050955,
+          "standalone_wait_ms_per_frame": 13.205993630573248
+        },
+        {
+          "phase": "identical-16",
+          "fused": true,
+          "frames": 228,
+          "readbacks": 2675,
+          "readbacks_per_frame": 11.732456140350877,
+          "flush_ms_per_frame": 22.93236403508772,
+          "read_ms_per_frame": 0.007916666666666666,
+          "standalone_encode_ms_per_frame": 0.0,
+          "standalone_wait_ms_per_frame": 0.0
+        },
+        {
+          "phase": "identical-32",
+          "fused": false,
+          "frames": 177,
+          "readbacks": 2580,
+          "readbacks_per_frame": 14.576271186440678,
+          "flush_ms_per_frame": 12.452994350282484,
+          "read_ms_per_frame": 18.614197740112996,
+          "standalone_encode_ms_per_frame": 0.7445141242937853,
+          "standalone_wait_ms_per_frame": 17.44779096045198
+        },
+        {
+          "phase": "identical-32",
+          "fused": true,
+          "frames": 89,
+          "readbacks": 1283,
+          "readbacks_per_frame": 14.415730337078651,
+          "flush_ms_per_frame": 30.74832584269663,
+          "read_ms_per_frame": 0.009685393258426966,
+          "standalone_encode_ms_per_frame": 0.0,
+          "standalone_wait_ms_per_frame": 0.0
+        },
+        {
+          "phase": "mixed-32",
+          "fused": false,
+          "frames": 111,
+          "readbacks": 1564,
+          "readbacks_per_frame": 14.09009009009009,
+          "flush_ms_per_frame": 11.630315315315315,
+          "read_ms_per_frame": 18.21799099099099,
+          "standalone_encode_ms_per_frame": 0.7061441441441442,
+          "standalone_wait_ms_per_frame": 17.100423423423422
+        },
+        {
+          "phase": "mixed-32",
+          "fused": true,
+          "frames": 184,
+          "readbacks": 2621,
+          "readbacks_per_frame": 14.244565217391305,
+          "flush_ms_per_frame": 30.046831521739133,
+          "read_ms_per_frame": 0.00957608695652174,
+          "standalone_encode_ms_per_frame": 0.0,
+          "standalone_wait_ms_per_frame": 0.0
+        }
+      ]
+    }
+  ]
+}

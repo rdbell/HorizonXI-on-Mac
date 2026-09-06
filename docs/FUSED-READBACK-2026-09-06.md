@@ -69,3 +69,39 @@ with `python3 scripts/harness/readback-ab-report.py SUITE_ROOT`.
 
 The two report tests cover transition frames, separate mode attribution, and
 missing/incomplete mode windows. The diagnostic candidate is `fused-readback-ab-01`.
+
+## Within-run result: no demonstrated benefit
+
+Two alternating runs preserved the crowd and rendering checks. Each had one scene
+with only one usable window for one mode, correctly rejected by the AB report.
+All four scenes have a qualifying comparison across the two runs. Do not treat
+both complete AB reports as passing. D used ordinary info logging; E added readback
+and GPU timing traces, so compare modes within each run, not absolute FPS across D/E.
+
+| Phase | D off / on FPS | D change | E off / on FPS | E change |
+| --- | ---: | ---: | ---: | ---: |
+| Empty | 34.670 / 34.443 | -0.65% | 33.968 / 33.868 | -0.29% |
+| 16 identical | 23.173 / 23.280 | +0.46% | 22.477 / 22.748 | +1.20% |
+| 32 identical | 18.396 / 18.147 | -1.35% | 17.786 / 17.768 | -0.10%, insufficient windows |
+| 32 mixed | 18.844 / 18.935 | +0.49%, insufficient windows | 18.368 / 18.370 | +0.01% |
+
+Fusion has no repeatable useful gain here. Keep it disabled. This is a tested
+experiment, not a performance improvement to deploy.
+
+E's diagnostic wall-time sums in the 32-identical scene explain the result:
+approximately 14.6 readbacks per frame, 12.45 ms/frame in the standalone path's
+render flush, 18.61 ms/frame in its readback call, and 30.75 ms/frame in the fused
+flush. Standalone native encoding was only 0.74 ms/frame; native completion waits
+were 17.45 ms/frame. Fusion largely moved the wait into SubmitFrame rather than
+removing it. These are time sums divided by captured frames, with boundary seconds
+excluded; they include instrumentation overhead and are not summed percentiles.
+
+Detailed sanitized measurements, input hashes, restoration results, and individual
+AB windows are in `docs/benchmarks/2026-09-06-fused-readback.json`. The installed app
+and vendored binaries remain build 24. No performance gain is claimed.
+
+Next diagnostic: reduce only background resolution to 1024 while preserving menu
+resolution and full addons, to distinguish high-resolution rendering/store cost
+from fixed synchronization latency. This is a quality-changing diagnostic, not a
+proposed user-setting change. After that, identify the game's consumer of the
+16x16 masks before considering changes to their rendering or update frequency.
