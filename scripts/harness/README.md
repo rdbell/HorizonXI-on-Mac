@@ -347,6 +347,11 @@ The default uses a frozen copy of the full `scripts/default.txt` boot script. `-
 is a separately labeled addon-cost probe. `--background 2048` changes only the background
 size, retaining the window/menu settings. Without `--graphics-profile`, the saved **local**
 profile's graphics are used; do not assume they match the personal server profile.
+Stress runs omit the `nettop` network sampler by default after it was observed using substantial
+CPU during a rendering capture. Use `--network` for network diagnostics. The recorder also
+accepts `--no-network` directly and records its choice in `telemetry-options.json`. Keep this
+choice fixed across comparisons.
+
 The same shader-cache seed is restored before **every** scenario. First encounters and
 repeated appearances remain separate phases; this is not a claim that the driver cache is
 cold. Keep the same seed, graphics profile, boot script and installed renderer for repeats.

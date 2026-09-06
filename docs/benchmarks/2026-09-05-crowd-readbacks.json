@@ -1,0 +1,417 @@
+[
+  {
+    "run": "submit-a14",
+    "valid": true,
+    "renderer_config": "color.hdr.enable=false;render.scale=1;present.maxFps=0;render.mergePasses=true;render.submitDraws=0",
+    "renderer_sha256": {
+      "d3d8.dll": "ab6bf7a9a9f4b3e66a75ca038d8d10289c88acbfe8d52c3b5a8a9a259cb26cd5",
+      "d3d9.dll": "d015eebb37c4aa30f641659693d899be715e30c23cb527bffdaf89548a383e5d",
+      "mtld3d.dll": "6618f35ca777b8c16d76e01e3261d2f17040b86ed7e88f34f6975d3ec6ac3701",
+      "mtld3d.so": "b9b48faed4923fe6110a6105e4d882622be3b459ae9c908f3f8877319f0c88d6"
+    },
+    "graphics": {
+      "0000": 2,
+      "0001": 1882,
+      "0002": 1058,
+      "0003": 4096,
+      "0004": 4096,
+      "0007": 1,
+      "0011": 2,
+      "0017": 0,
+      "0018": 2,
+      "0019": 1,
+      "0020": 1,
+      "0021": 1,
+      "0022": 0,
+      "0023": 0,
+      "0024": 0,
+      "0028": 0,
+      "0029": 20,
+      "0030": 0,
+      "0031": 1002740646,
+      "0032": 0,
+      "0033": 0,
+      "0034": 1,
+      "0035": 1,
+      "0036": 1,
+      "0037": 1882,
+      "0038": 1058,
+      "0039": 1,
+      "0040": 0,
+      "0041": 0,
+      "0043": 0,
+      "0044": 1,
+      "0045": 0
+    },
+    "boot_sha256": "62153a4fdfdcef80d7777012a3ca7dc2cf180460489eb01e130d10442c37bb96",
+    "shader_seed": "739984354253257c91f7eb1b895b0dc478123e4b412db99e0a3f807c7e1042ae",
+    "network_sampler": true,
+    "diagnostic": false,
+    "phases": [
+      {
+        "name": "empty",
+        "fps": 33.596,
+        "p50_ms": 29.906,
+        "p99_ms": 34.909,
+        "max_ms": 55.418,
+        "frames_over_100ms": 0
+      },
+      {
+        "name": "identical-16",
+        "fps": 22.861,
+        "p50_ms": 43.595,
+        "p99_ms": 51.584,
+        "max_ms": 73.555,
+        "frames_over_100ms": 0
+      },
+      {
+        "name": "identical-32",
+        "fps": 17.628,
+        "p50_ms": 56.024,
+        "p99_ms": 65.677,
+        "max_ms": 86.819,
+        "frames_over_100ms": 0
+      },
+      {
+        "name": "mixed-32",
+        "fps": 16.332,
+        "p50_ms": 61.196,
+        "p99_ms": 71.502,
+        "max_ms": 88.163,
+        "frames_over_100ms": 0
+      }
+    ]
+  },
+  {
+    "run": "submit-b15",
+    "valid": true,
+    "renderer_config": "color.hdr.enable=false;render.scale=1;present.maxFps=0;render.mergePasses=true;render.submitDraws=512",
+    "renderer_sha256": {
+      "d3d8.dll": "ab6bf7a9a9f4b3e66a75ca038d8d10289c88acbfe8d52c3b5a8a9a259cb26cd5",
+      "d3d9.dll": "d015eebb37c4aa30f641659693d899be715e30c23cb527bffdaf89548a383e5d",
+      "mtld3d.dll": "6618f35ca777b8c16d76e01e3261d2f17040b86ed7e88f34f6975d3ec6ac3701",
+      "mtld3d.so": "b9b48faed4923fe6110a6105e4d882622be3b459ae9c908f3f8877319f0c88d6"
+    },
+    "graphics": {
+      "0000": 2,
+      "0001": 1882,
+      "0002": 1058,
+      "0003": 4096,
+      "0004": 4096,
+      "0007": 1,
+      "0011": 2,
+      "0017": 0,
+      "0018": 2,
+      "0019": 1,
+      "0020": 1,
+      "0021": 1,
+      "0022": 0,
+      "0023": 0,
+      "0024": 0,
+      "0028": 0,
+      "0029": 20,
+      "0030": 0,
+      "0031": 1002740646,
+      "0032": 0,
+      "0033": 0,
+      "0034": 1,
+      "0035": 1,
+      "0036": 1,
+      "0037": 1882,
+      "0038": 1058,
+      "0039": 1,
+      "0040": 0,
+      "0041": 0,
+      "0043": 0,
+      "0044": 1,
+      "0045": 0
+    },
+    "boot_sha256": "62153a4fdfdcef80d7777012a3ca7dc2cf180460489eb01e130d10442c37bb96",
+    "shader_seed": "739984354253257c91f7eb1b895b0dc478123e4b412db99e0a3f807c7e1042ae",
+    "network_sampler": true,
+    "diagnostic": false,
+    "phases": [
+      {
+        "name": "empty",
+        "fps": 31.069,
+        "p50_ms": 31.967,
+        "p99_ms": 38.241,
+        "max_ms": 51.971,
+        "frames_over_100ms": 0
+      },
+      {
+        "name": "identical-16",
+        "fps": 20.625,
+        "p50_ms": 47.955,
+        "p99_ms": 58.803,
+        "max_ms": 70.008,
+        "frames_over_100ms": 0
+      },
+      {
+        "name": "identical-32",
+        "fps": 15.23,
+        "p50_ms": 64.588,
+        "p99_ms": 82.883,
+        "max_ms": 100.74,
+        "frames_over_100ms": 1
+      },
+      {
+        "name": "mixed-32",
+        "fps": 14.959,
+        "p50_ms": 66.091,
+        "p99_ms": 87.087,
+        "max_ms": 133.82,
+        "frames_over_100ms": 1
+      }
+    ]
+  },
+  {
+    "run": "submit-a16",
+    "valid": true,
+    "renderer_config": "color.hdr.enable=false;render.scale=1;present.maxFps=0;render.mergePasses=true;render.submitDraws=0",
+    "renderer_sha256": {
+      "d3d8.dll": "ab6bf7a9a9f4b3e66a75ca038d8d10289c88acbfe8d52c3b5a8a9a259cb26cd5",
+      "d3d9.dll": "d015eebb37c4aa30f641659693d899be715e30c23cb527bffdaf89548a383e5d",
+      "mtld3d.dll": "6618f35ca777b8c16d76e01e3261d2f17040b86ed7e88f34f6975d3ec6ac3701",
+      "mtld3d.so": "b9b48faed4923fe6110a6105e4d882622be3b459ae9c908f3f8877319f0c88d6"
+    },
+    "graphics": {
+      "0000": 2,
+      "0001": 1882,
+      "0002": 1058,
+      "0003": 4096,
+      "0004": 4096,
+      "0007": 1,
+      "0011": 2,
+      "0017": 0,
+      "0018": 2,
+      "0019": 1,
+      "0020": 1,
+      "0021": 1,
+      "0022": 0,
+      "0023": 0,
+      "0024": 0,
+      "0028": 0,
+      "0029": 20,
+      "0030": 0,
+      "0031": 1002740646,
+      "0032": 0,
+      "0033": 0,
+      "0034": 1,
+      "0035": 1,
+      "0036": 1,
+      "0037": 1882,
+      "0038": 1058,
+      "0039": 1,
+      "0040": 0,
+      "0041": 0,
+      "0043": 0,
+      "0044": 1,
+      "0045": 0
+    },
+    "boot_sha256": "62153a4fdfdcef80d7777012a3ca7dc2cf180460489eb01e130d10442c37bb96",
+    "shader_seed": "739984354253257c91f7eb1b895b0dc478123e4b412db99e0a3f807c7e1042ae",
+    "network_sampler": true,
+    "diagnostic": false,
+    "phases": [
+      {
+        "name": "empty",
+        "fps": 26.032,
+        "p50_ms": 38.028,
+        "p99_ms": 49.008,
+        "max_ms": 70.576,
+        "frames_over_100ms": 0
+      },
+      {
+        "name": "identical-16",
+        "fps": 17.768,
+        "p50_ms": 55.828,
+        "p99_ms": 72.425,
+        "max_ms": 74.972,
+        "frames_over_100ms": 0
+      },
+      {
+        "name": "identical-32",
+        "fps": 13.301,
+        "p50_ms": 73.914,
+        "p99_ms": 95.602,
+        "max_ms": 106.578,
+        "frames_over_100ms": 2
+      },
+      {
+        "name": "mixed-32",
+        "fps": 13.457,
+        "p50_ms": 73.59,
+        "p99_ms": 92.273,
+        "max_ms": 140.539,
+        "frames_over_100ms": 1
+      }
+    ]
+  },
+  {
+    "run": "profile-17",
+    "valid": true,
+    "renderer_config": "color.hdr.enable=false;render.scale=1;present.maxFps=0;render.mergePasses=true;render.submitDraws=0",
+    "renderer_sha256": {
+      "d3d8.dll": "ab6bf7a9a9f4b3e66a75ca038d8d10289c88acbfe8d52c3b5a8a9a259cb26cd5",
+      "d3d9.dll": "d015eebb37c4aa30f641659693d899be715e30c23cb527bffdaf89548a383e5d",
+      "mtld3d.dll": "6618f35ca777b8c16d76e01e3261d2f17040b86ed7e88f34f6975d3ec6ac3701",
+      "mtld3d.so": "b9b48faed4923fe6110a6105e4d882622be3b459ae9c908f3f8877319f0c88d6"
+    },
+    "graphics": {
+      "0000": 2,
+      "0001": 1882,
+      "0002": 1058,
+      "0003": 4096,
+      "0004": 4096,
+      "0007": 1,
+      "0011": 2,
+      "0017": 0,
+      "0018": 2,
+      "0019": 1,
+      "0020": 1,
+      "0021": 1,
+      "0022": 0,
+      "0023": 0,
+      "0024": 0,
+      "0028": 0,
+      "0029": 20,
+      "0030": 0,
+      "0031": 1002740646,
+      "0032": 0,
+      "0033": 0,
+      "0034": 1,
+      "0035": 1,
+      "0036": 1,
+      "0037": 1882,
+      "0038": 1058,
+      "0039": 1,
+      "0040": 0,
+      "0041": 0,
+      "0043": 0,
+      "0044": 1,
+      "0045": 0
+    },
+    "boot_sha256": "62153a4fdfdcef80d7777012a3ca7dc2cf180460489eb01e130d10442c37bb96",
+    "shader_seed": "739984354253257c91f7eb1b895b0dc478123e4b412db99e0a3f807c7e1042ae",
+    "network_sampler": true,
+    "diagnostic": true,
+    "phases": [
+      {
+        "name": "empty",
+        "fps": 27.191,
+        "p50_ms": 36.408,
+        "p99_ms": 46.187,
+        "max_ms": 80.962,
+        "frames_over_100ms": 0
+      },
+      {
+        "name": "identical-16",
+        "fps": 17.997,
+        "p50_ms": 55.352,
+        "p99_ms": 67.212,
+        "max_ms": 96.451,
+        "frames_over_100ms": 0
+      },
+      {
+        "name": "identical-32",
+        "fps": 13.838,
+        "p50_ms": 71.293,
+        "p99_ms": 91.126,
+        "max_ms": 111.919,
+        "frames_over_100ms": 1
+      },
+      {
+        "name": "mixed-32",
+        "fps": 13.321,
+        "p50_ms": 74.605,
+        "p99_ms": 91.423,
+        "max_ms": 131.489,
+        "frames_over_100ms": 1
+      }
+    ]
+  },
+  {
+    "run": "dump-19",
+    "valid": true,
+    "renderer_config": "color.hdr.enable=false;render.scale=1;present.maxFps=0;render.mergePasses=true;render.submitDraws=0",
+    "renderer_sha256": {
+      "d3d8.dll": "ab6bf7a9a9f4b3e66a75ca038d8d10289c88acbfe8d52c3b5a8a9a259cb26cd5",
+      "d3d9.dll": "d015eebb37c4aa30f641659693d899be715e30c23cb527bffdaf89548a383e5d",
+      "mtld3d.dll": "6618f35ca777b8c16d76e01e3261d2f17040b86ed7e88f34f6975d3ec6ac3701",
+      "mtld3d.so": "b9b48faed4923fe6110a6105e4d882622be3b459ae9c908f3f8877319f0c88d6"
+    },
+    "graphics": {
+      "0000": 2,
+      "0001": 1882,
+      "0002": 1058,
+      "0003": 4096,
+      "0004": 4096,
+      "0007": 1,
+      "0011": 2,
+      "0017": 0,
+      "0018": 2,
+      "0019": 1,
+      "0020": 1,
+      "0021": 1,
+      "0022": 0,
+      "0023": 0,
+      "0024": 0,
+      "0028": 0,
+      "0029": 20,
+      "0030": 0,
+      "0031": 1002740646,
+      "0032": 0,
+      "0033": 0,
+      "0034": 1,
+      "0035": 1,
+      "0036": 1,
+      "0037": 1882,
+      "0038": 1058,
+      "0039": 1,
+      "0040": 0,
+      "0041": 0,
+      "0043": 0,
+      "0044": 1,
+      "0045": 0
+    },
+    "boot_sha256": "62153a4fdfdcef80d7777012a3ca7dc2cf180460489eb01e130d10442c37bb96",
+    "shader_seed": "739984354253257c91f7eb1b895b0dc478123e4b412db99e0a3f807c7e1042ae",
+    "network_sampler": false,
+    "diagnostic": true,
+    "phases": [
+      {
+        "name": "empty",
+        "fps": 34.385,
+        "p50_ms": 29.14,
+        "p99_ms": 34.236,
+        "max_ms": 56.061,
+        "frames_over_100ms": 0
+      },
+      {
+        "name": "identical-16",
+        "fps": 23.236,
+        "p50_ms": 42.938,
+        "p99_ms": 48.927,
+        "max_ms": 88.504,
+        "frames_over_100ms": 0
+      },
+      {
+        "name": "identical-32",
+        "fps": 17.898,
+        "p50_ms": 54.164,
+        "p99_ms": 64.733,
+        "max_ms": 291.551,
+        "frames_over_100ms": 3
+      },
+      {
+        "name": "mixed-32",
+        "fps": 18.562,
+        "p50_ms": 53.503,
+        "p99_ms": 61.544,
+        "max_ms": 91.529,
+        "frames_over_100ms": 0
+      }
+    ]
+  }
+]

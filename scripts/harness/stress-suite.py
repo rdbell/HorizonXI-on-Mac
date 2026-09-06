@@ -81,6 +81,7 @@ def command(root, scenario, options):
         args+=['--renderer-bundle',str(options.renderer_bundle.resolve()),
                '--renderer-config',options.renderer_config,'--renderer-log',options.renderer_log]
     else: args+=['--installed-mtld3d']
+    if not getattr(options,'network',False): args+=['--no-network']
     if getattr(options,'dump_scene',None): args+=['--dump-scene',options.dump_scene]
     for value in getattr(options,'env',[]): args+=['--env',value]
     if not options.minimal: args+=['--boot-file',str(root/'inputs/boot.txt')]
@@ -95,6 +96,7 @@ def main():
     p.add_argument('--restore-fixture',type=Path)
     p.add_argument('--scenario',action='append',choices=SCENARIOS)
     p.add_argument('--execute',action='store_true')
+    p.add_argument('--network',action='store_true',help='include nettop; omitted by default to reduce capture overhead')
     p.add_argument('--minimal',action='store_true',help='diagnostic addon comparison; default full boot script')
     p.add_argument('--boot-file',type=Path,default=GAME/'scripts/default.txt')
     p.add_argument('--graphics-profile',type=Path)

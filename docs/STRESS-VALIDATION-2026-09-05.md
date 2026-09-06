@@ -131,3 +131,71 @@ performance. The next campaign keeps the full addon setup fixed and prioritizes
 renderer scheduling, character-processing attribution, and shared runtime overhead.
 Reduced-addon runs are reserved for diagnosis if needed; no per-addon tuning campaign
 is planned. A Lua execution finding would motivate a runtime-wide investigation.
+
+## Resumed campaign: crowded-frame synchronization
+
+All runs below used the same build-24 renderer bytes, full boot script, 4096-square
+background, graphics profile, shader seed, and corrected flat-ground fixture.
+The screenshots now show the full formation on the forecourt. Numeric details and
+renderer identities are in `benchmarks/2026-09-05-crowd-readbacks.json`.
+
+| Run | submitDraws | Empty FPS | 16 identical | 32 identical | 32 mixed |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| submit-a14 | 0 | 33.596 | 22.861 | 17.628 | 16.332 |
+| submit-b15 | 512 | 31.069 | 20.625 | 15.230 | 14.959 |
+| submit-a16 | 0 | 26.032 | 17.768 | 13.301 | 13.457 |
+
+The baseline repeat also slowed. The A/B/A sequence is inconclusive, so early
+submission remains disabled. All three had zero logged live shader compilations.
+A short host check during the following diagnostic observed substantial CPU use
+in WindowServer, MacsyZones, and the recorder's own nettop process. Memory pressure
+was normal, swap usage unchanged, and pmset reported no recorded thermal warning.
+The other applications were left alone. The stress suite now omits nettop unless
+`--network` is requested and records the selection. Its first attempt failed at
+argument parsing before launch; the missing forwarding flag was corrected. The
+next live run verified that no network.csv was generated and restoration passed.
+
+### Readback and guest profile
+
+`profile-17` enabled existing readback/GPU trace targets and the guest sampler.
+It followed the thread executing FFXiMain, Addons, and the renderer. The finalized
+profile covered 274.5 of 278 seconds, about 98.7%, with no dropped samples. Scene
+analysis uses two complete ten-second sample windows per phase. The pinned range
+selected the useful thread; it must still not be described as FFXiMain's image base.
+
+All observed lockable readbacks were 16x16. Excluding one second at each phase
+boundary, the summed synchronous flush-plus-read timings divided by measured frame
+count were approximately 16.4 ms/frame empty, 27.5 with 16 characters, 38.8 with 32
+identical characters, and 38.5 with 32 mixed characters. These are diagnostic sums,
+not the sum of percentile values or independent CPU/GPU time. Trace overhead is
+included. Corresponding guest-sample shares in psynch_cvwait plus ulock_wait2 were
+40.5%, 45.8%, 48.35%, and 47.8%. The waits alone do not identify their caller, but
+the independently timed synchronous readback path accounts for substantial wall time.
+
+`dump-19` captured exactly three frames at the 32-character phase. It recorded
+6,569, 6,575, and 6,566 draws, and 49 total 16x16 StretchRect/readback preparations.
+One representative frame had 16 readbacks. Before each, two draws wrote TextureId(10)
+using the shared scene depth, a third draw sampled that texture into TextureId(27)
+at 16x16, and StretchRect copied it to a lockable standalone surface. The first two
+draws select vertex diffuse color: one has depth disabled and the other enables the
+depth test without writing depth. This resembles a visibility mask/readback sequence;
+its exact game purpose is inferred, not yet confirmed by a caller disassembly.
+
+The source is rewritten before each readback. Returning a cached previous result
+would therefore change semantics. The scene-depth dependency also means that a
+selective flush cannot simply ignore all earlier scene rendering.
+
+The next targeted renderer experiment should append the readback blit to the producing
+submission and complete the CPU request after that buffer finishes. Current code first
+blocks until the encoder commits the rendering, then creates, commits, and waits for
+a separate readback command buffer. Combining them may remove repeated submission and
+handoff overhead while preserving current pixels. This requires explicit lifetime and
+ordering tests for render targets, copies, LockRect, and later draws; no such native
+change has been implemented or enabled yet.
+
+The dump run, with nettop omitted, measured 34.385/23.236/17.898/18.562 FPS across the
+four phases. Do not attribute that recovery to nettop alone: host drift and the
+three-frame diagnostic dump prevent a controlled performance claim.
+
+Every completed run restored 44 file states and launcher preferences and left Docker
+unchanged. The installed application remains build 24. Stable 120 FPS is not achieved.

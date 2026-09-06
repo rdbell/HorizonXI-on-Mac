@@ -1648,11 +1648,13 @@ def capture(pid: int, output: Path, args: argparse.Namespace, stop: threading.Ev
                           output / "iostat.txt")
     if iostat:
         streams.append(iostat)
-    nettop = start_stream(["/usr/bin/nettop", "-n", "-x", "-P", "-L",
-                           str(args.duration + 1), "-s", "1", "-p", str(pid),
-                           "-J", "bytes_in,bytes_out"], output / "network.csv")
-    if nettop:
-        streams.append(nettop)
+    if not args.no_network:
+        nettop = start_stream(["/usr/bin/nettop", "-n", "-x", "-P", "-L",
+                               str(args.duration + 1), "-s", "1", "-p", str(pid),
+                               "-J", "bytes_in,bytes_out"], output / "network.csv")
+        if nettop:
+            streams.append(nettop)
+    (output / "telemetry-options.json").write_text(json.dumps({"network": not args.no_network}) + "\n")
 
     fields = [
         "epoch", "elapsed", "cpu_percent", "memory_percent", "rss_kb", "vsize_kb",
@@ -1758,6 +1760,7 @@ def parse_offsets(value: str) -> list[int]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--no-network", action="store_true", help="omit nettop during rendering benchmarks")
     parser.add_argument("--game-dir", type=Path, default=DEFAULT_GAME,
                         help=f"Ashita/game directory (default: {DEFAULT_GAME})")
     parser.add_argument("--duration", type=int, default=900,

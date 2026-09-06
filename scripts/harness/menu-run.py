@@ -400,6 +400,8 @@ class MenuRun:
                 "--duration", str(self.args.capture_seconds),
                 "--wait-timeout", str(self.args.wait_timeout),
                 "--level", self.args.level, "--no-archive"]
+        if getattr(self.args, "no_network", False):
+            argv.append("--no-network")
         if self.args.sample_at:
             argv += ["--sample-at", self.args.sample_at,
                      "--sample-seconds", str(self.args.sample_seconds),
@@ -708,6 +710,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--game-dir", type=Path, default=DEFAULT_GAME)
+    parser.add_argument("--no-network", action="store_true", help="omit network sampler from capture")
     parser.add_argument("--world", default="HorizonXI")
     parser.add_argument("--level", choices=("standard", "standard-nosample", "deep"),
                         default="standard-nosample",

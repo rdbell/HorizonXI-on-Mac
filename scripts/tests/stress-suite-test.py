@@ -19,6 +19,9 @@ class SuiteTests(unittest.TestCase):
         self.assertIn('--installed-mtld3d',cmd)
         self.assertIn('/tmp/suite/inputs/shaders.bin',cmd)
         self.assertIn('/tmp/suite/inputs/boot.txt',cmd)
+        self.assertIn('--no-network',cmd)
+        a.network=True
+        self.assertNotIn('--no-network',s.command(Path('/tmp/suite'),'crowd',a))
         self.assertNotIn('--background',cmd)
 
     def test_fixture_refuses_existing_command(self):
