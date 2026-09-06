@@ -47,3 +47,79 @@ the temporary server command was removed. No game or Wine process remained.
 Local raw captures and private rollback snapshots remain outside Git under
 `ximac/benchmarks/20260905-stress-suite/`. Do not publish those private snapshots.
 Focused Lua stress/fixture tests and Python report/suite tests pass.
+
+## Log review and next experiment plan
+
+Game automation paused when the user returned. Tooling checkpoint `5d09d37` is
+pushed to the user-owned development branch; the installed app remains build 24.
+
+The completed city-12 diagnostic separates sustained cost from long freezes:
+
+| Phase | FPS | Median frame ms | p99 ms | Frames over 100 ms |
+| --- | ---: | ---: | ---: | ---: |
+| Empty | 35.950 | 27.505 | 34.783 | 0 |
+| 16 identical NPCs | 21.873 | 45.619 | 52.995 | 0 |
+| 32 identical NPCs | 16.910 | 58.666 | 69.168 | 0 |
+| 32 mixed NPCs | 15.894 | 62.619 | 72.101 | 0 |
+
+Identical models already incur most of the slowdown. Model diversity adds a smaller
+cost. This favors investigating per-character animation, state setup, and repeated
+render work over assuming new-texture loading explains the steady-state slowdown.
+It does not distinguish game CPU work from renderer synchronization by itself.
+
+The renderer logged NX flags changing from 2 to 9, pass merging enabled, and submission
+threshold zero. Shader prewarming reused 399 variants from 143 unique libraries in
+17 ms; no live shader compilations or GPU errors were logged. System-wide GPU
+utilization medians were 43.5%, 42%, 39.5%, and 39.5% across those phases. Those are
+whole-system utilization counters, not this game's GPU duration. Settled phases had
+zero page-ins; disk reads were zero except roughly 43 KB/s in mixed-32. Ordinary
+process faults remained measurable and are not proof of a renewed execute-policy
+exception storm. Detailed API/readback timings were not enabled in these runs.
+
+Run the next experiments sequentially, after the user releases the computer:
+
+1. Validate final flat-ground placement and camera alignment. Run full/reduced/full
+   addon comparisons on crowd and aga8 using one renderer, graphics profile, and
+   shader seed. Preserve XICamera, aspect/projection, and asset overrides on both
+   sides. The existing bare `--minimal` changes camera configuration as well, so it
+   cannot isolate UI CPU cost without that control. Compare both FPS and p99.
+2. If addons explain a substantial share, time the identified addons/modules in
+   separate 20-30 second diagnostic windows. LuaJIT's built-in profiler supports
+   interpreted code; first verify that Ashita's embedded build exposes `jit.profile`.
+   Keep the JIT crash guard enabled. Retain all intended UI behavior when optimizing.
+3. Use a separate short readback/GPU/guest-stack diagnostic on the heavy phase.
+   Existing trace targets are `mtld3d::readback` and `mtld3d::gpu_time`. API timing
+   requires a build with `MTLD3D_PERF`; setting a runtime log target cannot restore
+   timers compiled out of the production build. Confirm guest module/thread identity.
+4. Test submitDraws=512 versus zero with mergePasses=true. Include a light scene to
+   detect the regression seen before pass merging. Promote only a repeated gain
+   with correct rendering. Consider adaptive submission only if timing supports it.
+5. If the game remains dominant, isolate character shadows and animation cost in
+   the same crowd. Capture a bounded representative draw/state trace before pursuing
+   state deduplication, instancing, or translation changes. Finish aga24/aga40 and
+   arrivals validation; camera-heading phases remain experimental.
+
+### Research leads and limits
+
+- [LuaJIT profiler documentation](https://luajit.org/ext_profiler.html) explicitly
+  supports interpreted and compiled code. This offers addon attribution without
+  reintroducing the known JIT crash. Embedded availability remains unverified.
+- [Apple command-buffer guidance](https://developer.apple.com/library/archive/documentation/3DDrawing/Conceptual/MTLBestPracticesGuide/CommandBuffers.html)
+  recommends the fewest submissions that keep the GPU fed. It describes the same
+  starvation-versus-submission-cost tradeoff our threshold experiment measures.
+- [Mesa issue 320](https://github.com/iXit/Mesa-3D/issues/320) fixed stateblock aliasing
+  that zeroed character material data. It is a correctness reference, not FPS evidence.
+- [DXVK batching option](https://github.com/doitsujin/dxvk/blob/master/dxvk.conf) and
+  [batcher source](https://github.com/doitsujin/dxvk/blob/master/src/d3d8/d3d8_batch.h)
+  show a specialized approach for compatible tiny draws. Prior local batching
+  conclusions were explicitly superseded in PERFORMANCE.md; do not revive the
+  broad instancing proposal from draw-count ratios alone. Old DXVK timings also
+  cannot establish the cost split in the current mtld3d renderer.
+- [DXVK FFXI issue 5839](https://github.com/doitsujin/dxvk/issues/5839), August 2026,
+  discusses direct D3D8 support and a HUD sampler/filtering correction. It is useful
+  for compatibility reference, not evidence that replacing our renderer is faster.
+- [Windows player report, September 2024](https://www.vogons.org/viewtopic.php?t=102459)
+  describes mostly 60 FPS with dips into the 40s during busy FFXI combat. This is
+  anecdotal and lacks a matched workload; it does not establish stable 120 FPS.
+
+No new renderer optimization or 120-FPS result is claimed by this checkpoint.
