@@ -53,8 +53,18 @@ def complete_windows(records: list[dict], epoch: float, start: float, end: float
             and epoch + r['header']['window_end_s'] <= end]
 
 
+def phase_report(output: Path) -> dict:
+    session = Path(json.loads((output / 'active.json').read_text())['session'])
+    markers_path = session / 'perfscene-markers.jsonl'
+    markers = [json.loads(line) for line in markers_path.read_text().splitlines()] if markers_path.exists() else []
+    if any(m.get('label') == 'stress phase start' for m in markers):
+        stress = load('stress-report').report(output)
+        return {'scenes': stress['phases'], 'problems': stress['problems']}
+    return renderer.report(output)
+
+
 def report(output: Path, bundle: Path | None) -> dict:
-    fps = renderer.report(output)
+    fps = phase_report(output)
     session = Path(json.loads((output / 'active.json').read_text())['session'])
     menu = json.loads((session / 'menu-run.json').read_text())
     pid = menu['game_pid']

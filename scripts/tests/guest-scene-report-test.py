@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import importlib.util
 from pathlib import Path
+import json
+from unittest.mock import patch
 import tempfile
 import unittest
 
@@ -28,6 +30,18 @@ class GuestSceneReportTests(unittest.TestCase):
             self.assertEqual(guest.capture.module_location(110, [module])['location'], 'd3d9.dll+0xa')
             guest.resolve_renderer_symbols(records, identities, bundle)
             self.assertEqual(module['symbol_path'], str(frozen))
+
+    def test_stress_phases_retain_validation_and_boundaries(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / 'active.json').write_text(json.dumps({'session': str(root)}))
+            (root / 'perfscene-markers.jsonl').write_text(json.dumps({'label': 'stress phase start'}))
+            phase = {'name': 'mixed-32', 'start': 10, 'end': 40, 'fps': 16, 'valid': False}
+            with patch.object(guest, 'load') as load, patch.object(guest.renderer, 'report') as old:
+                load.return_value.report.return_value = {'phases': [phase], 'problems': ['incomplete fixture']}
+                result = guest.phase_report(root)
+                self.assertEqual(result, {'scenes': [phase], 'problems': ['incomplete fixture']})
+                old.assert_not_called()
 
     def test_scene_excludes_windows_crossing_either_boundary(self):
         records = [{'header': {'window_start_s': a, 'window_end_s': b}}

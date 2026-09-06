@@ -123,3 +123,11 @@ Run the next experiments sequentially, after the user releases the computer:
   anecdotal and lacks a matched workload; it does not establish stable 120 FPS.
 
 No new renderer optimization or 120-FPS result is claimed by this checkpoint.
+
+## Scope update
+
+The user ruled out individual addon tuning as a distraction from general FFXI-on-Mac
+performance. The next campaign keeps the full addon setup fixed and prioritizes
+renderer scheduling, character-processing attribution, and shared runtime overhead.
+Reduced-addon runs are reserved for diagnosis if needed; no per-addon tuning campaign
+is planned. A Lua execution finding would motivate a runtime-wide investigation.
