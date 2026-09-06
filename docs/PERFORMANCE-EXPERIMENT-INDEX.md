@@ -63,6 +63,35 @@ Game runs are currently paused at the user's request.
 - Camera-heading stress phases remain experimental. Server orientation alone is not proof
   of camera orientation.
 
+## Research lead: dxvk-low-latency
+
+Source review only, September 6. **Not built, installed, or benchmarked.** Reviewed
+[netborg-afps/dxvk-low-latency at ccc8cc8](https://github.com/netborg-afps/dxvk-low-latency/tree/ccc8cc8219b97088a7450ae9872d202acac294cc).
+The main objective is input latency and pacing through predictive frame-start timing.
+The README says its minimum-latency mode sacrifices CPU/GPU overlap and FPS; do not
+mistake the project's high-refresh examples for measured FFXI performance.
+
+Potentially useful implementation ideas:
+
+- [Submission tracking](https://github.com/netborg-afps/dxvk-low-latency/blob/ccc8cc8219b97088a7450ae9872d202acac294cc/src/dxvk/framepacer/dxvk_gpu_progress.h)
+  and calibrated GPU timestamps distinguish submission gaps from GPU progress. This
+  is the best immediate reference for our missing queue/execution/wakeup attribution.
+- [Low-latency setup](https://github.com/netborg-afps/dxvk-low-latency/blob/ccc8cc8219b97088a7450ae9872d202acac294cc/src/dxvk/framepacer/dxvk_framepacer.cpp)
+  lowers pending-submission/chunk thresholds from 2/3 to 1/1. This is a concrete
+  scheduling variation, not evidence that our prior 512-draw threshold works.
+- [Threaded sleep](https://github.com/netborg-afps/dxvk-low-latency/blob/ccc8cc8219b97088a7450ae9872d202acac294cc/src/dxvk/framepacer/dxvk_threaded_sleep.h)
+  wakes early and spins for the remaining interval, aiming for a 150-microsecond
+  margin. Consider only if wakeup overshoot is measured; it uses CPU time and does
+  not remove the dependency on fresh GPU pixels.
+
+The inspected fork diff does not introduce a D3D9 LockImage/GetRenderTargetData
+readback shortcut. Its D3D9 device change adjusts a latency-marker emission; most
+changes concern pacing, timestamps, queue notifications, synchronization and HUDs.
+There are also allocator synchronization changes, not assessed for correctness or
+performance in this review. The README acknowledges incomplete integration of CS
+processing timings into pacing. The fork is not a drop-in replacement for mtld3d;
+any mtld3d adoption needs a Metal implementation and a new controlled experiment.
+
 ## Historical evidence
 
 [PERFORMANCE.md](PERFORMANCE.md), [X87-WALL.md](X87-WALL.md),
