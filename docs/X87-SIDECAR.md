@@ -120,8 +120,9 @@ launcher logs which world it skipped and why.
 ## Upstream
 
 * [athei/x87sidecar](https://github.com/athei/x87sidecar) — the JIT. `vendor/x87sidecar-coop`
-  is commit `4e9c738` plus `patches/x87sidecar-profile-pid-path.patch`; see `patches/README.md`.
-  The local patch only improves opt-in diagnostics and does not change x87 translation. Upstream `4e9c738` brought three changes that mattered for
+  is commit `4e9c738` plus `patches/x87sidecar-profile-pid-path.patch` and
+  `patches/x87sidecar-sticky-sampler.patch`; see `patches/README.md`.
+  The local patches only improve opt-in diagnostics and do not change x87 translation. Upstream `4e9c738` brought three changes that mattered for
   HorizonXI: FMA contraction off by default (fused arithmetic corrupted PC=53 results), a cached
   register-state reset when Rosetta restarts a block, and survival of asynchronous signals inside
   emitted code. With it, the pathological `FFXiMain.dll+0x3d638` geometry stall disappeared.

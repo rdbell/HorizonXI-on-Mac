@@ -1,8 +1,8 @@
 diff --git a/rosetta_core/src/ConfigEnv.cpp b/rosetta_core/src/ConfigEnv.cpp
-index d8244b7..8b7d856 100644
+index 4bbc9b3..c09a50f 100644
 --- a/rosetta_core/src/ConfigEnv.cpp
 +++ b/rosetta_core/src/ConfigEnv.cpp
-@@ -415,6 +415,9 @@ void print_env_help(std::FILE* out) {
+@@ -509,6 +509,9 @@ void print_env_help(std::FILE* out) {
          "                                image it cannot find.  If\n"
          "                                nothing runs in the range no profile is\n"
          "                                written and the reason is logged.\n"
@@ -13,10 +13,10 @@ index d8244b7..8b7d856 100644
          "                                walk (roughly halves the per-sample cost)\n"
          "  X87_DISABLE_ALL_FUSIONS=1     disable every peephole fusion\n"
 diff --git a/rosetta_loader/src/sidecar.cpp b/rosetta_loader/src/sidecar.cpp
-index 0e4472c..22cad97 100644
+index afcac64..d8c098b 100644
 --- a/rosetta_loader/src/sidecar.cpp
 +++ b/rosetta_loader/src/sidecar.cpp
-@@ -1039,15 +1039,17 @@ uint64_t machThreadId(mach_port_t thread) {
+@@ -1060,15 +1060,17 @@ uint64_t machThreadId(mach_port_t thread) {
  // One sample: read the thread's ARM pc, resolve it to a guest pc, unwind, and
  // hand the result to the aggregator.  Nothing is accumulated here and nothing is
  // looked up — this thread's only job is to be on time.  `record=false` makes it
@@ -37,7 +37,7 @@ index 0e4472c..22cad97 100644
      }
      if (record) {
          g_counters.samples.fetch_add(1, std::memory_order_relaxed);
-@@ -1163,6 +1165,7 @@ void sampleThread(SamplerCtx* ctx, const guest_pc::Reader& reader, guest_pc::Cac
+@@ -1184,6 +1186,7 @@ void sampleThread(SamplerCtx* ctx, const guest_pc::Reader& reader, guest_pc::Cac
          g_counters.total_ns.fetch_add(static_cast<uint64_t>((nowUs() - t0) * 1000.0),
                                        std::memory_order_relaxed);
      }
@@ -45,7 +45,7 @@ index 0e4472c..22cad97 100644
  }
  
  // Everything the profile is made of, owned by one thread: the histograms, the
-@@ -1177,6 +1180,7 @@ struct AggCtx {
+@@ -1198,6 +1201,7 @@ struct AggCtx {
      double report_s;
      bool unwind;
      bool range_pinned;
@@ -53,7 +53,7 @@ index 0e4472c..22cad97 100644
      // Per-window delta profiles: how many have been written, and where the one
      // being filled started, in run seconds and in latched seconds.  A window's
      // rate has to divide by the latched time inside THAT window, not the run's.
-@@ -1324,6 +1328,7 @@ void emitProfile(FILE* fh, const AggCtx* ctx, const SamplerStats& st, double ela
+@@ -1345,6 +1349,7 @@ void emitProfile(FILE* fh, const AggCtx* ctx, const SamplerStats& st, double ela
          rangeFrom = "main image (detected)";
      }
      fprintf(fh, "guest_range_from %s\n", rangeFrom);
@@ -61,7 +61,7 @@ index 0e4472c..22cad97 100644
      // A failed latch writes no profile at all, so a profile always has a
      // subject.  `latched_thread` is the CURRENT one, not the only one: a run
      // that re-latched has every thread it followed in [threads], each holding
-@@ -1871,6 +1876,11 @@ void* samplerMain(void* raw) {
+@@ -1892,6 +1897,11 @@ void* samplerMain(void* raw) {
                  "onto the thread that runs the main image\n",
                  ctx->cfg.path.c_str(), sampleHz, sweepHz);
      }
@@ -73,7 +73,7 @@ index 0e4472c..22cad97 100644
      fflush(stdout);
  
      double started = nowUs();
-@@ -1882,9 +1892,26 @@ void* samplerMain(void* raw) {
+@@ -1903,9 +1913,26 @@ void* samplerMain(void* raw) {
              // Steady state: one thread, one thread_get_state, no task_threads,
              // no port churn and no thread_info.
              bool inRange = false;
@@ -102,7 +102,7 @@ index 0e4472c..22cad97 100644
                  lastInRange = now;
              } else if (now - lastInRange > kUnlatchAfterS * 1e6) {
                  const double quiet = (now - lastInRange) / 1e6;
-@@ -1896,6 +1923,9 @@ void* samplerMain(void* raw) {
+@@ -1917,6 +1944,9 @@ void* samplerMain(void* raw) {
                  g_latch.add((now - started) / 1e6,
                              "unlatched 0x%llx after %.1f s outside the image",
                              static_cast<unsigned long long>(latchedTid), quiet);
@@ -112,7 +112,7 @@ index 0e4472c..22cad97 100644
                  {
                      const std::scoped_lock lock(g_latch.mu);
                      g_latch.latched = false;
-@@ -2836,6 +2866,9 @@ void samplerConfigFromEnv(SamplerConfig& cfg) {
+@@ -3011,6 +3041,9 @@ void samplerConfigFromEnv(SamplerConfig& cfg) {
      if (const char* w = getenv("X87_SAMPLE_WINDOWS"); w != nullptr && w[0] != '\0') {
          cfg.windows = strcmp(w, "0") != 0;
      }
@@ -122,18 +122,7 @@ index 0e4472c..22cad97 100644
      if (env_truthy("X87_NO_UNWIND")) {
          cfg.unwind = false;
      }
-@@ -2897,6 +2930,10 @@ void startSampler(mach_port_t parentTaskPort, uint64_t runtimeBase, const Sample
-     // Sweeping every thread faster than the sample rate is never what was
-     // meant: the sweep is the expensive mode and the rate is the cheap one.
-     cfg.sweep_interval_us = std::max(cfg.sweep_interval_us, cfg.interval_us);
-+    if (cfg.guest_range_pinned) {
-+        g_counters.guest_lo.store(cfg.guest_lo, std::memory_order_relaxed);
-+        g_counters.guest_hi.store(cfg.guest_hi, std::memory_order_relaxed);
-+    }
-     // Resolve the target before touching the output path.  Wine starts one
-     // sidecar per i386 process, and all of them inherit the same environment.
-     // Expanding first keeps the injector from truncating the game's profile.
-@@ -2951,6 +2988,7 @@ void startSampler(mach_port_t parentTaskPort, uint64_t runtimeBase, const Sample
+@@ -3105,6 +3138,7 @@ void startSampler(mach_port_t parentTaskPort, uint64_t runtimeBase, const Sample
                             .report_s = cfg.report_s,
                             .unwind = cfg.unwind,
                             .range_pinned = cfg.guest_range_pinned,
@@ -142,10 +131,26 @@ index 0e4472c..22cad97 100644
      pthread_t aggThr;
      if (pthread_create(&aggThr, &attr, aggregatorMain, agg) != 0) {
 diff --git a/rosetta_loader/src/sidecar.hpp b/rosetta_loader/src/sidecar.hpp
-index 2c04eca..2b26665 100644
+index 97ead20..af65b27 100644
 --- a/rosetta_loader/src/sidecar.hpp
 +++ b/rosetta_loader/src/sidecar.hpp
-@@ -81,6 +81,12 @@ struct SamplerConfig {
+@@ -55,11 +55,14 @@ void dumpCountersIfEnabled(mach_port_t parentTaskPort);
+ // Guest-pc sampler.
+ //
+ // X87_SAMPLE=<path> enables it and names the profile, exactly like X87_PROFILE.
++// Every `%p` in the path expands to the sampled target's pid.  This matters for
++// launchers such as wine, where several independently wrapped processes inherit
++// the same environment and would otherwise overwrite one another's profile.
+ // Everything lands in that one self-describing file: the settings it ran with,
+ // which thread it latched onto, the rate it actually achieved, the leaf
+ // histogram and the folded stacks.
+ struct SamplerConfig {
+-    std::string path;  // X87_SAMPLE; empty = disabled
++    std::string path;  // X87_SAMPLE; empty = disabled, `%p` = target pid
+     // X87_SAMPLE_HZ, default 10 kHz.  A sample costs ~10 us, so the rate buys
+     // resolution at almost exactly 1% of one core per kHz, and it holds: 10 kHz
+     // measured 9998 Hz achieved with nothing dropped and the ring under 2% full.
+@@ -83,6 +86,12 @@ struct SamplerConfig {
      uint64_t guest_lo = 0;
      uint64_t guest_hi = 0x100000000ULL;
      bool guest_range_pinned = false;
@@ -158,7 +163,7 @@ index 2c04eca..2b26665 100644
      // Profile rewrite interval, and with it the window size below, which is what
      // sets this rather than durability: every catchable exit path flushes (see
      // flushSamplerIfEnabled), so it bounds only what an uncatchable kill takes
-@@ -105,8 +111,9 @@ struct SamplerConfig {
+@@ -107,8 +116,9 @@ struct SamplerConfig {
  };
  
  // Overlay X87_SAMPLE / X87_SAMPLE_HZ / X87_SAMPLE_SWEEP_HZ / X87_SAMPLE_REPORT /
