@@ -29,3 +29,6 @@ scripts/harness/.build/
 # local Docker test server logs
 scripts/lsb-docker/log/
 __pycache__/
+
+# Native compatibility addon build output
+addons/targetguard/targetguard.dll
