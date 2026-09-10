@@ -1,0 +1,403 @@
+{
+  "date": "2026-09-09",
+  "purpose": "Overlapping vertex-stream correction; rendering regression check",
+  "source_tree": "70c709177b8f70f9c3d06403889a959e196ff5a9",
+  "production_pixel_tests": {
+    "build24": {
+      "d3d9_sha256": "d015eebb37c4aa30f641659693d899be715e30c23cb527bffdaf89548a383e5d",
+      "tests": {
+        "overlapping_bound_vertices_preserve_stride_and_base_vertex": 101,
+        "overlapping_up_vertices_preserve_stride": 101,
+        "overlapping_instance_stream_preserves_stride_and_step_rate": 101,
+        "overlapping_up_tail_reads_zero_in_fixed_function_draws": 101,
+        "overlapping_bound_tail_upload_preserves_queued_fixed_function_draw": 101
+      }
+    },
+    "candidate": {
+      "d3d9_sha256": "990d7117b80de3b2c491ee7dc2204aba4a5e9365050d404ed0305276fe3e95d8",
+      "tests": {
+        "overlapping_bound_vertices_preserve_stride_and_base_vertex": 0,
+        "overlapping_up_vertices_preserve_stride": 0,
+        "overlapping_instance_stream_preserves_stride_and_step_rate": 0,
+        "overlapping_up_tail_reads_zero_in_fixed_function_draws": 0,
+        "overlapping_bound_tail_upload_preserves_queued_fixed_function_draw": 0
+      }
+    }
+  },
+  "gates": {
+    "make_check": "passed",
+    "core_tests_passed": 1045,
+    "shared_tests_passed": 203,
+    "rendering_tests_passed_per_arch": {
+      "i686": 452,
+      "x86_64": 452
+    },
+    "conformance": "nonzero against older reference baseline; visual failures identical to installed build 24; device timeout leaves incomplete counts",
+    "i686_production_visual_failure_count": 236,
+    "i686_production_visual_failure_values_identical": true,
+    "candidate_conformance": {
+      "i686": {
+        "visual": 236,
+        "stateblock": 0,
+        "d3d9ex": 1,
+        "device": "timeout"
+      },
+      "x86_64": {
+        "visual": 234,
+        "stateblock": 0,
+        "d3d9ex": 1,
+        "device": "timeout"
+      }
+    },
+    "reference_wine_new_pixel_tests": "4 passed; instance-rate change reference limitation failed"
+  },
+  "local_runs": [
+    {
+      "run": "local-baseline-lighting-combined",
+      "session": "20260909-230834-standard-nosample",
+      "scenes": [
+        {
+          "name": "lighting noon settled",
+          "clock": "12:12",
+          "clock_error_minutes": 0.969,
+          "position": {
+            "x": 0.02,
+            "y": -75.405,
+            "z": -0.017,
+            "yaw": -1.5706
+          },
+          "seconds": 7.188,
+          "windows": 7,
+          "fps": 26.154,
+          "minimum_window_fps": 25.866336,
+          "maximum_frame_ms": 46.8207,
+          "jit_enabled": [
+            0.0
+          ]
+        },
+        {
+          "name": "lighting sunset settled",
+          "clock": "18:07",
+          "clock_error_minutes": 0.512,
+          "position": {
+            "x": 0.02,
+            "y": -75.405,
+            "z": -0.017,
+            "yaw": -1.5706
+          },
+          "seconds": 7.17,
+          "windows": 7,
+          "fps": 25.662,
+          "minimum_window_fps": 24.982464,
+          "maximum_frame_ms": 48.376199,
+          "jit_enabled": [
+            0.0
+          ]
+        },
+        {
+          "name": "lighting midnight settled",
+          "clock": "00:07",
+          "clock_error_minutes": 0.515,
+          "position": {
+            "x": 0.02,
+            "y": -75.405,
+            "z": -0.018,
+            "yaw": -1.5706
+          },
+          "seconds": 7.077,
+          "windows": 7,
+          "fps": 25.577,
+          "minimum_window_fps": 24.956528,
+          "maximum_frame_ms": 44.678299,
+          "jit_enabled": [
+            0.0
+          ]
+        },
+        {
+          "name": "lighting dawn settled",
+          "clock": "06:07",
+          "clock_error_minutes": 0.508,
+          "position": {
+            "x": 0.02,
+            "y": -75.405,
+            "z": -0.017,
+            "yaw": -1.5706
+          },
+          "seconds": 7.146,
+          "windows": 7,
+          "fps": 24.768,
+          "minimum_window_fps": 21.923531,
+          "maximum_frame_ms": 70.886901,
+          "jit_enabled": [
+            0.0
+          ]
+        },
+        {
+          "name": "lighting storm settled",
+          "clock": "06:16",
+          "clock_error_minutes": 0.679,
+          "position": {
+            "x": 0.02,
+            "y": -75.405,
+            "z": -0.017,
+            "yaw": -1.5706
+          },
+          "seconds": 7.142,
+          "windows": 7,
+          "fps": 24.504,
+          "minimum_window_fps": 23.195779,
+          "maximum_frame_ms": 47.3486,
+          "jit_enabled": [
+            0.0
+          ]
+        }
+      ],
+      "renderer": {
+        "d3d8.dll": "ab6bf7a9a9f4b3e66a75ca038d8d10289c88acbfe8d52c3b5a8a9a259cb26cd5",
+        "d3d9.dll": "d015eebb37c4aa30f641659693d899be715e30c23cb527bffdaf89548a383e5d",
+        "mtld3d.dll": "6618f35ca777b8c16d76e01e3261d2f17040b86ed7e88f34f6975d3ec6ac3701",
+        "mtld3d.so": "b9b48faed4923fe6110a6105e4d882622be3b459ae9c908f3f8877319f0c88d6"
+      },
+      "config": "color.hdr.enable=false;render.scale=1;present.maxFps=0;render.mergePasses=true;render.submitDraws=0",
+      "graphics": {
+        "0000": 2,
+        "0001": 1920,
+        "0002": 1080,
+        "0003": 4096,
+        "0004": 4096,
+        "0007": 1,
+        "0011": 2,
+        "0017": 0,
+        "0018": 2,
+        "0019": 1,
+        "0020": 1,
+        "0021": 0,
+        "0022": 0,
+        "0023": 0,
+        "0024": 0,
+        "0028": 0,
+        "0029": 12,
+        "0030": 0,
+        "0031": 1002740646,
+        "0032": 0,
+        "0033": 0,
+        "0034": 1,
+        "0035": 1,
+        "0036": 1,
+        "0037": 1920,
+        "0038": 1080,
+        "0039": 1,
+        "0040": 0,
+        "0041": 0,
+        "0043": 0,
+        "0044": 1,
+        "0045": 0
+      },
+      "boot_sha256": "4733b6e0f2054f7b762ce06ba6d3eec01f75bbffac23b7e0ca103a4c0770a583",
+      "scenario_sha256": {
+        "perfscene.lua": "d6194faa3e167e9495dfcb34aa0d65d240d8a04395d9b81dc0fd34404b4fba6a",
+        "stress.lua": "105b42bee8f56c4959998281fc7c6be6ca32855b488639ceba12178673921f6d"
+      },
+      "restoration": {
+        "files_restored": 44,
+        "preferences_restored": true,
+        "docker_unchanged": true,
+        "related_processes": []
+      },
+      "visual_review_required": false,
+      "measurement_note": "Brief settled windows for a rendering regression check, not a sustained performance benchmark.",
+      "scenario_done_seconds": 271.5,
+      "cleanup_done_seconds": 282.29,
+      "visual_review": "Lighting changes present; no large stray triangle in saved frames; minimap fill transparent"
+    },
+    {
+      "run": "local-candidate-lighting",
+      "session": "20260909-231424-standard-nosample",
+      "scenes": [
+        {
+          "name": "lighting noon settled",
+          "clock": "12:12",
+          "clock_error_minutes": 0.968,
+          "position": {
+            "x": 0.02,
+            "y": -75.405,
+            "z": -0.017,
+            "yaw": -1.5706
+          },
+          "seconds": 7.084,
+          "windows": 7,
+          "fps": 27.526,
+          "minimum_window_fps": 25.389735,
+          "maximum_frame_ms": 47.379399,
+          "jit_enabled": [
+            0.0
+          ]
+        },
+        {
+          "name": "lighting sunset settled",
+          "clock": "18:07",
+          "clock_error_minutes": 0.514,
+          "position": {
+            "x": 0.02,
+            "y": -75.405,
+            "z": -0.017,
+            "yaw": -1.5706
+          },
+          "seconds": 7.115,
+          "windows": 7,
+          "fps": 27.127,
+          "minimum_window_fps": 24.549618,
+          "maximum_frame_ms": 53.8506,
+          "jit_enabled": [
+            0.0
+          ]
+        },
+        {
+          "name": "lighting midnight settled",
+          "clock": "00:07",
+          "clock_error_minutes": 0.521,
+          "position": {
+            "x": 0.02,
+            "y": -75.405,
+            "z": -0.018,
+            "yaw": -1.5706
+          },
+          "seconds": 7.092,
+          "windows": 7,
+          "fps": 29.047,
+          "minimum_window_fps": 28.496064,
+          "maximum_frame_ms": 38.437,
+          "jit_enabled": [
+            0.0
+          ]
+        },
+        {
+          "name": "lighting dawn settled",
+          "clock": "06:07",
+          "clock_error_minutes": 0.519,
+          "position": {
+            "x": 0.02,
+            "y": -75.405,
+            "z": -0.018,
+            "yaw": -1.5706
+          },
+          "seconds": 7.181,
+          "windows": 7,
+          "fps": 26.737,
+          "minimum_window_fps": 25.672777,
+          "maximum_frame_ms": 43.7479,
+          "jit_enabled": [
+            0.0
+          ]
+        },
+        {
+          "name": "lighting storm settled",
+          "clock": "06:16",
+          "clock_error_minutes": 0.699,
+          "position": {
+            "x": 0.02,
+            "y": -75.405,
+            "z": -0.018,
+            "yaw": -1.5706
+          },
+          "seconds": 7.142,
+          "windows": 7,
+          "fps": 28.982,
+          "minimum_window_fps": 28.087426,
+          "maximum_frame_ms": 40.3264,
+          "jit_enabled": [
+            0.0
+          ]
+        }
+      ],
+      "renderer": {
+        "d3d8.dll": "ab6bf7a9a9f4b3e66a75ca038d8d10289c88acbfe8d52c3b5a8a9a259cb26cd5",
+        "d3d9.dll": "990d7117b80de3b2c491ee7dc2204aba4a5e9365050d404ed0305276fe3e95d8",
+        "mtld3d.dll": "6618f35ca777b8c16d76e01e3261d2f17040b86ed7e88f34f6975d3ec6ac3701",
+        "mtld3d.so": "b9b48faed4923fe6110a6105e4d882622be3b459ae9c908f3f8877319f0c88d6"
+      },
+      "config": "color.hdr.enable=false;render.scale=1;present.maxFps=0;render.mergePasses=true;render.submitDraws=0",
+      "graphics": {
+        "0000": 2,
+        "0001": 1920,
+        "0002": 1080,
+        "0003": 4096,
+        "0004": 4096,
+        "0007": 1,
+        "0011": 2,
+        "0017": 0,
+        "0018": 2,
+        "0019": 1,
+        "0020": 1,
+        "0021": 0,
+        "0022": 0,
+        "0023": 0,
+        "0024": 0,
+        "0028": 0,
+        "0029": 12,
+        "0030": 0,
+        "0031": 1002740646,
+        "0032": 0,
+        "0033": 0,
+        "0034": 1,
+        "0035": 1,
+        "0036": 1,
+        "0037": 1920,
+        "0038": 1080,
+        "0039": 1,
+        "0040": 0,
+        "0041": 0,
+        "0043": 0,
+        "0044": 1,
+        "0045": 0
+      },
+      "boot_sha256": "4733b6e0f2054f7b762ce06ba6d3eec01f75bbffac23b7e0ca103a4c0770a583",
+      "scenario_sha256": {
+        "perfscene.lua": "d6194faa3e167e9495dfcb34aa0d65d240d8a04395d9b81dc0fd34404b4fba6a",
+        "stress.lua": "105b42bee8f56c4959998281fc7c6be6ca32855b488639ceba12178673921f6d"
+      },
+      "restoration": {
+        "files_restored": 44,
+        "preferences_restored": true,
+        "docker_unchanged": true,
+        "related_processes": []
+      },
+      "visual_review_required": false,
+      "measurement_note": "Brief settled windows for a rendering regression check, not a sustained performance benchmark.",
+      "scenario_done_seconds": 275.6,
+      "cleanup_done_seconds": 285.82,
+      "visual_review": "Lighting changes present; no large stray triangle in saved frames; minimap fill visible"
+    }
+  ],
+  "position_comparison_tolerance": 0.002,
+  "limitations": [
+    "The intermittent reported triangle was not reproduced or frame-correlated.",
+    "One pair of short settled samples does not establish a sustained FPS change.",
+    "Client coordinates differ vertically by at most 0.001 units; corresponding screenshots were reviewed.",
+    "Full D3D9 conformance is not established; existing failures and device timeouts remain."
+  ],
+  "installation": {
+    "version": "3.8",
+    "build": "25",
+    "codesign_verified": true,
+    "files_match_staged": true,
+    "rollback": "pre-stride-build24.app"
+  },
+  "installed_smoke": {
+    "session": "20260909-232302-standard-nosample",
+    "local_character_selection_confirmed": true,
+    "renderer_verified": {
+      "d3d8.dll": "ab6bf7a9a9f4b3e66a75ca038d8d10289c88acbfe8d52c3b5a8a9a259cb26cd5",
+      "d3d9.dll": "990d7117b80de3b2c491ee7dc2204aba4a5e9365050d404ed0305276fe3e95d8",
+      "mtld3d.dll": "6618f35ca777b8c16d76e01e3261d2f17040b86ed7e88f34f6975d3ec6ac3701",
+      "mtld3d.so": "b9b48faed4923fe6110a6105e4d882622be3b459ae9c908f3f8877319f0c88d6"
+    },
+    "renderer_config": "color.hdr.enable=false;render.scale=1;present.maxFps=0;render.mergePasses=true;render.submitDraws=0",
+    "restoration": {
+      "files_restored": 44,
+      "preferences_restored": true,
+      "docker_unchanged": true,
+      "related_processes": []
+    }
+  }
+}

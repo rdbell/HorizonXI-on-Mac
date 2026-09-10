@@ -65,9 +65,63 @@ already present in build 24. No conformance baselines were rewritten. This is
 evidence against a new visual-conformance regression, not a claim of full D3D9
 conformance.
 
-Local-server validation results will be recorded before promotion.
+The final local LSB baseline and candidate runs completed in 272 and 276 seconds
+to the last scene marker, with a 360-second game limit. Both confirmed noon,
+18:07, 00:07, 06:07 and storm at 06:16 in North Gustaberg. Graphics settings,
+boot script, scenario source and effective draw distance 10 matched. Corresponding
+screenshots were reviewed; recorded positions match within 0.001 units vertically.
+
+| Settled scene | Build 24 FPS | Candidate FPS |
+| --- | ---: | ---: |
+| Noon | 26.15 | 27.53 |
+| Sunset | 25.66 | 27.13 |
+| Midnight | 25.58 | 29.05 |
+| Dawn | 24.77 | 26.74 |
+| Storm | 24.50 | 28.98 |
+
+These are roughly seven-second samples after each checkpoint, from one paired
+local rendering check. They do not establish a sustained FPS improvement or
+replace the approved gameplay baseline. Neither run logged a renderer error.
+The baseline logged the widened-stride warning; the candidate did not. A visible
+secondary improvement is that the minimap's map image renders in all five candidate
+screenshots, where the baseline's border surrounds a transparent interior.
+
+Both runs restored 44 saved file states and launcher preferences, verified that
+Docker IDs/start times were unchanged, and left no related processes running.
+See the [recorded checks and measurements](benchmarks/2026-09-09-vertex-stride.json).
 The intermittent screenshot itself still requires reproduction or user retesting;
 a corrected compatibility defect is not proof of that attribution.
+
+## Installation
+
+Installed as version 3.8 build 25, retaining the existing performance settings,
+Wine shim, signed Unix renderer and targetguard fix. The only runtime component
+changed is D3D9; the launcher executable matches build 24 after removing its code
+signature. Source patch, manifest, bundle version and app signature were updated.
+The installed bundle's signature and every renderer hash verify.
+An additional local LSB character-selection run through the installed app verified
+the loaded production DLL and normal mtld3d configuration. It restored all saved
+settings and left the game closed.
+
+The full pre-change app is retained outside Git at
+`benchmarks/20260909-triangle/pre-stride-build24.app`. The earlier approved
+`benchmarks/known-good-20260906-build24/` snapshot is also untouched. Restore an app
+only with game and launcher closed.
+
+## Repeatable local lighting check
+
+The `lighting` scenario in [the renderer harness](../scripts/harness/README.md#local-renderer-comparisons)
+uses the local test character, a fixed North Gustaberg position, noon, sunset,
+midnight, dawn, thunderstorms, and a final clear-weather reset. Saved graphics,
+boot scripts, shader cache, account selection and renderer files are restored.
+
+Setup attempts revealed two invalid measurement conditions. The old outdoor
+anchor reused an arrival position for the other Gustaberg zone. Also, changing the
+server clock alone left the client at noon. Sending a separate reload one second
+later produced a client command error; the server audit confirmed that those
+reload commands never arrived. The final sequence combines clock changes and
+same-position zoning in a single GM command. Client clock markers and screenshots
+must agree before a phase is counted. The earlier setup captures are excluded.
 
 ## Rules check
 

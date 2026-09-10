@@ -58,6 +58,33 @@ local entity_distance_command = '/drawdistance setmob ' .. tostring(requested_di
 -- Weather ids follow xi.weather (6 rain, 12 snow, 15 thunderstorms). Positions are fixed
 -- zone-line arrival points from LandSandBoat's zone.yaml.
 local scenarios = {
+    -- Fixed outdoor camera across lighting and weather changes. perftime only
+    -- moves the server clock backward, avoiding forward session expiry. Rezone
+    -- at the same position after each clock change so the client receives it.
+    lighting = {
+        { 1, "!exec xi.commands.perftime = dofile('scripts/commands/perftime.lua')", 'clock command refreshed' },
+        { 1, '!perftime 12', 'clock pinned to noon' },
+        { 2, '/fps 0', 'fps uncapped' },
+        { 2, world_distance_command, 'world draw distance set' },
+        { 2, entity_distance_command, 'entity draw distance set' },
+        { 3, '!exec player:setPos(0.020,-4.409,-75.405,192,106)', 'zone north gustaberg' },
+        { 6, 'home', 'camera reset requested' },
+        { 1, '!setweather 0', 'lighting clear weather' },
+        { 15, 'settle', 'lighting noon settled' },
+        { 10, '!exec xi.commands.perftime.onTrigger(player,18);player:setPos(0.020,-4.409,-75.405,192,106)', 'lighting sunset clock' },
+        { 6, 'home', 'camera reset requested' },
+        { 12, 'settle', 'lighting sunset settled' },
+        { 10, '!exec xi.commands.perftime.onTrigger(player,0);player:setPos(0.020,-4.409,-75.405,192,106)', 'lighting midnight clock' },
+        { 6, 'home', 'camera reset requested' },
+        { 12, 'settle', 'lighting midnight settled' },
+        { 10, '!exec xi.commands.perftime.onTrigger(player,6);player:setPos(0.020,-4.409,-75.405,192,106)', 'lighting dawn clock' },
+        { 6, 'home', 'camera reset requested' },
+        { 12, 'settle', 'lighting dawn settled' },
+        { 10, '!setweather 15', 'lighting thunderstorms' },
+        { 12, 'settle', 'lighting storm settled' },
+        { 10, '!setweather 0', 'lighting weather restored' },
+        { 1, 'done', 'done' },
+    },
     -- The settled-city baseline: two fixed vantages in Bastok at uncapped FPS.
     city = {
         { 1,  "!exec xi.commands.perftime = dofile('scripts/commands/perftime.lua')", 'clock command refreshed' },
@@ -281,7 +308,7 @@ local function start(name)
         print(chat.header(addon.name):append(chat.error('unknown scenario: ' .. tostring(name))));
         return;
     end
-    if (name == 'effects' or stress_module.is_scenario(name)) and AshitaCore:GetMemoryManager():GetParty():GetMemberName(0) ~= 'Hxitest' then
+    if (name == 'effects' or name == 'lighting' or stress_module.is_scenario(name)) and AshitaCore:GetMemoryManager():GetParty():GetMemberName(0) ~= 'Hxitest' then
         mark('scenario failed', ', "reason": "stress/effects scenario requires local Hxitest"');
         return;
     end

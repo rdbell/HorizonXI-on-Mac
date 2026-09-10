@@ -5,6 +5,7 @@ local clock, commands, labels, handlers, name, job, level, learned, packets, res
 local spell_ids = { ['Blaze Spikes'] = 249, ['Ice Spikes'] = 250, ['Shock Spikes'] = 251,
                     Stoneskin = 54, Blink = 53, Aquaveil = 55 };
 local nx_enabled, nx_flags, nx_fails = false, 2, false;
+local scenario = 'effects';
 local player = {
     GetIsZoning = function() return 0 end,
     GetMainJob = function() return job end,
@@ -59,7 +60,7 @@ package.loaded.ffi = {
     },
 };
 os.getenv = function(key)
-    if key == 'PERFSCENE_SCENARIO' then return 'effects' end
+    if key == 'PERFSCENE_SCENARIO' then return scenario end
     if key == 'PERFSCENE_ENFORCE_NX' and nx_enabled then return '1' end
 end;
 print = function(label) labels[#labels + 1] = label end;
@@ -122,5 +123,27 @@ local failed = false;
 for _, label in ipairs(labels) do failed = failed or label == 'scenario failed' end
 assert(nx_flags == 2 and #commands == 0 and failed,
     'continued after execution-policy verification failed');
+nx_enabled, nx_fails, scenario = false, false, 'lighting';
+run('PersonalCharacter', true);
+assert(#commands == 0 and labels[#labels] == 'scenario failed',
+    'lighting sequence touched a different character');
+run('Hxitest', true);
+local clocks, weather, rezones = {}, {}, 0;
+for _, row in ipairs(commands) do
+    assert(#row.command <= 118, 'lighting command exceeds the chat payload limit');
+    local hour = row.command:match('^!perftime (%d+)$')
+        or row.command:match('perftime%.onTrigger%(player,(%d+)%)');
+    if hour then clocks[#clocks + 1] = hour end
+    local value = row.command:match('^!setweather (%d+)$');
+    if value then weather[#weather + 1] = value end
+    if row.command:find('player:setPos(0.020,-4.409,-75.405,192,106)', 1, true) then
+        rezones = rezones + 1;
+    end
+end
+assert(table.concat(clocks, ',') == '12,18,0,6', 'lighting sweep omitted a time of day');
+assert(table.concat(weather, ',') == '0,15,0', 'lighting weather was not restored');
+assert(rezones == 4, 'lighting clock changes must refresh the client through zoning');
+assert(labels[#labels] == 'done' and commands[#commands].time < 180,
+    'lighting sequence exceeded its bounded schedule');
 os.getenv, print = original_getenv, original_print;
-print('Effects identity, readiness, chat length, response timeout, cadence and repetition checks passed');
+print('Effects checks and bounded lighting identity, time and weather checks passed');

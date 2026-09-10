@@ -81,6 +81,28 @@ coordinates, heading and screenshots when adding a scene.
 the second vantage in the Mines plaza. `field` measures clear weather, thunderstorms and
 a mob crowd outdoors; each settled phase holds for 20 seconds before the next change.
 
+`lighting` keeps one North Gustaberg camera while moving through noon, sunset,
+midnight, dawn, thunderstorms, then clear weather. It requires Hxitest, takes about
+150 seconds after startup, and uses backward clock changes to avoid expiring the
+local session. Each clock change is followed by zoning back to the same position:
+the client otherwise keeps its old clock. Use it to inspect lighting-related
+geometry corruption:
+
+```sh
+python3 scripts/harness/renderer-run.py --output /path/outside/git/baseline-lighting \
+  --installed-mtld3d --scenario lighting --draw-distance 10 --menu-sample 0 \
+  --boot-file "$HOME/Games/FFXI/HorizonXI/scripts/default.txt" \
+  --no-network --level standard-nosample --limit 360 --capture-seconds 340 --hold 1
+```
+
+For a candidate, replace `--installed-mtld3d` with
+`--renderer-bundle /path/to/candidate` and add
+`--renderer-config 'color.hdr.enable=false;render.scale=1;present.maxFps=0;render.mergePasses=true;render.submitDraws=0'`
+to match the approved settings. Inspect the settled screenshots and marker clocks,
+coordinates and effective draw distances. The general report currently recognizes
+the older noon scenes only; lighting results need manual review and their short
+holds are not a long-run FPS benchmark.
+
 The runner snapshots renderer files, boot scripts, registry hives, local account storage,
 and the selected account preferences. Its `private/` directory has mode 0700 and must never
 be published. On normal completion it restores the saved file states and preferences and
