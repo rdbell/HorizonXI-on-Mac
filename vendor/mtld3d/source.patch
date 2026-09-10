@@ -3,9 +3,9 @@ index 8180614..e7f0987 100644
 --- a/mtld3d.conf
 +++ b/mtld3d.conf
 @@ -191,6 +191,16 @@
-
+ 
  # query.flushImmediate = false
-
+ 
 +# Experimental early submission for games that read a render target every frame.
 +# Send work after this many draws while the game continues collecting the next
 +# chunk. Zero keeps whole-frame batching. Colour, depth and readback ordering are
@@ -16,7 +16,7 @@ index 8180614..e7f0987 100644
 +# Copies, clears, resolves, and visibility queries retain their ordering.
 +# render.mergePasses = false
 +
-
+ 
  #########
  # Depth #
 diff --git a/unix/shared/src/ffi_boundary.rs b/unix/shared/src/ffi_boundary.rs
@@ -24,14 +24,14 @@ index ee5bd6b..4e6b6f6 100644
 --- a/unix/shared/src/ffi_boundary.rs
 +++ b/unix/shared/src/ffi_boundary.rs
 @@ -174,7 +174,7 @@ impl<T: Copy> ValueIn<'_, T> {
-
+ 
  /// Null-guarded FFI out-param. `write` consumes `self`.
  ///
 -/// Construction is `unsafe` (the caller asserts writeability and alignment);
 +/// Construction is `unsafe` (the caller asserts writeability and lifetime);
  /// `write` is safe because the invariant is type-encoded.
  pub struct OutPtr<'a, T>(NonNull<T>, PhantomData<&'a mut T>);
-
+ 
 @@ -183,8 +183,8 @@ impl<T> OutPtr<'_, T> {
      ///
      /// # Safety
@@ -50,7 +50,7 @@ index ee5bd6b..4e6b6f6 100644
 -        unsafe { self.0.as_ptr().write(val) };
 +        unsafe { self.0.as_ptr().write_unaligned(val) };
      }
-
+ 
      /// One-shot null-guarded write. Convenience for the `opt + write` pair.
 diff --git a/unix/shared/src/ffi_boundary/tests.rs b/unix/shared/src/ffi_boundary/tests.rs
 index 09f99c6..0afdcb8 100644
@@ -59,7 +59,7 @@ index 09f99c6..0afdcb8 100644
 @@ -67,6 +67,20 @@ fn out_ptr_opt_filters_null() {
      assert!(opt.is_none());
  }
-
+ 
 +#[test]
 +fn out_ptr_writes_unaligned_storage_without_touching_neighbors() {
 +    let mut storage = [u64::MAX; 3];
@@ -115,7 +115,7 @@ index 18e1be0..6eb9ee4 100644
                  // both stores are `Release`, so a PE-side `Acquire` load of
                  // `coherent_seq` that observes this seq observes the failure
 @@ -644,6 +656,12 @@ pub fn submit_frame(params: &mut SubmitFrameParams) -> bool {
-
+ 
      mtld3d_shared::crumb!("submit:commit");
      cmd_buf.commit();
 +    if let Some(start) = timer {
@@ -130,7 +130,7 @@ index 18e1be0..6eb9ee4 100644
 @@ -2862,6 +2880,9 @@ fn encode_readback_resolve(
  pub fn blit_texture_to_buffer(args: &BlitArgs) -> bool {
      use core::{ffi::c_void, ptr::NonNull};
-
+ 
 +    let timer = log::log_enabled!(target: "mtld3d::readback", log::Level::Trace)
 +        .then(std::time::Instant::now);
 +
@@ -139,7 +139,7 @@ index 18e1be0..6eb9ee4 100644
      let BlitArgs {
 @@ -3024,8 +3045,15 @@ pub fn blit_texture_to_buffer(args: &BlitArgs) -> bool {
      }
-
+ 
      blit.endEncoding();
 +    let encode_elapsed = timer.map(|start| start.elapsed());
      cmd_buf.commit();
@@ -345,7 +345,7 @@ index e2fa46b..f9913f0 100644
 @@ -193,6 +194,12 @@ fn buffer_ignore_lock_bounds_defaults_off_and_round_trips() {
      assert!(!cfg.buffer_ignore_lock_bounds);
  }
-
+ 
 +#[test]
 +fn merge_passes_defaults_off_and_accepts_an_explicit_override() {
 +    assert!(!parse(None, "", None).render_merge_passes);
@@ -356,10 +356,29 @@ index e2fa46b..f9913f0 100644
  fn cursor_scale_auto_keyword_case_insensitive() {
      let cfg = parse(None, "cursor.scale = Auto\n", None);
 diff --git a/windows/core/src/convert.rs b/windows/core/src/convert.rs
-index d021cf0..bb69a11 100644
+index d021cf0..c0b6b0a 100644
 --- a/windows/core/src/convert.rs
 +++ b/windows/core/src/convert.rs
-@@ -1169,11 +1169,6 @@ bitflags::bitflags! {
+@@ -1036,13 +1036,11 @@ pub struct ResolvedAttrs {
+     pub attrs: Vec<VertexAttrDesc>,
+     /// Per stream, `max(offset + size)` over the elements kept in `attrs`.
+     ///
+-    /// Only kept elements count: Metal validates a layout's stride against
+-    /// the attributes in the descriptor, and an element the shader never
+-    /// consumes is not in it. Counting unconsumed tail fields would widen
+-    /// the fetch step past the stream's true stride and mis-fetch every
+-    /// vertex after the first — applications legitimately bind a packed
+-    /// buffer under a shared declaration whose trailing elements only exist
+-    /// for other shaders. Zero for a stream with no kept element.
++    /// Only kept elements count: unconsumed fields must not enlarge inline
++    /// padding or the tracked buffer read range. Extents describe the bytes
++    /// a vertex can read independently of the stream's fetch stride, and can
++    /// extend into the next vertex's storage. Zero for a stream with no kept
++    /// element.
+     pub extents: [u32; MAX_STREAMS as usize],
+     /// Bit `s` set: stream `s` feeds at least one consumed attribute.
+     ///
+@@ -1169,11 +1167,6 @@ bitflags::bitflags! {
          /// Drives whether the FF VS emit needs the indexed-palette input
          /// attribute (slot 13).
          const DECLARED_INDICES = 1 << 4;
@@ -371,7 +390,7 @@ index d021cf0..bb69a11 100644
          /// Vertex declaration has a PSIZE element (per-vertex point size).
          const HAS_PSIZE = 1 << 6;
      }
-@@ -1187,11 +1182,6 @@ impl FfVsLayout {
+@@ -1187,11 +1180,6 @@ impl FfVsLayout {
      }
      #[inline]
      #[must_use]
@@ -383,7 +402,7 @@ index d021cf0..bb69a11 100644
      pub const fn has_psize(&self) -> bool {
          self.flags.contains(FfVsLayoutFlags::HAS_PSIZE)
      }
-@@ -1223,9 +1213,8 @@ impl FfVsLayout {
+@@ -1223,9 +1211,8 @@ impl FfVsLayout {
  ///
  /// Panics if `tex_coord_count` exceeds the `u8` range (clamped to ≤8 by the
  /// loop, so unreachable).
@@ -415,7 +434,7 @@ index 35fca49..3f8e90c 100644
 +    let layout = ff_vs_layout_from_elements(&elements);
      assert_eq!(layout.tex_coord_count, 8);
  }
-
+ 
 @@ -828,13 +828,13 @@ fn ff_vs_layout_in_spec_usage_index_7_yields_8() {
              usage_index: 7,
          },
@@ -424,14 +443,14 @@ index 35fca49..3f8e90c 100644
 +    let layout = ff_vs_layout_from_elements(&elements);
      assert_eq!(layout.tex_coord_count, 8);
  }
-
+ 
  #[test]
  fn ff_vs_layout_single_tex0_yields_1() {
 -    let layout = ff_vs_layout_from_elements(&[pos3(), tex0(12)], false);
 +    let layout = ff_vs_layout_from_elements(&[pos3(), tex0(12)]);
      assert_eq!(layout.tex_coord_count, 1);
  }
-
+ 
 diff --git a/windows/core/src/dxso/ff.rs b/windows/core/src/dxso/ff.rs
 index 00692df..9182d68 100644
 --- a/windows/core/src/dxso/ff.rs
@@ -480,7 +499,7 @@ index 00692df..9182d68 100644
 -        const USES_DECL = 1 << 3;
      }
  }
-
+ 
 @@ -1378,6 +1361,8 @@ bitflags::bitflags! {
  /// The field (0 = `MCS_MATERIAL`, 1 = `MCS_COLOR1`, 2 = `MCS_COLOR2`) selects
  /// the expression that feeds the FF lighting math. When `D3DRS_COLORVERTEX` is
@@ -520,7 +539,7 @@ index e41b60d..94cad74 100644
 --- a/windows/core/src/passes.rs
 +++ b/windows/core/src/passes.rs
 @@ -5555,3 +5555,5 @@ impl LastBoundCache {
-
+ 
  #[cfg(test)]
  mod tests;
 +
@@ -695,7 +714,7 @@ index c450bab..15edd06 100644
 @@ -153,6 +153,115 @@ fn dummy_draw() -> Command {
      Command::draw_primitives(mtld3d_shared::mtl::PrimitiveType::Triangle, 0, 3)
  }
-
+ 
 +fn independent_pass_sequence() -> PassState {
 +    let mut state = fresh();
 +    state.clear_color(0, 0, 0, 1.0f32.to_bits());
@@ -808,14 +827,73 @@ index c450bab..15edd06 100644
  fn unpack_scissor(cmd: &Command) -> (u32, u32, u32, u32) {
      assert_eq!(cmd.cmd, CommandType::SetScissorRect as u32);
      let x = cmd.param_a;
+diff --git a/windows/core/src/scratch.rs b/windows/core/src/scratch.rs
+index e72ef37..83f9bbb 100644
+--- a/windows/core/src/scratch.rs
++++ b/windows/core/src/scratch.rs
+@@ -177,6 +177,28 @@ impl ScratchArena {
+         ptr as u64
+     }
+ 
++    /// Copy a payload followed by explicitly zeroed padding into stable storage.
++    ///
++    /// Reused chunks contain old frame data, so the padding is written on every
++    /// allocation. The pointer remains valid until the next `clear()`.
++    ///
++    /// # Panics
++    ///
++    /// Panics if the payload length plus padding overflows `usize`.
++    pub fn alloc_padded(&mut self, data: &[u8], padding: usize) -> u64 {
++        let size = data
++            .len()
++            .checked_add(padding)
++            .expect("scratch padded size fits usize");
++        let ptr = self.reserve(size);
++        // SAFETY: reserve returns size writable, initialized bytes in an arena
++        // chunk; data is a separate allocation and no slice to this region exists.
++        let bytes = unsafe { core::slice::from_raw_parts_mut(ptr, size) };
++        bytes[..data.len()].copy_from_slice(data);
++        bytes[data.len()..].fill(0);
++        ptr as u64
++    }
++
+     /// Bump-allocate uninitialised space for one `T` and return a raw pointer.
+     ///
+     /// Caller writes the value via `ptr::write` or per-field
+diff --git a/windows/core/src/scratch/tests.rs b/windows/core/src/scratch/tests.rs
+index 90b875b..05cd107 100644
+--- a/windows/core/src/scratch/tests.rs
++++ b/windows/core/src/scratch/tests.rs
+@@ -10,6 +10,21 @@ use super::*;
+ 
+ const TEST_CHUNK: usize = 256;
+ 
++#[test]
++fn padded_alloc_zeroes_reused_storage_and_keeps_prior_pointers_stable() {
++    let mut arena = ScratchArena::with_chunk_size(TEST_CHUNK);
++    arena.alloc(&[0xAB; TEST_CHUNK]);
++    arena.clear();
++    let ptr = arena.alloc_padded(&[1, 2, 3, 4], 8);
++    for _ in 0..8 {
++        arena.alloc(&[0xCD; TEST_CHUNK]);
++    }
++    // SAFETY: the padded allocation covers 12 initialized bytes and the arena
++    // has not been cleared; subsequent allocations preserve its address.
++    let bytes = unsafe { core::slice::from_raw_parts(ptr as *const u8, 12) };
++    assert_eq!(bytes, &[1, 2, 3, 4, 0, 0, 0, 0, 0, 0, 0, 0]);
++}
++
+ #[test]
+ fn alloc_returns_stable_pointer_across_subsequent_allocs() {
+     let mut arena = ScratchArena::with_chunk_size(TEST_CHUNK);
 diff --git a/windows/core/src/shader_cache.rs b/windows/core/src/shader_cache.rs
 index dd195b7..ca91c8e 100644
 --- a/windows/core/src/shader_cache.rs
 +++ b/windows/core/src/shader_cache.rs
 @@ -49,6 +49,9 @@ use xxhash_rust::xxh3::Xxh3;
-
+ 
  use crate::shader_compile_stats::CompileBucket;
-
+ 
 +mod libraries;
 +pub use libraries::CompiledShaders;
 +
@@ -831,7 +909,7 @@ index dd195b7..ca91c8e 100644
 +/// `68` falls back to material constants for omitted vertex colour semantics
 +/// in fixed-function lighting and removes the declaration-origin key bit.
 +pub const SHADER_CACHE_SCHEMA_VERSION: u32 = 68;
-
+ 
  /// File magic.
  ///
 diff --git a/windows/core/src/shader_cache/libraries.rs b/windows/core/src/shader_cache/libraries.rs
@@ -1058,6 +1136,102 @@ index 0000000..aba0120
 +        assert_eq!(cache.len(), 4);
 +    }
 +}
+diff --git a/windows/core/src/streams.rs b/windows/core/src/streams.rs
+index 9393970..0cc2b2b 100644
+--- a/windows/core/src/streams.rs
++++ b/windows/core/src/streams.rs
+@@ -144,28 +144,32 @@ pub const fn instanced_stream_read_bytes(
+ 
+ /// The stride a stream's vertex buffer layout steps by.
+ ///
+-/// The application's stride wins when it covers the extent of the declaration
+-/// elements the shader consumes on that stream (it can exceed it when the
+-/// vertex struct carries fields past them). A zero stride returns the extent:
++/// Every nonzero application stride is preserved, including overlapping
++/// attributes that extend into the next vertex's storage. Widening the layout
++/// without repacking the buffer would change every fetch after the first.
++/// A zero stride returns the extent:
+ /// the inline (UP) path has no other span, and [`bound_stream_layout`] pairs it
+-/// with a `Constant` step. A non-zero stride smaller than the consumed extent
+-/// means the shader reads an attribute past the end of each vertex, which
+-/// Metal rejects as a pipeline, so the layout is widened to the extent with a
+-/// warning; the affected draw fetches wrong data either way.
++/// with a `Constant` step.
+ #[must_use]
+-pub fn layout_stride(app_stride: u32, extent: u32) -> u32 {
++pub const fn layout_stride(app_stride: u32, extent: u32) -> u32 {
+     if app_stride == 0 {
+         return extent;
+     }
+-    if app_stride < extent {
+-        mtld3d_shared::log_once_warn!(target: crate::LOG_TARGET,
+-            "stream stride {app_stride} below the consumed declaration extent {extent}; layout widened to the extent"
+-        );
+-        return extent;
+-    }
+     app_stride
+ }
+ 
++/// Cover attributes extending past the final stride of a tracked stream read.
++///
++/// A zero size means "to end of buffer" and stays zero. Saturation preserves
++/// conservative coverage when adding the tail would overflow.
++#[must_use]
++pub const fn cover_stream_extent(size: u32, stride: u32, extent: u32) -> u32 {
++    if size == 0 {
++        return 0;
++    }
++    size.saturating_add(extent.saturating_sub(stride))
++}
++
+ /// The vertex buffer layout of a stream with a vertex buffer bound.
+ ///
+ /// `app_stride` and `freq` are the stream's `SetStreamSource` stride and
+@@ -177,7 +181,7 @@ pub fn layout_stride(app_stride: u32, extent: u32) -> u32 {
+ /// stream per vertex would fetch past the buffer's end). Any other stride
+ /// steps per the frequency word.
+ #[must_use]
+-pub fn bound_stream_layout(app_stride: u32, extent: u32, freq: u32) -> StreamLayout {
++pub const fn bound_stream_layout(app_stride: u32, extent: u32, freq: u32) -> StreamLayout {
+     if app_stride == 0 {
+         return StreamLayout {
+             stride: extent,
+diff --git a/windows/core/src/streams/tests.rs b/windows/core/src/streams/tests.rs
+index 9de2581..972be9a 100644
+--- a/windows/core/src/streams/tests.rs
++++ b/windows/core/src/streams/tests.rs
+@@ -136,11 +136,28 @@ fn non_zero_stride_steps_per_frequency_word() {
+ }
+ 
+ #[test]
+-fn layout_stride_widens_below_the_consumed_extent() {
++fn layout_stride_preserves_nonzero_application_stride() {
+     assert_eq!(layout_stride(48, 36), 48);
+     assert_eq!(layout_stride(36, 36), 36);
+-    // A stride below the consumed extent is unencodable in Metal: widened.
+-    assert_eq!(layout_stride(16, 28), 28);
++    assert_eq!(layout_stride(16, 28), 16);
++    assert_eq!(layout_stride(36, 44), 36);
+     // Zero is the declaration extent for the inline (UP) path.
+     assert_eq!(layout_stride(0, 28), 28);
+ }
++
++#[test]
++fn stream_read_extent_covers_overlapping_tail_and_preserves_to_end() {
++    assert_eq!(cover_stream_extent(108, 36, 28), 108);
++    assert_eq!(cover_stream_extent(108, 36, 44), 116);
++    assert_eq!(cover_stream_extent(36, 36, 44), 44);
++    assert_eq!(cover_stream_extent(0, 36, 44), 0);
++    assert_eq!(cover_stream_extent(u32::MAX - 4, 36, 44), u32::MAX);
++    let mut range = crate::dirty_range::DirtyRange::empty();
++    let size = cover_stream_extent(108, 36, 44);
++    range.conjoin(52, size, 196);
++    assert!(
++        range.overlaps(164, 168),
++        "the last vertex's color is in use"
++    );
++    assert!(!range.overlaps(168, 172), "disjoint uploads stay disjoint");
++}
 diff --git a/windows/d3d9/src/device.rs b/windows/d3d9/src/device.rs
 index 9f0ab21..043a64b 100644
 --- a/windows/d3d9/src/device.rs
@@ -1097,7 +1271,7 @@ index 9f0ab21..043a64b 100644
 +            }
 +        }
      }
-
+ 
      /// Queue an eager `MTLTexture` create on the current frame.
 @@ -2644,6 +2659,8 @@ impl Direct3DDevice9 {
              encoder: info.encoder,
@@ -1143,7 +1317,7 @@ index 77dd655..27a6bab 100644
 --- a/windows/d3d9/src/device/frame_dump.rs
 +++ b/windows/d3d9/src/device/frame_dump.rs
 @@ -20,9 +20,9 @@ use core::ffi::c_void;
-
+ 
  use log::info;
  use mtld3d_types::{
 -    D3DRS_ALPHABLENDENABLE, D3DRS_ALPHAFUNC, D3DRS_ALPHAREF, D3DRS_ALPHATESTENABLE, D3DRS_BLENDOP,
@@ -1187,8 +1361,64 @@ index 77dd655..27a6bab 100644
          // Draws that fetch raw depth reconstruct positions from shared PS
          // constants (screen scale, linearization); print the window those
          // shaders read so wrong uploads are visible next to the draw.
+diff --git a/windows/d3d9/src/draw.rs b/windows/d3d9/src/draw.rs
+index 7103a77..ca2ab2b 100644
+--- a/windows/d3d9/src/draw.rs
++++ b/windows/d3d9/src/draw.rs
+@@ -28,8 +28,8 @@ use mtld3d_core::{
+     scratch::ScratchArena,
+     shader_cache,
+     streams::{
+-        bound_stream_layout, instance_count, instanced_stream_read_bytes, is_instance_data,
+-        layout_stride,
++        bound_stream_layout, cover_stream_extent, instance_count, instanced_stream_read_bytes,
++        is_instance_data, layout_stride,
+     },
+     vs_draw::{MAX_CLIP_PLANES, VS_DRAW_BYTES, build_vs_draw_bytes},
+ };
+@@ -2187,9 +2187,24 @@ pub fn emit_draw(enc: &mut FrameEncoder, draw: DrawOp) {
+     //    and churns only when the game renames.
+     let t_vbib = CycleAddTimer::start(enc.op_sub_detail_ptr(OpSubDetail::BVbib));
+     match &vertex_source {
+-        VertexSource::Up { bytes, size, .. } => {
+-            let scratch_ptr = enc.alloc_scratch(bytes);
+-            enc.emit_command(Command::set_vertex_bytes(scratch_ptr, *size, 0));
++        VertexSource::Up {
++            bytes,
++            size,
++            stride,
++        } => {
++            let padding = attrs.extents[0].saturating_sub(*stride);
++            let Some(padded_size) = size.checked_add(padding) else {
++                mtld3d_shared::log_once_warn!(target: crate::LOG_TARGET,
++                    "draw dropped: inline vertex extent exceeds the buffer size limit"
++                );
++                return;
++            };
++            let scratch_ptr = if padding == 0 {
++                enc.alloc_scratch(bytes)
++            } else {
++                enc.alloc_scratch_padded(bytes, padding as usize)
++            };
++            enc.emit_command(Command::set_vertex_bytes(scratch_ptr, padded_size, 0));
+             // Inline slot-0 bind clobbers the real Metal vertex-buffer
+             // binding; drop the cached bound-VB so the next bound draw
+             // re-emits its `setVertexBuffer` instead of reading these bytes.
+@@ -2323,7 +2338,11 @@ pub fn emit_draw(enc: &mut FrameEncoder, draw: DrawOp) {
+                     enc.note_buffer_draw_range(
+                         b.buffer_id.raw(),
+                         range_off,
+-                        range_size,
++                        cover_stream_extent(
++                            range_size,
++                            layout.stride,
++                            attrs.extents[slot as usize],
++                        ),
+                         logical_len,
+                     );
+                 }
 diff --git a/windows/d3d9/src/encoder.rs b/windows/d3d9/src/encoder.rs
-index 4441efb..0668514 100644
+index 4441efb..1ea5bb7 100644
 --- a/windows/d3d9/src/encoder.rs
 +++ b/windows/d3d9/src/encoder.rs
 @@ -39,7 +39,7 @@ use mtld3d_core::{
@@ -1236,7 +1466,19 @@ index 4441efb..0668514 100644
              ff_vs_libs: FxHashMap::default(),
              prog_vs_libs: FxHashMap::default(),
              ff_ps_libs: FxHashMap::default(),
-@@ -5052,12 +5048,11 @@ impl FrameEncoder {
+@@ -4745,6 +4741,11 @@ impl FrameEncoder {
+         self.scratch.alloc(data)
+     }
+ 
++    /// Copy inline vertices and zero their out-of-range attribute tail.
++    pub fn alloc_scratch_padded(&mut self, data: &[u8], padding: usize) -> u64 {
++        self.scratch.alloc_padded(data, padding)
++    }
++
+     /// Apply an `Op::SetVsConstRange` delta to the encoder-side VS mirror.
+     ///
+     /// Reads `rows × 16` bytes from `data` (a scratch-allocated slice from
+@@ -5052,12 +5053,11 @@ impl FrameEncoder {
      /// the rest of the session skips the open/append entirely.
      pub fn ingest_warm_cache(
          &mut self,
@@ -1252,7 +1494,7 @@ index 4441efb..0668514 100644
          self.flags.insert(FrameEncoderFlags::CACHE_READY);
          if writes_disabled {
              self.flags.insert(FrameEncoderFlags::CACHE_DISABLED);
-@@ -5080,6 +5075,12 @@ impl FrameEncoder {
+@@ -5080,6 +5080,12 @@ impl FrameEncoder {
      /// poll cost stays in the few-cycle range — no `Instant::now()`
      /// syscall.
      pub fn maybe_emit_compile_summary(&mut self) {
@@ -1265,7 +1507,7 @@ index 4441efb..0668514 100644
          let counts = shader_compile_stats::current_counts();
          let idle = secs_to_cycles(1);
          if !self.compile_burst.poll(counts, rdtsc(), idle) {
-@@ -5261,15 +5262,16 @@ impl FrameEncoder {
+@@ -5261,15 +5267,16 @@ impl FrameEncoder {
              let tag = shader_source_tag_vs(source);
              trace!(target: MSL_TRACE_TARGET, "── VS MSL {tag} ──\n{msl}\n── /VS MSL {tag} ──");
          }
@@ -1286,8 +1528,8 @@ index 4441efb..0668514 100644
 -        self.lib_cache.insert(disk_key, handles);
          Some(handles)
      }
-
-@@ -5359,15 +5361,16 @@ impl FrameEncoder {
+ 
+@@ -5359,15 +5366,16 @@ impl FrameEncoder {
              let tag = shader_source_tag_ps(source, variant);
              trace!(target: MSL_TRACE_TARGET, "── PS MSL {tag} ──\n{msl}\n── /PS MSL {tag} ──");
          }
@@ -1308,8 +1550,8 @@ index 4441efb..0668514 100644
 -        self.lib_cache.insert(disk_key, handles);
          Some(handles)
      }
-
-@@ -8479,7 +8482,7 @@ pub struct EncoderThread {
+ 
+@@ -8479,7 +8487,7 @@ pub struct EncoderThread {
  /// causing the encoder to compile a shader from scratch that the
  /// prewarm is concurrently compiling from disk.
  struct PrewarmPayload {
@@ -1317,8 +1559,8 @@ index 4441efb..0668514 100644
 +    entries: CompiledShaders<StageLibHandles>,
      writes_disabled: bool,
  }
-
-@@ -8492,9 +8495,9 @@ pub struct PrewarmSender(mpsc::SyncSender<PrewarmPayload>);
+ 
+@@ -8492,9 +8500,9 @@ pub struct PrewarmSender(mpsc::SyncSender<PrewarmPayload>);
  impl PrewarmSender {
      /// Normal completion.
      ///
@@ -1330,7 +1572,7 @@ index 4441efb..0668514 100644
          let _ = self.0.send(PrewarmPayload {
              entries,
              writes_disabled: false,
-@@ -8510,7 +8513,7 @@ impl PrewarmSender {
+@@ -8510,7 +8518,7 @@ impl PrewarmSender {
      /// stay off for the rest of the session.
      pub fn send_disabled(self) {
          let _ = self.0.send(PrewarmPayload {
@@ -1339,16 +1581,16 @@ index 4441efb..0668514 100644
              writes_disabled: true,
          });
      }
-@@ -8810,7 +8813,7 @@ fn encoder_thread_main(
+@@ -8810,7 +8818,7 @@ fn encoder_thread_main(
              target: LOG_TARGET,
              "shader_cache: pre-warm channel closed without payload → starting cold"
          );
 -        enc.ingest_warm_cache(Vec::new(), false);
 +        enc.ingest_warm_cache(CompiledShaders::default(), false);
      }
-
+ 
      loop {
-@@ -9466,6 +9469,9 @@ fn trailing_blit_descriptor(trailing_blits: &[BlitCommand]) -> PassDescriptor {
+@@ -9466,6 +9474,9 @@ fn trailing_blit_descriptor(trailing_blits: &[BlitCommand]) -> PassDescriptor {
  /// Rule G so the cull picks up the strip.
  fn apply_pass_rules(enc: &mut FrameEncoder, frame_continues: bool) {
      enc.pass_state.coalesce_clear_only_passes();
@@ -1488,7 +1730,7 @@ index 4cb867a..1e12fc6 100644
 +    out.write(ptr.cast::<c_void>());
      D3D_OK
  }
-
+ 
 diff --git a/windows/d3d9/src/lib.rs b/windows/d3d9/src/lib.rs
 index e716393..a9794bc 100644
 --- a/windows/d3d9/src/lib.rs
@@ -1508,13 +1750,13 @@ index e716393..a9794bc 100644
 +    execute_policy::enforce();
      Box::into_raw(Box::new(Direct3D9::new())).cast::<c_void>()
  }
-
+ 
 diff --git a/windows/d3d9/src/shader_prewarm.rs b/windows/d3d9/src/shader_prewarm.rs
 index 8729c1a..64ac1d1 100644
 --- a/windows/d3d9/src/shader_prewarm.rs
 +++ b/windows/d3d9/src/shader_prewarm.rs
 @@ -21,7 +21,7 @@ use std::{
-
+ 
  use log::info;
  use mtld3d_core::{
 -    shader_cache::{self, CacheEntry, CachedKind, SHADER_CACHE_SCHEMA_VERSION},
@@ -1530,13 +1772,13 @@ index 8729c1a..64ac1d1 100644
 +        sender.send(CompiledShaders::default());
          return;
      }
-
+ 
      let Some(path) = shader_cache_path() else {
 -        sender.send(Vec::new());
 +        sender.send(CompiledShaders::default());
          return;
      };
-
+ 
 @@ -109,7 +109,7 @@ fn run(device_handle: MetalHandle<MTLDeviceKind>, sender: PrewarmSender, stop: &
          Ok(b) => b,
          Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
@@ -1567,12 +1809,12 @@ index 8729c1a..64ac1d1 100644
 @@ -178,7 +178,7 @@ fn run(device_handle: MetalHandle<MTLDeviceKind>, sender: PrewarmSender, stop: &
          rewrite_as_bundle(&path, &deduped);
      }
-
+ 
 -    let mut warm: Vec<(u64, StageLibHandles)> = Vec::with_capacity(deduped.len());
 +    let mut warm = CompiledShaders::<StageLibHandles>::default();
      let mut counts = [0u32; 4];
      let mut duration_ns = [0u64; 4];
-
+ 
 @@ -189,20 +189,26 @@ fn run(device_handle: MetalHandle<MTLDeviceKind>, sender: PrewarmSender, stop: &
          let stage = stage_for_kind(entry.kind);
          let entry_name = entry.kind.entry_name(entry.key);
@@ -1594,7 +1836,7 @@ index 8729c1a..64ac1d1 100644
          duration_ns[idx] += u64::try_from(elapsed.as_nanos()).unwrap_or(u64::MAX);
 -        warm.push((entry.key, handles));
      }
-
+ 
      let total: u32 = counts.iter().sum();
      let cached = u32::try_from(warm.len()).unwrap_or(u32::MAX);
 +    if warm.reused() > 0 {
@@ -1690,20 +1932,22 @@ index a7b22d9..c3d6ca8 100644
 +    out.write(ptr.cast::<c_void>());
      D3D_OK
  }
-
+ 
 diff --git a/windows/tests/COVERAGE.md b/windows/tests/COVERAGE.md
-index 54ec575..63b6dbc 100644
+index 54ec575..c336022 100644
 --- a/windows/tests/COVERAGE.md
 +++ b/windows/tests/COVERAGE.md
-@@ -38,7 +38,7 @@ test file lands with its row in the same change.
+@@ -38,8 +38,8 @@ test file lands with its row in the same change.
  | `draw.rs` | XYZRHW screen-space quad; every accepted primitive type (point/line/linestrip/tristrip); triangle fans through `DrawPrimitiveUP` (including a 300 triangle fan that outgrows the encoder's shared index pattern mid-frame), `DrawPrimitive` (bound stream, `StartVertex`, and the same mid-frame pattern growth) and `DrawIndexedPrimitive` (bound 16-bit indices, `StartIndex` + `BaseVertexIndex`, and two fans in one `D3DUSAGE_WRITEONLY` `D3DPOOL_DEFAULT` index buffer whose CPU copy was released, so the indices are read back off the GPU and the second fan is written through a later announced window), all rewritten as triangle lists; `DrawIndexedPrimitiveUP`; `ProcessVertices` transforming through the current FVF, and rejected from an explicit declaration. |
  | `points.rs` | `D3DRS_POINTSIZE` sizing the square; an XYZ-only point under an ortho projection (Wine's test_pointsize shape); several sizes in one scene with a Clear between scenes and no Present; `POINTSIZE_MIN`/`MAX` clamp; `D3DFVF_PSIZE` per-vertex size; `POINTSCALEENABLE` with the viewport-height factor and eye-distance attenuation; programmable VS `oPts` vs the render-state default; point sprites through fixed-function and `ps_2_0` texcoords (quadrant texture), and the sprite state leaving triangles alone. The probes one pixel either side of a square's edge, and the one-pixel points whose every probe is a boundary, assert at the default `render.scale` alone; every extent with room around it is asserted at any scale. |
  | `clip_planes.rs` | Fixed-function plane keeping the positive side and released when disabled; world-space semantics under a translated view; `D3DRS_CLIPPING` gating; two sparse-index planes intersecting; RHW geometry ignoring the planes; clip-space semantics under a programmable VS; `D3DSBT_ALL` capture/apply round trip that renders. |
 -| `buffers.rs` | `CreateVertexBuffer`/`CreateIndexBuffer`; `DrawPrimitive`/`DrawIndexedPrimitive` from bound streams; DYNAMIC+DISCARD refill; `GetDesc` round-trips; `GetStreamSource`/`GetIndices` round-trips including higher streams and the NULL-bind offset/stride retention; under `buffer.ignoreLockBounds=true`, a `Staged` (DEFAULT, non-DYNAMIC) vertex buffer and index buffer each carrying the writes a title makes past the `[OffsetToLock, SizeToLock)` window it announced, checked by re-locking a window whose announced bytes do not change and reading back the pixel the rest of the write moves; the CPU-backing release a `D3DPOOL_DEFAULT` `D3DUSAGE_WRITEONLY` non-`DYNAMIC` vertex buffer takes after an upload has carried every byte, checked by refilling half of a two-triangle buffer through an announced sub-range and through a zero-`SizeToLock` tail and reading back the half neither `Lock` named, and by a `Reset` after a release still leaving buffer draws working. |
+-| `streams.rs` | A two-stream declaration through a programmable VS; a zero `SetStreamSource` stride feeding every vertex the element at the stream offset; the `SetStreamSourceFreq` contract (defaults, rejections leaving state untouched, flag round-trip); instanced indexed draws (count from stream 0, per-instance step rate, non-indexed draws never instance, no per-instance stream means one instance); recorded and `D3DSBT_ALL` state blocks restoring stream bindings and frequencies. |
 +| `buffers.rs` | `CreateVertexBuffer`/`CreateIndexBuffer`; unaligned `Lock` output slots on both buffer types, including successful locks, invalid-range null outputs and untouched neighboring bytes; `DrawPrimitive`/`DrawIndexedPrimitive` from bound streams; DYNAMIC+DISCARD refill; `GetDesc` round-trips; `GetStreamSource`/`GetIndices` round-trips including higher streams and the NULL-bind offset/stride retention; under `buffer.ignoreLockBounds=true`, a `Staged` (DEFAULT, non-DYNAMIC) vertex buffer and index buffer each carrying the writes a title makes past the `[OffsetToLock, SizeToLock)` window it announced, checked by re-locking a window whose announced bytes do not change and reading back the pixel the rest of the write moves; the CPU-backing release a `D3DPOOL_DEFAULT` `D3DUSAGE_WRITEONLY` non-`DYNAMIC` vertex buffer takes after an upload has carried every byte, checked by refilling half of a two-triangle buffer through an announced sub-range and through a zero-`SizeToLock` tail and reading back the half neither `Lock` named, and by a `Reset` after a release still leaving buffer draws working. |
- | `streams.rs` | A two-stream declaration through a programmable VS; a zero `SetStreamSource` stride feeding every vertex the element at the stream offset; the `SetStreamSourceFreq` contract (defaults, rejections leaving state untouched, flag round-trip); instanced indexed draws (count from stream 0, per-instance step rate, non-indexed draws never instance, no per-instance stream means one instance); recorded and `D3DSBT_ALL` state blocks restoring stream bindings and frequencies. |
++| `streams.rs` | A two-stream declaration through a programmable VS; overlapping attributes preserving application stride on bound, indexed, inline, triangle-fan and instanced draws, including signed base vertices, stream offsets and step rates; fixed-function inline tails reading zero and tail uploads preserving queued draws; a zero `SetStreamSource` stride feeding every vertex the element at the stream offset; the `SetStreamSourceFreq` contract (defaults, rejections leaving state untouched, flag round-trip); instanced indexed draws (count from stream 0, per-instance step rate, non-indexed draws never instance, no per-instance stream means one instance); recorded and `D3DSBT_ALL` state blocks restoring stream bindings and frequencies. |
  | `render_states.rs` | Alpha + additive blend; COLORWRITEENABLE mask; scissor; cull-mode winding; defaults vs `render_state_defaults()`; set/get round-trip; stencil round-trip; stencil test gating a draw; stencil clear preserving depth; combined depth+stencil mid-frame clear resetting both planes; stencil reference compared through the mask; stencil clear and test against a depth-only surface; wireframe no-op (pinned).; a Clear after a draw in the same pass (clear quad) surviving the draw's cull mode; `D3DRS_SRGBWRITEENABLE` encoding an opaque draw's linear 0x80 to 0xBC in a render-target texture, and blending in linear before that encode (half-alpha white over a stored 0x80 lands on 0xCD, not the 0xC0 a gamma-space blend gives) on a render-target texture, on the back buffer, and on a `CreateRenderTarget` surface. |
  | `textures.rs` | Lock/sample A8R8G8B8/X8R8G8B8/R5G6B5/A1R5G5B5/X1R5G5B5/A4R4G4B4/L8 (X1R5G5B5 with its padding bit clear, which also blends as fully opaque under SRCALPHA and round-trips a texel through a 5-5-5 `GetDC` DIB); a 2x2 lock/sample round trip per quadrant for the reversed-channel A8B8G8R8/X8B8G8R8 pair and for 24-bit R8G8B8, whose three-byte texels stride an eight-byte row and are widened into the BGRA8 backing by the GPU upload pass, plus X8B8G8R8 sampling alpha as 1 through a SRC_ALPHA-blended draw whatever its padding byte holds; DXT1 block decode; mip chain levels/dims; every level of an 8x8 mip chain carrying its own texels, which puts the bottom two mips under the linear texture alignment and so on the GPU upload pass; AUTOGENMIPMAP (level count, `GetLevelDesc` usage, filter-type round trip, and `UnlockRect` rejecting a level the chain does not expose); SetLOD no-op; cube creation in all pools; CPU-only extension-format cubes; managed DXT face isolation; cube face upload, sampling, state blocks, render targets, and AUTOGENMIPMAP (including `GetCubeMapSurface` rejecting a level the chain does not expose); volume creates; `UpdateTexture` between volumes copies every slice (sampled per slice centre through the fixed-function 3D texcoord path); a level from `GetVolumeLevel` locked through `IDirect3DVolume9` and written samples back on every slice; the `D3DPOOL_DEFAULT` lock split (`default_pool_texture_lock_splits_by_entry_point`: a non-DYNAMIC level rejected through `IDirect3DSurface9::LockRect` and served through `IDirect3DTexture9::LockRect`, both entry points serving it once the texture carries `D3DUSAGE_DYNAMIC`); `GetDC` on level 0 of a 33x4 R5G6B5 managed texture, whose odd row length is where the level's staging and the stride a DIB steps by would part company (the DC reads the last texel of the last row, GDI's drawing reaches the staging at `ReleaseDC`, and a draw after it samples what GDI drew); `GetDC` and `LockRect` on one texture level excluding each other in both orders, each accepted once the other side is given up (the level's lock lives on the parent texture, out of reach of the surface shell's own map count); the same exclusion read across the whole resource, where `GetDC` on level 0 is rejected while level 1 is locked and `IDirect3DTexture9::LockRect` on either level is rejected while a level surface holds a DC, both accepted again once the other side is given up; `UpdateTexture` from a transposed source (2x4 into 4x2, which D3D9 accepts because the two agree on their larger dimension) copies the 2x2 the levels share and leaves the rest; the system-memory pool contract (a `D3DPOOL_SYSTEMMEM` texture, which allocates nothing on the GPU until it is bound, samples what was written to it once bound and picks up later writes; `LockRect` round-trips its texels; a level and an offscreen surface of one odd-width 16-bit size report one `LockRect` pitch, with rows written at it surviving `UpdateTexture` and sampling; the texels survive a resizing `Reset` and still reach the GPU through `UpdateTexture` afterwards; and no `D3DPOOL_SYSTEMMEM` / `D3DPOOL_SCRATCH` surface is accepted by `SetRenderTarget`); a block-compressed `D3DPOOL_SCRATCH` volume, which only the CPU-only path can represent, created, locked and written with the GPU pools rejecting the format; a DEFAULT-pool level written through four partial `UpdateTexture` rects that together cover it (its staging is released only once they do) sampling back whole, and a fifth partial update after that release leaving the quadrants it does not touch alone; a `LockRect` of a DEFAULT-pool level whose staging was released after its upload reading the level's own texels back (and the `D3DLOCK_DISCARD` form rewriting it whole from fresh pages).a sub-rectangle `UpdateSurface` from a system-memory offscreen-plain source into a default-pool level whose staging was already released, leaving the texels outside the rectangle untouched;a released DEFAULT-pool level reading the level's own texels back through the DIB, with GDI's `SetPixel` on it sampling back after `ReleaseDC`; a `GetDC` held across two draws that upload the level keeping its staging, so GDI's `SetPixel` under the held DC still samples back after `ReleaseDC`; `GetDC` onthe same `UpdateSurface` between two draws of one scene reaching the second draw, with no other state change to dirty the snapshot for it;the same standalone-source `UpdateSurface` rejecting a managed destination, a destination of another format and a `D3DPOOL_SCRATCH` source, and accepted for the matching default-pool destination and system-memory source;; `UpdateTexture` rejecting a resource-type mismatch in both directions (2D into volume, volume into 2D) with the destination left as it was, while a volume pair one depth slice deep, which is backed 2D, is still accepted; `UpdateTexture` accepting a source that still has one of its levels mapped, unlike the per-endpoint rejection `UpdateSurface` applies (pinned).; a single-slice DEFAULT volume taking a second `UpdateTexture` after the first one has been drawn, the point a droppable level's staging would have gone; `UpdateSurface` and `UpdateTexture` across a format pair the CPU codec covers (X8R8G8B8 into A8R8G8B8, R5G6B5 into X8R8G8B8, A8R8G8B8 into R5G6B5, A1R5G5B5 into A8R8G8B8, A8R8G8B8 into A4R4G4B4, L8 into A8R8G8B8, R8G8B8 into A8R8G8B8, A8B8G8R8 into A8R8G8B8, each sampled back), with a block-compressed source still answering `D3DERR_INVALIDCALL`., converting an X8R8G8B8 source into an A8R8G8B8 level and into a cube face, and still rejecting the pairs the codec omits (V8U8 into R5G6B5, any source into a DXT1 destination); a `Levels` count one past the chain the extent allows resolving to that chain on all four create paths (`CreateTexture`, the depth-format `CreateTexture`, `CreateCubeTexture` and `CreateVolumeTexture`, the last measured on its depth as well), with the count at exactly the chain unchanged; the lock contract a level's contents rest on (`dynamic_whole_level_lock_without_discard_keeps_the_texels_it_does_not_rewrite`, `partial_discard_lock_leaves_the_rest_of_the_level_alone`, `discard_lock_of_a_managed_level_is_ignored`): a DEFAULT DYNAMIC level locked whole without `D3DLOCK_DISCARD` while its previous upload is still in flight, rewritten in one quadrant and sampled back with the other three intact; the same with a `D3DLOCK_DISCARD` sub-rect lock, which cannot be honoured and is served as a plain partial lock; and a MANAGED level whose whole-level `D3DLOCK_DISCARD` is ignored the same way; the rect a lock names being what its `UnlockRect` publishes (`partial_locks_publish_their_own_rect_on_every_upload_path`): four contended quadrant locks on a DEFAULT DYNAMIC A8R8G8B8 level, on a DXT1 level with block-aligned rects and with rects off the block grid (the encoder's whole-mip fallback), and on one face of a cube, each sampled back as its four quadrants |
+ | `expand16.rs` | The packed 16-bit expansion path under `intel.expandPacked16=true` (the non-Apple-family behaviour, forced so it runs on Apple Silicon): A4R4G4B4/R5G6B5/A1R5G5B5/X1R5G5B5 lock/sample through the BGRA8 backing, with X1R5G5B5's padding bit still widening to an opaque alpha; an R5G6B5 mip chain sampled at every level, whose low mips have row pitches under the linear texture alignment; a partial lock re-uploading only the dirty sub-rect (2 bpp → 4 bpp widening with the border preserved); an A4R4G4B4 cube face; an R5G6B5 volume sampled per slice; a DEFAULT offscreen-plain R5G6B5 surface as a scaling `StretchRect` source; and the caps split: `CheckDeviceFormat(RENDERTARGET)` denied for R5G6B5/A1R5G5B5 with `CreateRenderTarget`/`CreateTexture(RENDERTARGET)` rejected to match, while the sampled-texture (X1R5G5B5 included), conversion-source, and windowed 16-bit-backbuffer answers stay advertised, and X1R5G5B5's render-target answer is denied on every device. |
 @@ -51,7 +51,7 @@ test file lands with its row in the same change.
  | `texture_stages.rs` | COLOROP round-trip; MODULATE/ADD/SELECTARG2; TFACTOR arg source; sampling a locked A16B16G16R16F texture. |
  | `shaders.rs` | hand-assembled VS/PS; PS-constant colour; VS-constant translation; float-constant setters (in-range accept + out-of-range/`-1` → `INVALIDCALL`); integer/bool constant round trips; a `vs_2_0` static `if b0` branch driven by `SetVertexShaderConstantB` (TRUE and FALSE arms, no shader rebind); the same `if b0` in a `ps_3_0` driven by `SetPixelShaderConstantB`; a `ps_3_0` `rep i0` loop count driven by `SetPixelShaderConstantI` (4 iterations vs 0); a `ps_2_0` writing `oDepth` still drawing with no depth buffer bound (the depth export is dropped for that pass); `GetFunction` returning the creating bytecode (size query, round trip, undersized buffer, null size pointer) for both shader kinds and for a shader-model 1 program; a `ps_3_0` sampler reading the texture kind the application bound rather than the one its `dcl` names, over all four combinations of a 2D and a volume texture with a `dcl_2d` and a `dcl_volume` slot; a `ps_2_0` whose only `c0` read is `def`-declared keeping its literal colour across a `SetPixelShaderConstantF` upload; three draws in one pass alternating that program with one that does read `c0`, pinning that the reader still sees a row set between the draws; a `vs_3_0` whose only relative constant read (`c[a0.x + 0]`, the row index itself uploaded in `c0`) sits in a subroutine reached through `call`, drawing the colour uploaded twenty rows past anything the instruction stream names; a `vs_3_0` vertex texture fetch reading the texture bound at `D3DVERTEXTEXTURESAMPLER0` with `texldl`, and the same fetch declared `dcl_volume` over a 2D binding, pinning that the sampler argument and its coordinate follow the bound texture kind rather than the declaration. |
@@ -1719,7 +1963,7 @@ index 89bac19..6928d81 100644
 +++ b/windows/tests/src/resource.rs
 @@ -975,6 +975,42 @@ pub struct VertexBuffer<'h> {
  }
-
+ 
  impl VertexBuffer<'_> {
 +    /// Probe `Lock` with an output slot two bytes past a pointer-aligned address.
 +    ///
@@ -1762,7 +2006,7 @@ index 89bac19..6928d81 100644
              ptr,
 @@ -1152,6 +1188,42 @@ pub struct IndexBuffer<'h> {
  }
-
+ 
  impl IndexBuffer<'_> {
 +    /// Probe `Lock` with an output slot two bytes past a pointer-aligned address.
 +    ///
@@ -1810,7 +2054,7 @@ index a0791d9..52de382 100644
 @@ -51,6 +51,25 @@ fn arm_diffuse(h: &Harness) {
      assert_eq!(h.set_fvf(FVF), 0, "SetFVF");
  }
-
+ 
 +#[test]
 +fn vertex_buffer_lock_accepts_unaligned_output() {
 +    let h = Harness::new();
@@ -1840,7 +2084,7 @@ index 405966b..89e0d82 100644
 @@ -226,6 +226,61 @@ fn render_to_texture_then_sample() {
      assert_eq!(h.clear_texture(0), 0, "unbind RT texture");
  }
-
+ 
 +#[test]
 +fn alternating_independent_targets_preserve_draw_order_and_depth() {
 +    let h = Harness::new();
@@ -1902,7 +2146,7 @@ index 405966b..89e0d82 100644
 @@ -3727,6 +3782,48 @@ fn depth_survives_a_mid_frame_readback_flush() {
      );
  }
-
+ 
 +#[test]
 +fn early_submission_preserves_depth_and_changing_draw_snapshots() {
 +    let merged = format!(
@@ -1948,12 +2192,260 @@ index 405966b..89e0d82 100644
  /// Assert each RGB channel of `got` is within `tolerance` of `expected` (alpha ignored).
  fn assert_rgb_close(got: u32, expected: u32, tolerance: i32, context: &str) {
      let channel = |c: u32, shift: u32| i32::try_from((c >> shift) & 0xff).unwrap_or(0);
+diff --git a/windows/tests/tests/streams.rs b/windows/tests/tests/streams.rs
+index 51fcfaa..da35c1e 100644
+--- a/windows/tests/tests/streams.rs
++++ b/windows/tests/tests/streams.rs
+@@ -5,11 +5,12 @@
+ //! (count, step rate, and the non-indexed exemption), and state-block capture
+ //! of stream bindings and frequencies.
+ 
+-use mtld3d_tests::{Harness, PosVertex};
++use mtld3d_tests::{DrawIndexedUpParams, Harness, PosVertex};
+ use mtld3d_types::{
+     D3D_OK, D3DDECL_END_STREAM, D3DDECLTYPE_D3DCOLOR, D3DDECLTYPE_FLOAT3, D3DDECLTYPE_UNUSED,
+     D3DDECLUSAGE_COLOR, D3DDECLUSAGE_POSITION, D3DDECLUSAGE_TEXCOORD, D3DERR_INVALIDCALL,
+-    D3DFMT_INDEX16, D3DPOOL_DEFAULT, D3DPT_TRIANGLELIST, D3DSBT_ALL, D3DSTREAMSOURCE_INDEXEDDATA,
++    D3DFMT_INDEX16, D3DPOOL_DEFAULT, D3DPT_POINTLIST, D3DPT_TRIANGLEFAN, D3DPT_TRIANGLELIST,
++    D3DRS_LIGHTING, D3DRS_POINTSIZE, D3DSBT_ALL, D3DSTREAMSOURCE_INDEXEDDATA,
+     D3DSTREAMSOURCE_INSTANCEDATA, D3DUSAGE_WRITEONLY, D3DVERTEXELEMENT9,
+ };
+ 
+@@ -258,6 +259,184 @@ fn stride_below_an_unconsumed_decl_tail_still_fetches_vertices() {
+     );
+ }
+ 
++// Read before Present: a DISCARD backbuffer has undefined contents afterwards.
++fn render_stream_test(h: &Harness, body: impl FnOnce(&Harness)) {
++    assert_eq!(h.begin_scene(), D3D_OK);
++    assert_eq!(h.clear_target(BLUE), D3D_OK);
++    body(h);
++    assert_eq!(h.end_scene(), D3D_OK);
++}
++
++const fn overlapping_declaration() -> [D3DVERTEXELEMENT9; 3] {
++    let mut position = element(0, D3DDECLTYPE_FLOAT3, D3DDECLUSAGE_POSITION);
++    position.offset = 8;
++    let mut color = element(0, D3DDECLTYPE_D3DCOLOR, D3DDECLUSAGE_COLOR);
++    color.offset = 40;
++    [position, color, end()]
++}
++
++fn overlapping_vertices() -> [[u32; 9]; 5] {
++    let mut vertices = [[0; 9]; 5];
++    for vertex in &mut vertices {
++        vertex[1] = GREEN;
++    }
++    for (vertex, position) in vertices[1..4].iter_mut().zip(centered_triangle()) {
++        vertex[2..5].copy_from_slice(&[
++            position.x.to_bits(),
++            position.y.to_bits(),
++            position.z.to_bits(),
++        ]);
++    }
++    vertices
++}
++
++/// A consumed attribute beyond the stride overlaps the next vertex's storage.
++#[test]
++fn overlapping_bound_vertices_preserve_stride_and_base_vertex() {
++    let h = Harness::new();
++    let decl = h.create_vertex_declaration(&overlapping_declaration());
++    let vs = h.create_vertex_shader(&VS_POS_COLOR);
++    let ps = h.create_pixel_shader(&PS_DIFFUSE);
++    assert_eq!(h.set_vertex_declaration(&decl), D3D_OK);
++    assert_eq!(h.set_vertex_shader(&vs), D3D_OK);
++    assert_eq!(h.set_pixel_shader(&ps), D3D_OK);
++    let vertices = overlapping_vertices();
++    let vb = h.create_vertex_buffer(16 + 5 * 36, D3DUSAGE_WRITEONLY, 0, D3DPOOL_DEFAULT);
++    vb.lock(16, 5 * 36, 0).write(&vertices);
++    assert_eq!(h.set_stream_source(0, &vb, 16, 36), D3D_OK);
++    for primitive in [D3DPT_TRIANGLELIST, D3DPT_TRIANGLEFAN] {
++        render_stream_test(&h, |d| {
++            assert_eq!(d.draw_primitive(primitive, 1, 1), D3D_OK);
++        });
++        assert_eq!(
++            h.read_pixel(320, 280),
++            GREEN,
++            "non-indexed primitive {primitive}"
++        );
++    }
++    let ib = h.create_index_buffer(6, D3DUSAGE_WRITEONLY, D3DFMT_INDEX16, D3DPOOL_DEFAULT);
++    assert_eq!(h.set_indices(&ib), D3D_OK);
++    for (base, indices) in [(1, [0u16, 1, 2]), (0, [1, 2, 3]), (-1, [2, 3, 4])] {
++        ib.lock(0, 0, 0).write(&indices);
++        render_stream_test(&h, |d| {
++            assert_eq!(
++                d.draw_indexed_primitive(D3DPT_TRIANGLELIST, base, u32::from(indices[0]), 3, 0, 1),
++                D3D_OK
++            );
++        });
++        assert_eq!(h.read_pixel(320, 280), GREEN, "base vertex {base}");
++    }
++}
++
++/// An overlapping inline layout keeps its positions even with a trailing color.
++#[test]
++fn overlapping_up_vertices_preserve_stride() {
++    let h = Harness::new();
++    let decl = h.create_vertex_declaration(&overlapping_declaration());
++    let vs = h.create_vertex_shader(&VS_POS_COLOR);
++    let ps = h.create_pixel_shader(&PS_CONST);
++    assert_eq!(h.set_vertex_declaration(&decl), D3D_OK);
++    assert_eq!(h.set_vertex_shader(&vs), D3D_OK);
++    assert_eq!(h.set_pixel_shader(&ps), D3D_OK);
++    assert_eq!(
++        h.set_pixel_shader_constant_f(0, &[0.0, 1.0, 0.0, 1.0]),
++        D3D_OK
++    );
++    let vertices = overlapping_vertices();
++    for primitive in [D3DPT_TRIANGLELIST, D3DPT_TRIANGLEFAN] {
++        render_stream_test(&h, |d| {
++            assert_eq!(d.draw_primitive_up(primitive, 1, &vertices[1..4]), D3D_OK);
++        });
++        assert_eq!(
++            h.read_pixel(320, 280),
++            GREEN,
++            "inline primitive {primitive}"
++        );
++        render_stream_test(&h, |d| {
++            assert_eq!(
++                d.draw_indexed_primitive_up(
++                    &DrawIndexedUpParams {
++                        prim: primitive,
++                        min_vertex_index: 1,
++                        num_vertices: 3,
++                        prim_count: 1,
++                        index_format: D3DFMT_INDEX16,
++                    },
++                    &[1u16, 2, 3],
++                    &vertices[..4]
++                ),
++                D3D_OK
++            );
++        });
++        assert_eq!(
++            h.read_pixel(320, 280),
++            GREEN,
++            "indexed inline primitive {primitive}"
++        );
++    }
++}
++
++/// The final inline attribute reads zero beyond the caller's vertex data.
++#[test]
++fn overlapping_up_tail_reads_zero_in_fixed_function_draws() {
++    let h = Harness::new();
++    let decl = h.create_vertex_declaration(&overlapping_declaration());
++    assert_eq!(h.set_vertex_declaration(&decl), D3D_OK);
++    assert_eq!(h.set_render_state(D3DRS_LIGHTING, 0), D3D_OK);
++    assert_eq!(
++        h.set_render_state(D3DRS_POINTSIZE, 8.0f32.to_bits()),
++        D3D_OK
++    );
++    h.select_diffuse_stage(0);
++    let vertices = overlapping_vertices();
++    for _ in 0..3 {
++        render_stream_test(&h, |d| {
++            assert_eq!(
++                d.draw_primitive_up(D3DPT_POINTLIST, 3, &vertices[1..4]),
++                D3D_OK
++            );
++        });
++        assert_eq!(
++            h.read_pixel(320, 120),
++            GREEN,
++            "first vertex reads next vertex's color"
++        );
++        assert_eq!(
++            h.read_pixel(480, 360),
++            GREEN,
++            "second vertex reads next vertex's color"
++        );
++        assert_eq!(
++            h.read_pixel(160, 360) & 0x00FF_FFFF,
++            0,
++            "final color is zero-filled"
++        );
++    }
++}
++
++/// Updating an overlapping attribute tail cannot corrupt an earlier queued draw.
++#[test]
++fn overlapping_bound_tail_upload_preserves_queued_fixed_function_draw() {
++    let h = Harness::new();
++    let decl = h.create_vertex_declaration(&overlapping_declaration());
++    assert_eq!(h.set_vertex_declaration(&decl), D3D_OK);
++    assert_eq!(h.set_render_state(D3DRS_LIGHTING, 0), D3D_OK);
++    h.select_diffuse_stage(0);
++    let vertices = overlapping_vertices();
++    let vb = h.create_vertex_buffer(16 + 5 * 36, 0, 0, D3DPOOL_DEFAULT);
++    vb.lock(16, 5 * 36, 0).write(&vertices);
++    assert_eq!(h.set_stream_source(0, &vb, 16, 36), D3D_OK);
++    render_stream_test(&h, |d| {
++        assert_eq!(d.draw_primitive(D3DPT_TRIANGLELIST, 1, 1), D3D_OK);
++        vb.lock(164, 4, 0).write(&[RED]);
++    });
++    assert_eq!(
++        h.read_pixel(320, 280),
++        GREEN,
++        "pending draw keeps the old tail"
++    );
++}
++
+ /// A zero stride feeds every vertex the element at the stream offset.
+ ///
+ /// D3D9 defines a `SetStreamSource` stride of 0 as one element for the whole
+@@ -510,6 +689,43 @@ fn indexed_draw_renders_every_instance() {
+     s.assert_instances([true, true, true, true]);
+ }
+ 
++/// Per-instance attributes can extend into the next instance's storage.
++#[test]
++fn overlapping_instance_stream_preserves_stride_and_step_rate() {
++    let s = InstancedScene::new();
++    let offsets = [
++        [-0.5f32, -0.5],
++        [0.5, -0.5],
++        [0.5, 0.5],
++        [-0.5, 0.5],
++        [0.0, 0.0],
++    ];
++    let vb =
++        s.h.create_vertex_buffer(40, D3DUSAGE_WRITEONLY, 0, D3DPOOL_DEFAULT);
++    vb.lock(0, 0, 0).write(&offsets);
++    assert_eq!(s.h.set_stream_source(1, &vb, 0, 8), D3D_OK);
++    assert_eq!(
++        s.h.set_stream_source_freq(0, D3DSTREAMSOURCE_INDEXEDDATA | 4),
++        D3D_OK
++    );
++    for (rate, expected) in [
++        (1, [true, true, true, true]),
++        (2, [true, true, false, false]),
++    ] {
++        assert_eq!(
++            s.h.set_stream_source_freq(1, D3DSTREAMSOURCE_INSTANCEDATA | rate),
++            D3D_OK
++        );
++        render_stream_test(&s.h, |d| {
++            assert_eq!(
++                d.draw_indexed_primitive(D3DPT_TRIANGLELIST, 0, 0, 4, 0, 2),
++                D3D_OK
++            );
++        });
++        s.assert_instances(expected);
++    }
++}
++
+ /// The instance count follows stream 0's frequency: two instances draw two quads.
+ #[test]
+ fn instance_count_follows_stream_zero() {
 diff --git a/windows/tests/tests/transforms_ff.rs b/windows/tests/tests/transforms_ff.rs
 index 3455b4a..94bd415 100644
 --- a/windows/tests/tests/transforms_ff.rs
 +++ b/windows/tests/tests/transforms_ff.rs
 @@ -2,12 +2,16 @@
-
+ 
  use mtld3d_tests::{Harness, LitVertex, PosVertex, SpecularVertex, Vertex};
  use mtld3d_types::{
 -    D3DCMP_GREATER, D3DCOLORVALUE, D3DFVF_DIFFUSE, D3DFVF_NORMAL, D3DFVF_SPECULAR, D3DFVF_XYZ,
@@ -1973,12 +2465,12 @@ index 3455b4a..94bd415 100644
 +    D3DTS_PROJECTION, D3DTS_TEXTURE0, D3DTS_VIEW, D3DTS_WORLD, D3DTSS_COLORARG1, D3DVECTOR,
 +    D3DVERTEXELEMENT9,
  };
-
+ 
  #[rustfmt::skip]
 @@ -20,6 +24,171 @@ const IDENTITY: [f32; 16] = [
-
+ 
  const BLUE: u32 = 0xFF00_00FF;
-
+ 
 +#[test]
 +fn shader_aliases_preserve_active_texture_arguments_across_devices() {
 +    use mtld3d_types::{
