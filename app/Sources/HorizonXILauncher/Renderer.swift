@@ -154,18 +154,23 @@ enum RendererSetup {
         stopWineserver(install)
         defer { stopWineserver(install) }
 
-        reg(install, add: #"HKCU\Software\Wine\Direct3D"#, name: "renderer",
-            type: "REG_SZ", data: renderer.wineRendererKey)
-        reg(install, add: #"HKCU\Software\Wine\Direct3D"#, name: "MaxVersionGL",
-            type: "REG_DWORD", data: String(format: "0x%x", maxVersionGL))
+        var values = [(#"HKCU\Software\Wine\Direct3D"#, "renderer", "REG_SZ", renderer.wineRendererKey),
+                      (#"HKCU\Software\Wine\Direct3D"#, "MaxVersionGL", "REG_DWORD", String(format: "0x%x", maxVersionGL))]
+        if renderer == .mtld3d || renderer.needsDXVK {
+            values += ["*d3d8", "*d3d9"].map { (#"HKCU\Software\Wine\DllOverrides"#, $0, "REG_SZ", "native") }
+        }
+        // Wine has exited and flushed the registry. Check the complete transaction
+        // before starting any helper; later reads could miss unflushed changes.
+        let registry = (try? String(contentsOf: install.prefix.appendingPathComponent("user.reg"), encoding: .utf8)) ?? ""
+        if !values.allSatisfy({ registryMatches(registry, key: $0.0, name: $0.1, type: $0.2, data: $0.3) }) {
+            for (key, name, type, data) in values {
+                reg(install, add: key, name: name, type: type, data: data)
+            }
+        }
 
         if let bundle = nativeBundle, let shim = converter {
             backupBuiltins(install)
             try installMTLD3DFiles(to: install, bundle: bundle, converter: shim)
-            for name in ["*d3d8", "*d3d9"] {
-                reg(install, add: #"HKCU\Software\Wine\DllOverrides"#, name: name,
-                    type: "REG_SZ", data: "native")
-            }
             log("renderer: mtld3d + d3d8to9 installed; \(mtld3dConfig)")
         } else if renderer.needsDXVK {
             installDXVK(install, log: log)
@@ -220,6 +225,8 @@ enum RendererSetup {
             // Never write through a Wine builtin symlink into its runtime directory.
             if (try? fm.destinationOfSymbolicLink(atPath: target.path)) != nil {
                 try fm.removeItem(at: target)
+            } else if (try? Data(contentsOf: target)) == bytes {
+                return
             }
             try bytes.write(to: target, options: .atomic)
         }
@@ -266,8 +273,6 @@ enum RendererSetup {
             replace(d3d8to9, at: dir.appendingPathComponent("d3d8.dll"))
             replace(dxvk, at: dir.appendingPathComponent("d3d9.dll"))
         }
-        reg(i, add: #"HKCU\Software\Wine\DllOverrides"#, name: "*d3d8", type: "REG_SZ", data: "native")
-        reg(i, add: #"HKCU\Software\Wine\DllOverrides"#, name: "*d3d9", type: "REG_SZ", data: "native")
         linkMoltenVK(i, toCX: true)
         log("renderer: DXVK 1.10.3 + d3d8to9 installed")
     }
@@ -470,7 +475,13 @@ enum RendererSetup {
         chk.arguments = ["-x", "wineserver"]
         chk.standardOutput = Pipe(); chk.standardError = Pipe()
         var wasUp = false
-        if (try? chk.run()) != nil { chk.waitUntilExit(); wasUp = chk.terminationStatus == 0 }
+        if (try? chk.run()) != nil {
+            chk.waitUntilExit()
+            // pgrep's status 1 confirms no server exists. There is no registry
+            // writer to flush, so avoid two subprocesses and the polling delay.
+            if chk.terminationStatus == 1 { return false }
+            wasUp = chk.terminationStatus == 0
+        }
         let p = Process()
         p.executableURL = i.wineserver
         p.arguments = ["-k"]
@@ -496,6 +507,32 @@ enum RendererSetup {
 
     private static func reg(_ i: Install, add key: String, name: String, type: String, data: String) {
         wine(i, ["reg", "add", key, "/v", name, "/t", type, "/d", data, "/f"])
+    }
+
+    static func registryMatches(_ registry: String, key: String, name: String,
+                                type: String, data: String) -> Bool {
+        guard key.hasPrefix("HKCU\\") else { return false }
+        func quote(_ text: String) -> String {
+            "\"" + text.replacingOccurrences(of: "\\", with: "\\\\")
+                .replacingOccurrences(of: "\"", with: "\\\"") + "\""
+        }
+        let section = "[" + key.dropFirst(5).replacingOccurrences(of: "\\", with: "\\\\") + "]"
+        let expected: String
+        if type == "REG_SZ" {
+            expected = quote(data)
+        } else if type == "REG_DWORD", let value = data.hasPrefix("0x")
+            ? UInt32(data.dropFirst(2), radix: 16) : UInt32(data) {
+            expected = String(format: "dword:%08x", value)
+        } else { return false }
+        var active = false
+        for line in registry.components(separatedBy: .newlines) {
+            if line.hasPrefix("[") {
+                active = line.lowercased().hasPrefix(section.lowercased())
+            } else if active, line.lowercased().hasPrefix((quote(name) + "=").lowercased()) {
+                return String(line.dropFirst(quote(name).count + 1)) == expected
+            }
+        }
+        return false
     }
 
     private static func regDelete(_ i: Install, key: String, name: String) {

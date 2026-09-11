@@ -58,6 +58,8 @@ local entity_distance_command = '/drawdistance setmob ' .. tostring(requested_di
 -- Weather ids follow xi.weather (6 rain, 12 snow, 15 thunderstorms). Positions are fixed
 -- zone-line arrival points from LandSandBoat's zone.yaml.
 local scenarios = {
+    -- Login smoke test: wait in the current zone without issuing game commands.
+    login = { { 3, 'done', 'done' } },
     -- Fixed outdoor camera across lighting and weather changes. perftime only
     -- moves the server clock backward, avoiding forward session expiry. Rezone
     -- at the same position after each clock change so the client receives it.
@@ -274,7 +276,7 @@ local function step()
         -- Measurement intervals end at this marker. Restore the server's normal
         -- clock after them; a forward reset can end the test session.
         if stress.is_active() then stress.stop();
-        else send('!addtime 0'); end
+        elseif sc ~= scenarios.login then send('!addtime 0'); end
         state.running = nil;
         return;
     elseif (cmd:sub(1, 6) == 'spawn ') then
@@ -308,7 +310,7 @@ local function start(name)
         print(chat.header(addon.name):append(chat.error('unknown scenario: ' .. tostring(name))));
         return;
     end
-    if (name == 'effects' or name == 'lighting' or stress_module.is_scenario(name)) and AshitaCore:GetMemoryManager():GetParty():GetMemberName(0) ~= 'Hxitest' then
+    if (name == 'effects' or name == 'lighting' or name == 'login' or stress_module.is_scenario(name)) and AshitaCore:GetMemoryManager():GetParty():GetMemberName(0) ~= 'Hxitest' then
         mark('scenario failed', ', "reason": "stress/effects scenario requires local Hxitest"');
         return;
     end

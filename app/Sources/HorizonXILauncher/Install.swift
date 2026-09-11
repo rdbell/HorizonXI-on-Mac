@@ -10,6 +10,16 @@ struct Install: Identifiable, Hashable {
     /// `Server.dataPath`; see `Install.for(server:)`.
     var gameDirOverride: URL? = nil
 
+    /// A launch uses the same Wine for registry maintenance and the game. Installer
+    /// prefixes and wrapper repair retain the wrapper runtime.
+    var wineOverride: URL? = nil
+
+    func usingWine(_ executable: URL) -> Install {
+        var copy = self
+        copy.wineOverride = executable
+        return copy
+    }
+
     init(wrapper: URL, prefixName: String, gameDirOverride: URL? = nil) {
         self.wrapper = wrapper; self.prefixName = prefixName; self.gameDirOverride = gameDirOverride
     }
@@ -217,8 +227,8 @@ struct Install: Identifiable, Hashable {
     }
 
     var sharedSupport: URL { wrapper.appendingPathComponent("Contents/SharedSupport") }
-    var wine: URL { sharedSupport.appendingPathComponent("wine/bin/wine") }
-    var wineserver: URL { sharedSupport.appendingPathComponent("wine/bin/wineserver") }
+    var wine: URL { wineOverride ?? sharedSupport.appendingPathComponent("wine/bin/wine") }
+    var wineserver: URL { wine.deletingLastPathComponent().appendingPathComponent("wineserver") }
     var prefix: URL { sharedSupport.appendingPathComponent(prefixName) }
     var driveC: URL { prefix.appendingPathComponent("drive_c") }
     var gameDir: URL { gameDirOverride ?? driveC.appendingPathComponent("HorizonXI") }

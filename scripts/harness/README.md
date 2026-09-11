@@ -8,6 +8,45 @@ These scripts drive Daniel's install directly (paths are hard-coded at the top o
 they are checked in as a record of how the measurements were taken and as a starting point, not
 as a general-purpose tool.
 
+## Launch timing
+
+`renderer-run.py` records the request to open the launcher with `--play`, the injector
+spawn record's timestamp, and the first visible XI window. It polls for that window every
+0.2 seconds, with a 60-second bound after finding the game process and the overall run
+deadline still enforced. The launcher also logs renderer, registry, and spawn phase timings.
+
+```sh
+python3 scripts/harness/renderer-run.py \
+  --output /path/outside/git/launch-baseline --installed-mtld3d \
+  --boot-file "$HOME/Games/FFXI/HorizonXI/scripts/default.txt" \
+  --draw-distance 10 --menu-sample 0 --no-network \
+  --level standard-nosample --limit 210 --capture-seconds 190 --hold 1 \
+  --scenario login
+python3 scripts/harness/launch-report.py /path/outside/git/launch-baseline
+```
+
+`login` verifies Hxitest enters the local world, waits briefly, and finishes without game
+commands, job changes, movement, or clock changes. The runner checks the local account,
+loopback server, character selection, renderer hashes, and restoration. It never restarts
+Docker. Omit `--scenario login` to stop at character selection.
+
+For a launcher comparison, add `--launcher-binary /path/to/HorizonXILauncher`; it stages a
+signed app copy while retaining the installed renderer and other resources. Keep graphics,
+boot script, shader cache state, and host load comparable. Build before timing runs. Repeat
+both versions with no existing Wine processes. These are repeat launches with warm OS
+caches, not first-install or cold-reboot measurements, and the start timestamp includes app
+initialization rather than measuring an exact mouse click on an already open launcher.
+
+For a separate diagnostic, use `--wine-debug=-all,+timestamp,+pid,+process,+loaddll` or
+`--sample-at 0 --sample-seconds 6 --sample-interval-ms 10`. Wine tracing goes through the
+temporarily saved performance setting because the launcher overrides inherited WINEDEBUG.
+The original setting is restored afterward. Traces and samples affect timings; exclude them
+from accepted comparisons. Raw Wine process traces may contain launch arguments, so keep
+them private. The launch report exports timing and verification fields without copying log
+lines or boot commands. Its `valid` field verifies completion and restoration; it does not
+certify a quiet host or a matched comparison. Inspect the diagnostic flags and label external
+confounders separately. See [the launch results](../../docs/LAUNCH-SPEED-2026-09-11.md).
+
 ## Bounded menu run
 
 `menu-run.py` drives one launch to the top-level menu with the rules-screen Return and nothing

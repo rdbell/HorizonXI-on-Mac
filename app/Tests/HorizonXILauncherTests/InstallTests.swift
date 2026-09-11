@@ -22,6 +22,20 @@ final class InstallTests: XCTestCase {
         XCTAssertFalse(Install.isGamePrefixName("something-else"))
     }
 
+    func testLaunchRuntimeKeepsTheGamePrefixAndInstallerRuntimeSeparate() throws {
+        let f = try fixture()
+        defer { try? FileManager.default.removeItem(at: f.root) }
+        let runtime = URL(fileURLWithPath: "/runtime/wine/bin/wine")
+        let launch = f.install.usingWine(runtime)
+        XCTAssertEqual(launch.wine, runtime)
+        XCTAssertEqual(launch.wineserver.path, "/runtime/wine/bin/wineserver")
+        XCTAssertEqual(launch.prefix, f.install.prefix)
+        XCTAssertEqual(launch.gameDir, f.install.gameDir)
+        XCTAssertEqual(launch.wrapper, f.install.wrapper)
+        XCTAssertEqual(launch.installerPrefix.wine, f.install.wine)
+        XCTAssertNotEqual(f.install.wine, runtime)
+    }
+
     func testClassicGameLinkIsCreatedAndIdempotent() throws {
         let f = try fixture()
         defer { try? FileManager.default.removeItem(at: f.root) }

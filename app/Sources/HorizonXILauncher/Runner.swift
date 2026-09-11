@@ -541,20 +541,23 @@ final class Runner: ObservableObject {
         currentInstall = install
         currentProfile = profile
         currentWorld = world.isEmpty ? "Vana'diel" : world
+        let launchStart = ProcessInfo.processInfo.systemUptime
+        let launchInstall = install.usingWine(gameWine)
+        appendLine(String(format: "launch timing: prepare elapsed=0 epoch=%.3f", Date().timeIntervalSince1970))
         // gameExe names the client process for both the spawn and the watch poller. Resolve it
         // here on the main actor -- a cheap boot-profile read -- so it is set the instant Play is
         // pressed, ahead of the detached setup below.
         gameExe = Credentials.bootLoaderName(in: install, profile: profile) ?? "horizon-loader.exe"
         Self.currentGameExe = gameExe
-        // Everything from here to the spawn shells out to wine: the registry writes in
-        // RendererSetup.apply / GameRegistry.point, and stopWineserver, which blocks the caller
-        // until the wrapper's wineserver has flushed the registry and exited (bounded at 30 s, and
-        // genuinely seconds on a slow disk). Runner is @MainActor, so doing this inline is what
-        // beach-balled the UI on Play. Run it off the main actor instead, in the exact same order
-        // -- that order is what the comments below guard -- hopping every log line and the final
-        // spawn back to the main actor.
+        // Registry repair can start Wine, and flushing its server can take seconds.
+        // Keep that work off the main actor. Use the game runtime throughout so
+        // Wine does not reconfigure the prefix for two different versions per launch.
         Task.detached { [weak self] in
             let log: (String) -> Void = { s in Task { @MainActor in self?.appendLine(s) } }
+            let timing: (String) -> Void = { phase in
+                log(String(format: "launch timing: %@ elapsed=%.3f epoch=%.3f", phase,
+                           ProcessInfo.processInfo.systemUptime - launchStart, Date().timeIntervalSince1970))
+            }
             // The renderer lives in the prefix's registry and DLLs, not in the environment, so it
             // has to be written before the process starts — and after any wineserver holding the
             // old copy of the registry has exited.
@@ -562,7 +565,7 @@ final class Runner: ObservableObject {
             // copy; fix that before anything tries to load one. See relinkStrayDylibs.
             RendererSetup.relinkStrayDylibs(install) { log($0) }
             do {
-                try RendererSetup.apply(perf.renderer, to: install) { log($0) }
+                try RendererSetup.apply(perf.renderer, to: launchInstall) { log($0) }
             } catch {
                 await MainActor.run { [weak self] in
                     self?.appendLine("!! \(error.localizedDescription)")
@@ -571,7 +574,9 @@ final class Runner: ObservableObject {
                 return
             }
             // Same moment, same reason: the registry has to name *this* world's SquareEnix folder.
-            GameRegistry.point(install) { log($0) }
+            timing("renderer ready")
+            GameRegistry.point(launchInstall) { log($0) }
+            timing("registry ready")
             Self.cleanStaleWineSockets()
             Credentials.applyIniOverrides(perf.renderer.iniOverrides, to: install, profile: profile)
             // Launching with Sandbox loaded and its interface bypass off produces the worst
@@ -665,15 +670,12 @@ final class Runner: ObservableObject {
             let args = [injector, bootFile]
             log("==> wine: \(gameWine.path)"
                 + (x87Enabled && X87Sidecar.coopBinary() != nil ? " + x87 sidecar" : ""))
-            // Every registry edit above (renderer, SquareEnix path) went through the *wrapper's*
-            // wine, which leaves the wrapper's wineserver alive on this prefix for ~3 s after its
-            // last client. The game runs on the cooperative wine, a different protocol -- and
-            // joining that server is "wine client error: version mismatch 856/1809" followed by a
-            // refused login (2026-08-27, two launches in a row). Wait for it to be gone first;
-            // this is a no-op when a game is already running in the prefix.
-            if RendererSetup.stopWineserver(install) {
-                log("==> wrapper wineserver stopped; the game starts its own")
+            // Registry helpers do not inherit the game's synchronization settings.
+            // Flush them before starting the game with its selected msync/esync mode.
+            if RendererSetup.stopWineserver(launchInstall) {
+                log("==> preparation wineserver stopped; the game starts its own")
             }
+            timing("spawn")
             let spawnEnv = env
             await MainActor.run { [weak self] in
                 self?.spawnViaShell(gameWine,

@@ -321,11 +321,11 @@ def main() -> int:
     parser.add_argument("--draw-distance", type=float, default=20,
                         help="world and entity distance for the scenario, default stress setting 20")
     parser.add_argument("--menu-sample", type=float, default=15)
+    parser.add_argument("--wine-debug", help="temporary WINEDEBUG channels; diagnostic runs only")
     parser.add_argument("--dump", action="store_true", help="F12 dump at character selection")
     parser.add_argument("--dump-scene", help="F12 dump at a named scene screenshot, such as city-settled")
     options, forwarded = parser.parse_known_args()
-    if options.installed_mtld3d and (options.renderer_bundle or options.converter or options.dxmt_bundle
-                                   or options.launcher_binary):
+    if options.installed_mtld3d and (options.renderer_bundle or options.converter or options.dxmt_bundle):
         parser.error("--installed-mtld3d cannot replace renderer resources")
     if options.installed_mtld3d and any(any(key in arg for key in
             ("WINEDLLPATH", "WINEDLLOVERRIDES", "MTLD3D_", "RUST_LOG")) for arg in forwarded):
@@ -383,6 +383,13 @@ def main() -> int:
                 perf["renderer"] = "metal"
                 checked(["defaults", "write", menu.APP_BUNDLE_ID, "perf.settings", "-data",
                          json.dumps(perf).encode().hex()])
+            if options.wine_debug:
+                # PerfSettings overrides inherited WINEDEBUG. Use its snapshotted
+                # extra environment so the requested trace reaches the game.
+                perf["extraEnv"] = perf.get("extraEnv", "").rstrip() + "\nWINEDEBUG=" + options.wine_debug
+                checked(["defaults", "write", menu.APP_BUNDLE_ID, "perf.settings", "-data",
+                         json.dumps(perf).encode().hex()])
+                self.record["wine_debug_requested"] = options.wine_debug
             profile = self.game_dir / "config/boot/lsb-docker.ini"
             if options.graphics_profile:
                 profile.write_text(match_graphics(profile.read_text(), options.graphics_profile.read_text()))
@@ -432,14 +439,38 @@ def main() -> int:
 
         def launch(self) -> bool:
             launched_at = time.time()
+            self.record["launch_requested_epoch"] = launched_at
             ok = super().launch()
+            if ok:
+                spawn = Path.home() / "Library/Application Support/HorizonXI-on-Mac/last-spawn.txt"
+                if spawn.is_file() and spawn.stat().st_mtime >= launched_at:
+                    self.record["injector_spawn_epoch"] = spawn.stat().st_mtime
+                deadline = min(time.monotonic() + 60, self.started + self.args.limit)
+                while time.monotonic() < deadline:
+                    window = menu.run([str(self.window_tool), "find", str(self.game_pid)], timeout=3)
+                    if window.returncode == 0:
+                        visible_at = time.time()
+                        self.record["first_window"] = {
+                            "epoch": visible_at, "launch_seconds": visible_at - launched_at,
+                            "poll_interval_seconds": 0.2, **json.loads(window.stdout),
+                        }
+                        marker = menu.PREFIX / ".update-timestamp"
+                        if marker.is_file():
+                            self.record["prefix_update_epoch"] = marker.stat().st_mtime
+                        self.event("first visible game window", seconds=round(visible_at - launched_at, 3))
+                        break
+                    time.sleep(0.2)
+                else:
+                    raise RuntimeError("No visible game window within the startup deadline")
             if ok and options.installed_mtld3d:
                 spawn = Path.home() / "Library/Application Support/HorizonXI-on-Mac/last-spawn.txt"
                 if spawn.stat().st_mtime < launched_at:
                     raise RuntimeError("No fresh launcher environment record")
-                keys = ("WINEDLLPATH", "MTLD3D_CONFIG", "RUST_LOG")
+                keys = ("WINEDLLPATH", "MTLD3D_CONFIG", "RUST_LOG", "WINEDEBUG")
                 environment = {key: value for line in spawn.read_text().splitlines()
                                for key, sep, value in [line.partition("=")] if sep and key in keys}
+                if options.wine_debug and environment.get("WINEDEBUG") != options.wine_debug:
+                    raise RuntimeError("Requested Wine startup trace did not reach the game")
                 installed_wine = menu.APP / "Contents/Resources/mtld3d/wine"
                 if environment.get("WINEDLLPATH") != str(installed_wine):
                     raise RuntimeError("Normal launcher did not select the bundled Wine shim")

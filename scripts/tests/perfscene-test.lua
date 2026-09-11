@@ -145,5 +145,12 @@ assert(table.concat(weather, ',') == '0,15,0', 'lighting weather was not restore
 assert(rezones == 4, 'lighting clock changes must refresh the client through zoning');
 assert(labels[#labels] == 'done' and commands[#commands].time < 180,
     'lighting sequence exceeded its bounded schedule');
+scenario = 'login';
+run('PersonalCharacter', true);
+assert(#commands == 0 and labels[#labels] == 'scenario failed',
+    'login smoke accepted a different character');
+run('Hxitest', true);
+assert(#commands == 0 and labels[#labels] == 'done',
+    'login smoke issued commands or did not complete');
 os.getenv, print = original_getenv, original_print;
-print('Effects checks and bounded lighting identity, time and weather checks passed');
+print('Effects, lighting and command-free local login checks passed');

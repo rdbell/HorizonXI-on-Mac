@@ -1,10 +1,11 @@
 import Foundation
 
-/// The Wine build used to run the game.
+/// The Wine build used for game launches and their registry maintenance.
 ///
-/// The Sikarugir Wine inside the wrapper still owns prefix setup and registry maintenance, but it
-/// exits this client shortly after login. The game therefore runs with athei's CrossOver-derived
-/// build, which also contains the cooperative x87sidecar handshake used by `ROSETTA_X87_PATH`.
+/// Wrapper repair and third-party installers retain Sikarugir. Launch preparation
+/// uses this runtime too: alternating two Wine versions on the game prefix causes
+/// wineboot to reinstall its Windows files before every launch. This build also
+/// contains the cooperative x87sidecar handshake used by `ROSETTA_X87_PATH`.
 enum WineRuntime {
     static let version = "wine-cx-26.3.0-1"
     static let downloadURL = URL(string:

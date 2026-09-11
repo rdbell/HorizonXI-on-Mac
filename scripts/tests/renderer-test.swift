@@ -24,7 +24,47 @@ struct RendererTest {
         try savedSettings()
         try missingShim()
         try repeatedInstall()
+        registryChecks()
+        try unchangedFilesAndRepair()
         print("PASS: renderer settings, incomplete-package protection, repeat install and builtin preservation")
+    }
+
+    static func registryChecks() {
+        let registry = #"""
+        WINE REGISTRY Version 2
+        [Software\\Wine\\Direct3D] 123
+        "renderer"="gl"
+        "MaxVersionGL"=dword:00040001
+        [Software\\Wine\\DllOverrides] 456
+        "*d3d8"="native"
+        "*d3d9"="native"
+        "renderer"="wrong section"
+        "quoted"="a\\b\"c"
+        """#
+        let key = #"HKCU\Software\Wine\Direct3D"#
+        expect(RendererSetup.registryMatches(registry, key: key, name: "renderer", type: "REG_SZ", data: "gl"), "matching renderer missed")
+        expect(RendererSetup.registryMatches(registry, key: key, name: "maxversiongl", type: "REG_DWORD", data: "0x40001"), "DWORD or name case mismatch")
+        expect(!RendererSetup.registryMatches(registry, key: key, name: "renderer", type: "REG_SZ", data: "vulkan"), "renderer change skipped")
+        expect(!RendererSetup.registryMatches(registry, key: key, name: "*d3d9", type: "REG_SZ", data: "native"), "read another section")
+        expect(!RendererSetup.registryMatches(registry, key: key + "Extra", name: "renderer", type: "REG_SZ", data: "gl"), "accepted section prefix")
+        expect(!RendererSetup.registryMatches("", key: key, name: "renderer", type: "REG_SZ", data: "gl"), "missing registry accepted")
+        expect(RendererSetup.registryMatches(registry, key: #"HKCU\Software\Wine\DllOverrides"#, name: "quoted", type: "REG_SZ", data: "a\\b\"c"), "escaped string mismatch")
+    }
+
+    static func unchangedFilesAndRepair() throws {
+        let f = try fixture()
+        defer { try? FileManager.default.removeItem(at: f.root) }
+        let target = f.install.gameDir.appendingPathComponent("d3d9.dll")
+        try RendererSetup.installMTLD3DFiles(to: f.install, bundle: f.bundle, converter: f.converter)
+        let date = Date(timeIntervalSince1970: 1000)
+        try FileManager.default.setAttributes([.modificationDate: date], ofItemAtPath: target.path)
+        try RendererSetup.installMTLD3DFiles(to: f.install, bundle: f.bundle, converter: f.converter)
+        expect(try target.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate == date,
+               "unchanged renderer was rewritten")
+        try Data("damaged".utf8).write(to: target)
+        try RendererSetup.installMTLD3DFiles(to: f.install, bundle: f.bundle, converter: f.converter)
+        expect(try Data(contentsOf: target) == Data(contentsOf: f.bundle.appendingPathComponent("native/i386-windows/d3d9.dll")),
+               "damaged renderer was not repaired")
     }
 
     static func savedSettings() throws {
@@ -37,6 +77,14 @@ struct RendererTest {
                && restored.extraEnv == "USER_SETTING=kept", "renderer choice reset unrelated settings")
 
         let install = Install(wrapper: URL(fileURLWithPath: "/tmp/test-wrapper.app"), prefixName: "prefix10")
+        let runtime = URL(fileURLWithPath: "/runtime/wine/bin/wine")
+        let launch = install.usingWine(runtime)
+        expect(launch.wine == runtime && launch.wineserver.path == "/runtime/wine/bin/wineserver",
+               "launch helpers do not share the selected runtime")
+        expect(launch.prefix == install.prefix && launch.gameDir == install.gameDir,
+               "runtime selection moved the game or prefix")
+        expect(launch.installerPrefix.wine == install.wine && install.wine != runtime,
+               "launch runtime leaked into wrapper repair or installers")
         let env = restored.environment(for: install, x87: false)
         expect(env["MTLD3D_CONFIG"]?.contains("render.mergePasses=true") == true, "pass merging is off")
         expect(env["MTLD3D_CONFIG"]?.contains("render.submitDraws=0") == true, "early submission is on")
