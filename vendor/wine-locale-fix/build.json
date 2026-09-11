@@ -1,0 +1,18 @@
+{
+  "source_repository": "https://github.com/athei/wine",
+  "source_commit": "16aac07e6fe9815ffb51efe0e736ba6a3dc97a9c",
+  "release": "cx-26.3.0-1",
+  "release_run": 32250417447,
+  "compiler": "llvm-mingw-20260616-ucrt-macos-universal",
+  "locale_baseline_sha256": "e4ae60b3e868204b57fafb305b8ca8be35097dcb2646c79ed7aa4f71fb01207d",
+  "runtime": "wine-cx-26.3.0-1",
+  "files": {
+    "i386-windows/ucrtbase.dll": "7af360cda518f356db6c2c19da5df49ef5be1d80f0cd7b34adeba80ff6a84de2",
+    "x86_64-windows/ucrtbase.dll": "321d4d9cce42bcced22c30769e58a2f211e3054863643142b7d98e36f9466160"
+  },
+  "originals": {
+    "i386-windows/ucrtbase.dll": "f3dc8141591d5dab3b09049ad717485ca06b19092bbf26f79d037e3b4b727fdf",
+    "x86_64-windows/ucrtbase.dll": "c1138e9ec74615bfbb0720a1f9910c958ae7ca9ed697bc41bf0cbd9a6e029dd8"
+  },
+  "patch_sha256": "1f4a72087b80e91c3e1b5bc5a09427096a5b08180660846c377e990bfa372194"
+}

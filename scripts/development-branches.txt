@@ -51,3 +51,6 @@ release-cadence-check
 
 # Docs: NOWAIT-vs-FENCE A/B record + upstream-filing note corrections.
 docs-findings-cleanup
+
+# Wine UCRT country-locale restoration fix, based on the tested build 26 integration.
+wine-locale-roundtrip

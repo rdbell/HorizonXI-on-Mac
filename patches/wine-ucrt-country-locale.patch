@@ -1,0 +1,104 @@
+--- a/dlls/msvcrt/locale.c
++++ b/dlls/msvcrt/locale.c
+@@ -280,6 +280,11 @@
+   WCHAR buff[MAX_ELEM_LEN];
+   unsigned int flags = 0;
+ 
++  /* An explicit country requires a specific locale, even when a neutral
++   * locale reports that country through GetLocaleInfoEx. */
++  if (res->search_country[0] && (locale_flags & LOCALE_NEUTRALDATA))
++    return CONTINUE_LOOKING;
++
+   if (res->allow_sname && compare_info(name,LOCALE_SNAME,buff,res->search_language, TRUE))
+   {
+     TRACE(":Found locale: %s->%s\n", wine_dbgstr_w(res->search_language), wine_dbgstr_w(buff));
+--- a/dlls/ucrtbase/tests/Makefile.in
++++ b/dlls/ucrtbase/tests/Makefile.in
+@@ -5,6 +5,7 @@
+ 	cpp.c \
+ 	environ.c \
+ 	file.c \
++	locale.c \
+ 	misc.c \
+ 	printf.c \
+ 	scanf.c \
+--- /dev/null
++++ b/dlls/ucrtbase/tests/locale.c
+@@ -0,0 +1,77 @@
++/* Locale selection must preserve an explicitly requested country.
++ * Copyright 2026 ximac contributors
++ * SPDX-License-Identifier: LGPL-2.1-or-later
++ */
++#include <locale.h>
++#include <string.h>
++#include <windows.h>
++#include "wine/test.h"
++
++static WCHAR **(__cdecl *locale_names)(void);
++
++static void check_name(const WCHAR *expected)
++{
++    WCHAR *actual = locale_names()[LC_CTYPE];
++    ok(!lstrcmpW(actual, expected), "expected %s, got %s\n",
++            wine_dbgstr_w(expected), wine_dbgstr_w(actual));
++}
++
++static void test_country_roundtrip(void)
++{
++    static const struct { const char *input; const WCHAR *name; } cases[] =
++    {
++        { "English_United States.1252", L"en-US" },
++        { "English_United Kingdom.1252", L"en-GB" },
++        { "French_France.1252", L"fr-FR" },
++        { "German_Germany.1252", L"de-DE" },
++        { "Japanese_Japan.932", L"ja-JP" },
++        { "Turkish_Turkey.1254", L"tr-TR" },
++        { "English_United States.65001", L"en-US" },
++        { "en-US", L"en-US" },
++        { "en", L"en" },
++        { "fr", L"fr" },
++        { "tr", L"tr" },
++        { "sr-Latn", L"sr-Latn" },
++    };
++    char saved[256];
++    const char *result;
++    unsigned int i;
++
++    for (i = 0; i < ARRAY_SIZE(cases); ++i)
++    {
++        winetest_push_context("%s", cases[i].input);
++        setlocale(LC_ALL, "C");
++        result = setlocale(LC_ALL, cases[i].input);
++        ok(!!result, "setlocale failed\n");
++        if (result)
++        {
++            check_name(cases[i].name);
++            lstrcpynA(saved, result, ARRAY_SIZE(saved));
++            setlocale(LC_ALL, "C");
++            ok(!!setlocale(LC_ALL, saved), "restore failed for %s\n", saved);
++            check_name(cases[i].name);
++        }
++        winetest_pop_context();
++    }
++    setlocale(LC_ALL, "C");
++    ok(!locale_names()[LC_CTYPE], "C should not have a locale name\n");
++    ok(!setlocale(LC_ALL, "definitely-no-such-locale"), "invalid locale accepted\n");
++    ok(!locale_names()[LC_CTYPE], "invalid request changed locale\n");
++
++    setlocale(LC_ALL, "English_United States.1252");
++    ok(!!setlocale(LC_NUMERIC, "French_France.1252"), "LC_NUMERIC selection failed\n");
++    check_name(L"en-US");
++    ok(!strcmp(localeconv()->decimal_point, ","), "French decimal separator changed\n");
++    ok(!!setlocale(LC_CTYPE, "Turkish_Turkey.1254"), "LC_CTYPE selection failed\n");
++    check_name(L"tr-TR");
++    ok(!strcmp(localeconv()->decimal_point, ","), "LC_CTYPE changed LC_NUMERIC\n");
++    setlocale(LC_ALL, "C");
++}
++
++START_TEST(locale)
++{
++    HMODULE crt = GetModuleHandleA("ucrtbase.dll");
++    locale_names = (void *)GetProcAddress(crt, "___lc_locale_name_func");
++    if (!locale_names) { win_skip("locale name export unavailable\n"); return; }
++    test_country_roundtrip();
++}

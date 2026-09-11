@@ -72,6 +72,8 @@ enum WineRuntime {
             throw Err("The patched Wine archive had an unexpected layout. Expected wine/bin/wine.")
         }
 
+        try WineLocaleFix.apply(to: staging, log: log)
+
         try? fm.removeItem(at: destination)
         try fm.moveItem(at: staging, to: destination)
         _ = run("/usr/bin/xattr", ["-dr", "com.apple.quarantine", destination.path])

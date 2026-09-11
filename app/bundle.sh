@@ -58,6 +58,22 @@ for name, expected in manifest["files"].items():
 PY
 cp -R "$REPO/vendor/mtld3d" "$APP/Contents/Resources/mtld3d"
 
+# UCRT locale restoration fix, built from the same source as the pinned Wine.
+python3 - "$REPO/vendor/wine-locale-fix" <<'PY'
+import hashlib, json, pathlib, sys
+root = pathlib.Path(sys.argv[1])
+manifest = json.loads((root / "build.json").read_text())
+expected = {"i386-windows/ucrtbase.dll", "x86_64-windows/ucrtbase.dll"}
+if set(manifest["files"]) != expected:
+    raise SystemExit("Incomplete Wine locale fix")
+if hashlib.sha256((root / "source.patch").read_bytes()).hexdigest() != manifest["patch_sha256"]:
+    raise SystemExit("Wine locale source patch checksum mismatch")
+for name, digest in manifest["files"].items():
+    if hashlib.sha256((root / name).read_bytes()).hexdigest() != digest:
+        raise SystemExit(f"Wine locale fix checksum mismatch: {name}")
+PY
+cp -R "$REPO/vendor/wine-locale-fix" "$APP/Contents/Resources/wine-locale-fix"
+
 # x87sidecar: the fix for FFXI's x87 floating-point math running ~100x slow under Rosetta (see
 # docs/X87-WALL.md). Signed individually below with its own entitlements -- the app's deep-sign
 # strips them otherwise, and without get-task-allow/cs.debugger it cannot attach to the game.
@@ -113,7 +129,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   <key>NSDocumentsFolderUsageDescription</key><string>To find a wrapper you keep in Documents.</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>3.8</string>
-  <key>CFBundleVersion</key><string>26</string>
+  <key>CFBundleVersion</key><string>27</string>
   <key>LSMinimumSystemVersion</key><string>13.0</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>LSApplicationCategoryType</key><string>public.app-category.games</string>

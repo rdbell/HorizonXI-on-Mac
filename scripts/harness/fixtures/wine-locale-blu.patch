@@ -1,0 +1,120 @@
+--- a/perfscene.lua
++++ b/perfscene.lua
+@@ -136,40 +136,34 @@
+     scenarios.town[#scenarios.town + 1] = { delay, command, label };
+ end
+ 
+-local effect_spells = {
+-    { 'Blaze Spikes', 249 }, { 'Ice Spikes', 250 }, { 'Shock Spikes', 251 },
+-    { 'Stoneskin', 54 }, { 'Blink', 53 }, { 'Aquaveil', 55 },
++local effect_spells = { { 'Cocoon', 547, 'DEFENSE_BOOST' }, { 'Metallic Body', 517, 'STONESKIN' }, { 'Refueling', 530, 'HASTE' } };
++scenarios.effects = {
++    { 1, '/fps 0', 'fps uncapped' },
++    { 2, '!changejob BLU 99', 'effects job requested' },
++    { 3, '!addspell 547', 'Cocoon learned' },
++    { 1, '!addspell 517', 'Metallic Body learned' },
++    { 1, '!addspell 530', 'Refueling learned' },
++    { 3, 'equip_cocoon', 'Cocoon equip requested' },
++    { 12, '!exec player:setPos(39,0,-49,128,234)', 'zone bastok mines' },
++    { 8, 'effects_ready', 'BLU setup confirmed' },
+ };
+-scenarios.effects = {
+-    { 1, "!exec xi.commands.perftime = dofile('scripts/commands/perftime.lua')", 'clock command refreshed' },
+-    { 1, '!perftime 12', 'clock pinned to noon' },
+-    { 2, '/fps 0', 'fps uncapped' },
+-    { 2, world_distance_command, 'world draw distance set' },
+-    { 2, entity_distance_command, 'entity draw distance set' },
+-    { 2, '!changejob RDM 99', 'effects job requested' },
+-    { 3, '!addallspells', 'effects spells requested' },
+-    { 12, '!exec player:setPos(39,0,-49,128,234)', 'zone bastok mines' },
+-    { 6, 'home', 'camera reset requested' },
+-    { 15, 'effects_ready', 'effects idle settled' },
+-    { 20, 'settle', 'effects idle end' },
+-};
+-for round = 1, 3 do
+-    local prefix = 'effects round ' .. round;
+-    local steps = {
+-        { 3, '!reset', prefix .. ' recasts reset' },
+-        { 3, '!exec player:setMP(player:getMaxMP())', prefix .. ' MP restored' },
+-        -- Blink, Stoneskin, Aquaveil and Chainspell. Keep GM lines under the chat packet limit.
+-        { 3, '!exec for _,e in ipairs({36,37,39,48}) do player:delStatusEffect(e) end', prefix .. ' buffs cleared' },
+-        { 1, 'settle', prefix .. ' start' },
+-        { 1, '/ja "Chainspell" <me>', prefix .. ' Chainspell' },
+-    };
++if os.getenv('PERFSCENE_LATE_XIAPI') == '1' then
++    table.insert(scenarios.effects, { 2, '/load xiapi', 'diagnostic plugin load requested' });
++    table.insert(scenarios.effects, { 4, 'settle', 'diagnostic plugin loaded interval' });
++end
++for round = 1, math.min(4, math.max(1, tonumber(os.getenv('PERFSCENE_ROUNDS') or '4'))) do
+     for _, spell in ipairs(effect_spells) do
+-        steps[#steps + 1] = { 3, '/ma "' .. spell[1] .. '" <me>', prefix .. ' ' .. spell[1] };
+-    end
+-    steps[#steps + 1] = { 8, 'settle', prefix .. ' end' };
+-    for _, s in ipairs(steps) do scenarios.effects[#scenarios.effects + 1] = s; end
+-end
+-scenarios.effects[#scenarios.effects + 1] = { 10, 'done', 'done' };
++        local prefix = 'effects round ' .. round .. ' ' .. spell[1];
++        local steps = {
++            { 2, '!reset', prefix .. ' recasts reset' },
++            { 2, '!exec player:setMP(player:getMaxMP());player:delStatusEffect(xi.effect.' .. spell[3] .. ')', prefix .. ' prepared' },
++            { 2, '/ma "' .. spell[1] .. '" <me>', prefix .. ' cast' },
++            { 4, 'settle', prefix .. ' end' },
++        };
++        for _, step in ipairs(steps) do scenarios.effects[#scenarios.effects + 1] = step; end
++    end
++end
++scenarios.effects[#scenarios.effects + 1] = { 5, 'done', 'done' };
+ 
+ local stress_module = require('stress');
+ for name, steps in pairs(stress_module.scenarios(world_distance_command, entity_distance_command)) do
+@@ -228,6 +222,11 @@
+ end
+ 
+ local function send(cmd)
++    -- This private fixture is authorized only on local LSB as Hxitest ID 1.
++    local party = AshitaCore:GetMemoryManager():GetParty();
++    if party:GetMemberName(0) ~= 'Hxitest' or party:GetMemberServerId(0) ~= 1 then
++        error('Hxitest ID 1 identity guard failed');
++    end
+     -- Mode 1: as if typed in the chat box. GM commands are plain text that begins with '!'.
+     AshitaCore:GetChatManager():QueueCommand(1, cmd);
+ end
+@@ -259,13 +258,27 @@
+     if waiting then return; end
+     if handled then
+         if not state.running then return; end
++    elseif (cmd == 'equip_cocoon') then
++        local party = AshitaCore:GetMemoryManager():GetParty();
++        if party:GetMemberName(0) ~= 'Hxitest' or party:GetMemberServerId(0) ~= 1 or
++            AshitaCore:GetMemoryManager():GetPlayer():GetMainJob() ~= 16 then
++            error('Hxitest BLU identity guard failed');
++        end
++        for slot, spell in ipairs(effect_spells) do
++            local packet = {};
++            for i=1,164 do packet[i]=0; end
++            packet[1]=0x02; packet[2]=0x53;
++            packet[5]=spell[2]-512; packet[9]=16; packet[12+slot]=spell[2]-512;
++            AshitaCore:GetPacketManager():AddOutgoingPacket(0x102, packet);
++        end
++        mark(label);
+     elseif (cmd == 'effects_ready') then
+         local player = AshitaCore:GetMemoryManager():GetPlayer();
+-        local ready = player:GetMainJob() == 5 and player:GetMainJobLevel() == 99;
++        local ready = player:GetMainJob() == 16 and player:GetMainJobLevel() == 99;
+         for _, spell in ipairs(effect_spells) do ready = ready and player:HasSpell(spell[2]); end
+         if not ready or state.zone ~= 234 then
+             state.running = nil;
+-            mark('scenario failed', ', "reason": "RDM99, required spells, or Mines zone not confirmed"');
++            mark('scenario failed', ', "reason": "BLU99, Cocoon, or Mines zone not confirmed"');
+             return;
+         end
+         mark(label, ', "required_spells_confirmed": true');
+@@ -276,7 +289,7 @@
+         -- Measurement intervals end at this marker. Restore the server's normal
+         -- clock after them; a forward reset can end the test session.
+         if stress.is_active() then stress.stop();
+-        elseif sc ~= scenarios.login then send('!addtime 0'); end
++        end
+         state.running = nil;
+         return;
+     elseif (cmd:sub(1, 6) == 'spawn ') then

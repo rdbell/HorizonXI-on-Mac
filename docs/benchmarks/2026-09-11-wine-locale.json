@@ -1,0 +1,138 @@
+{
+  "runtime_changed_files": [
+    "wine/lib/wine/i386-windows/ucrtbase.dll",
+    "wine/lib/wine/x86_64-windows/ucrtbase.dll"
+  ],
+  "cases": {
+    "cocoon-diagnostics2": {
+      "session": "20260911-165829-standard-nosample",
+      "successful_casts": 8,
+      "done": true,
+      "frames_after_done_seconds": 7.973,
+      "restoration": {
+        "files_restored": 44,
+        "preferences_restored": true,
+        "docker_unchanged": true,
+        "related_processes": []
+      }
+    },
+    "mixed-original-xiapi": {
+      "session": "20260911-170417-standard-nosample",
+      "successful_casts": 12,
+      "done": true,
+      "frames_after_done_seconds": 6.818,
+      "restoration": {
+        "files_restored": 44,
+        "preferences_restored": true,
+        "docker_unchanged": true,
+        "related_processes": []
+      }
+    },
+    "installed-smoke": {
+      "session": "20260911-171117-standard-nosample",
+      "successful_casts": 3,
+      "done": true,
+      "frames_after_done_seconds": 8.114,
+      "restoration": {
+        "files_restored": 44,
+        "preferences_restored": true,
+        "docker_unchanged": true,
+        "related_processes": []
+      }
+    }
+  },
+  "successful_casts": 23,
+  "related_processes": [],
+  "remaining_test_launchd_flags": {},
+  "xiapi_sha256": "e7396a9a9548ad5144e87f4d88a95ccba148e1bfc472ff6154635a87a79a8f42",
+  "app": {
+    "version": "3.8",
+    "build": "27",
+    "sha256": "4a6899c53b680bc8911411988c80fa16c1a515cc41c78903f80221f0d36bfd62"
+  },
+  "installed_apply_is_idempotent": true,
+  "date": "2026-09-11",
+  "hardware": "Apple M2 Max",
+  "macos": "26.5",
+  "test_world": "local Docker LSB",
+  "character": "Hxitest",
+  "crt_baseline": [
+    {
+      "test": "roundtrip",
+      "exit": 0,
+      "seconds": 63.41
+    },
+    {
+      "test": "i386-locale",
+      "exit": 14,
+      "seconds": 0.292
+    },
+    {
+      "test": "i386-string",
+      "exit": 0,
+      "seconds": 0.451
+    },
+    {
+      "test": "i386-misc",
+      "exit": 0,
+      "seconds": 0.922
+    },
+    {
+      "test": "x86_64-locale",
+      "exit": 14,
+      "seconds": 0.175
+    },
+    {
+      "test": "x86_64-string",
+      "exit": 0,
+      "seconds": 0.441
+    },
+    {
+      "test": "x86_64-misc",
+      "exit": 0,
+      "seconds": 0.595
+    }
+  ],
+  "crt_candidate": [
+    {
+      "test": "roundtrip",
+      "exit": 0,
+      "seconds": 12.851
+    },
+    {
+      "test": "i386-locale",
+      "exit": 0,
+      "seconds": 0.274
+    },
+    {
+      "test": "i386-string",
+      "exit": 0,
+      "seconds": 0.438
+    },
+    {
+      "test": "i386-misc",
+      "exit": 0,
+      "seconds": 0.854
+    },
+    {
+      "test": "x86_64-locale",
+      "exit": 0,
+      "seconds": 0.224
+    },
+    {
+      "test": "x86_64-string",
+      "exit": 0,
+      "seconds": 0.399
+    },
+    {
+      "test": "x86_64-misc",
+      "exit": 0,
+      "seconds": 0.71
+    }
+  ],
+  "limitations": [
+    "Bounded local tests; not a guarantee against unrelated freezes.",
+    "Native Windows tests were not run.",
+    "Full Swift XCTest suite unavailable with Command Line Tools; focused production-code installation tests passed."
+  ]
+}
