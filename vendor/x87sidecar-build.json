@@ -1,11 +1,11 @@
 {
   "source_repository": "https://github.com/rdbell/x87sidecar",
-  "source_commit": "1e2e6655c99ce018b219234d6a5e12f05ac265b3",
+  "source_commit": "c00c5f7c2de0c04728e53ce08af225c608c47ec1",
   "upstream_commit": "010f50a93c86d57ac93c395d5f9c283b74a5a6e8",
   "pr31_commit": "48535de895bf7230cfe6e772b4ebe19d5b041424",
-  "patch_sha256": "be029b710c5e0aa34d6d6596fa71e3f2728f43f9626a1cf73dd93dc415c8823d",
+  "patch_sha256": "7151ce5f180f9626c444f1def8425adb72a499bafe1d43c862358cd84bddbaef",
   "files": {
-    "x87sidecar-coop": "440164ef0a27cadff7ad503d90dec72e4bbc0e62f44ccffc0d59ca93334f8c76"
+    "x87sidecar-coop": "36335379c346b35f80971ae1ad48ebeb68bb9f778fec812126feff5dd3fafc0c"
   },
   "profile_paths": "automatic .<target-pid> suffix",
   "sticky_sampling": true

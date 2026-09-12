@@ -805,7 +805,9 @@ def export_symbol(path: str, offset: int) -> str | None:
     if not exports:
         return None
     import bisect
-    index = bisect.bisect_right([rva for rva, _ in exports], offset) - 1
+    # Search the cached table directly. Rebuilding all export addresses for
+    # every sampled stack frame makes a short capture take minutes to report.
+    index = bisect.bisect_right(exports, offset, key=lambda item: item[0]) - 1
     if index < 0:
         return None
     rva, name = exports[index]
@@ -838,17 +840,29 @@ RUNTIME_MODULES = ("ucrtbase.dll", "msvcrt.dll", "ntdll.dll", "kernel32.dll", "k
                    "libsystem", "libdispatch", "wine")
 
 
-def caller_attribution(record: dict[str, Any], limit: int = 12) -> list[dict[str, Any]]:
+def x87_locator(record: dict[str, Any]):
+    """Resolve repeated PCs once per summary, retaining that record's module map."""
+    from functools import cache
+    modules = record.get("modules", [])
+
+    @cache
+    def locate(pc: int) -> dict[str, Any]:
+        return module_location(pc, modules)
+
+    return locate
+
+
+def caller_attribution(record: dict[str, Any], limit: int = 12, locate=None) -> list[dict[str, Any]]:
     """For each sampled stack, name the innermost frame that is not a runtime helper.
 
     The leaf histogram says `memset`; this says who asked for it. Frames are stored
     root-first, so the walk runs from the leaf backwards."""
-    modules = record.get("modules", [])
+    locate = locate or x87_locator(record)
     samples = max(1, int(record.get("header", {}).get("samples", 0)))
     counts: Counter[str] = Counter()
     leaves: dict[str, Counter[str]] = {}
     for row in record.get("stacks", []):
-        located = [module_location(pc, modules) for pc in row["pcs"]]
+        located = [locate(pc) for pc in row["pcs"]]
         if not located:
             continue
         leaf = located[-1]["location"]
@@ -864,13 +878,13 @@ def caller_attribution(record: dict[str, Any], limit: int = 12) -> list[dict[str
             for caller, count in counts.most_common(limit)]
 
 
-def inclusive_module_share(record: dict[str, Any], limit: int = 10) -> list[dict[str, Any]]:
+def inclusive_module_share(record: dict[str, Any], limit: int = 10, locate=None) -> list[dict[str, Any]]:
     """Samples whose stack passes through each module at least once."""
-    modules = record.get("modules", [])
+    locate = locate or x87_locator(record)
     samples = max(1, int(record.get("header", {}).get("samples", 0)))
     counts: Counter[str] = Counter()
     for row in record.get("stacks", []):
-        seen = {module_location(pc, modules)["module"] for pc in row["pcs"]}
+        seen = {locate(pc)["module"] for pc in row["pcs"]}
         for module in seen:
             counts[module] += row["count"]
     return [{"module": module, "count": count,
@@ -878,7 +892,8 @@ def inclusive_module_share(record: dict[str, Any], limit: int = 10) -> list[dict
             for module, count in counts.most_common(limit)]
 
 
-def x87_hotspots(record: dict[str, Any], limit: int = 12) -> list[dict[str, Any]]:
+def x87_hotspots(record: dict[str, Any], limit: int = 12, locate=None) -> list[dict[str, Any]]:
+    locate = locate or x87_locator(record)
     counts: Counter[int] = Counter()
     for row in record.get("leaves", []):
         counts[row["pc"]] += row["count"]
@@ -888,22 +903,24 @@ def x87_hotspots(record: dict[str, Any], limit: int = 12) -> list[dict[str, Any]
         result.append({
             "pc": f"0x{pc:x}", "count": count,
             "percent_of_samples": round(count / samples * 100, 2),
-            **module_location(pc, record.get("modules", [])),
+            **locate(pc),
         })
     return result
 
 
-def x87_module_hotspots(record: dict[str, Any], limit: int = 10) -> list[dict[str, Any]]:
+def x87_module_hotspots(record: dict[str, Any], limit: int = 10, locate=None) -> list[dict[str, Any]]:
+    locate = locate or x87_locator(record)
     counts: Counter[str] = Counter()
     samples = max(1, int(record.get("header", {}).get("samples", 0)))
     for row in record.get("leaves", []):
-        counts[module_location(row["pc"], record.get("modules", []))["module"]] += row["count"]
+        counts[locate(row["pc"])["module"]] += row["count"]
     return [{"module": module, "count": count,
              "percent_of_samples": round(count / samples * 100, 2)}
             for module, count in counts.most_common(limit)]
 
 
 def x87_record_summary(record: dict[str, Any], limit: int = 12) -> dict[str, Any]:
+    locate = x87_locator(record)
     header = record.get("header", {})
     keep = (
         "pid", "written", "rate_hz", "effective_hz", "elapsed_s", "profiled_s",
@@ -924,8 +941,8 @@ def x87_record_summary(record: dict[str, Any], limit: int = 12) -> dict[str, Any
     host_count = sum(row["count"] for row in record.get("host_leaves", []))
     result["guest_leaf_percent"] = round(guest_count / samples * 100, 2)
     result["host_leaf_percent"] = round(host_count / samples * 100, 2)
-    result["top_guest_leaves"] = x87_hotspots(record, limit)
-    result["top_guest_modules"] = x87_module_hotspots(record, limit)
+    result["top_guest_leaves"] = x87_hotspots(record, limit, locate)
+    result["top_guest_modules"] = x87_module_hotspots(record, limit, locate)
 
     host_counts: Counter[tuple[int, str]] = Counter()
     for row in record.get("host_leaves", []):
@@ -933,7 +950,7 @@ def x87_record_summary(record: dict[str, Any], limit: int = 12) -> dict[str, Any
     result["top_host_leaves"] = [
         {"pc": f"0x{pc:x}", "reason": reason, "count": count,
          "percent_of_samples": round(count / samples * 100, 2),
-         **module_location(pc, record.get("modules", []))}
+         **locate(pc)}
         for (pc, reason), count in host_counts.most_common(limit)
     ]
 
@@ -945,15 +962,15 @@ def x87_record_summary(record: dict[str, Any], limit: int = 12) -> dict[str, Any
          "percent_of_samples": round(count / samples * 100, 2)}
         for svc, count in syscall_counts.most_common(limit)
     ]
-    result["callers"] = caller_attribution(record, limit)
-    result["inclusive_modules"] = inclusive_module_share(record, limit)
+    result["callers"] = caller_attribution(record, limit, locate)
+    result["inclusive_modules"] = inclusive_module_share(record, limit, locate)
 
     stack_counts: Counter[tuple[int, ...]] = Counter()
     for row in record.get("stacks", []):
         stack_counts[tuple(row["pcs"])] += row["count"]
     result["top_guest_stacks"] = [
         {"count": count, "percent_of_samples": round(count / samples * 100, 2),
-         "locations": [module_location(pc, record.get("modules", []))["location"]
+         "locations": [locate(pc)["location"]
                        for pc in stack]}
         for stack, count in stack_counts.most_common(min(limit, 8))
     ]

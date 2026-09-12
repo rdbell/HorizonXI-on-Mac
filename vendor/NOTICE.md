@@ -35,7 +35,7 @@ both prefix markers must accompany the native D3D9 DLL. See `../docs/MTLD3D-EXPE
 ## x87sidecar-coop
 
 This is the unentitled cooperative binary used by the patched Wine runtime. It is built from
-`rdbell/x87sidecar@1e2e6655c99ce018b219234d6a5e12f05ac265b3`, based on upstream `010f50a` with the PR #31
+`rdbell/x87sidecar@c00c5f7c2de0c04728e53ce08af225c608c47ec1`, based on upstream `010f50a` with the PR #31
 automatic profiler PID suffixes and our optional sticky sampler. `x87sidecar-build.json` records
 its binary and source-patch hashes. `../patches/x87sidecar-upstream-integration.patch` is the
 complete source difference from that upstream commit.

@@ -161,7 +161,7 @@ index fa03422..6411d2f 100644
          "set X87_SAMPLE_WINDOWS=0 to write only the cumulative profile.\n"
          "\n"
 diff --git a/rosetta_loader/src/sidecar.cpp b/rosetta_loader/src/sidecar.cpp
-index 41d791f..b9c405f 100644
+index 41d791f..037914a 100644
 --- a/rosetta_loader/src/sidecar.cpp
 +++ b/rosetta_loader/src/sidecar.cpp
 @@ -1060,15 +1060,17 @@ uint64_t machThreadId(mach_port_t thread) {
@@ -315,7 +315,14 @@ index 41d791f..b9c405f 100644
      if (env_truthy("X87_NO_UNWIND")) {
          cfg.unwind = false;
      }
-@@ -3033,6 +3092,13 @@ void startSampler(mach_port_t parentTaskPort, uint64_t runtimeBase, const Sample
+@@ -3030,9 +3089,20 @@ void startSampler(mach_port_t parentTaskPort, uint64_t runtimeBase, const Sample
+         return;
+     }
+     SamplerConfig cfg = in;
++    // Pinned ranges bypass main-image discovery, which normally publishes
++    // these counters. Preserve the configured bounds in the profile header.
++    g_counters.guest_lo.store(cfg.guest_lo, std::memory_order_relaxed);
++    g_counters.guest_hi.store(cfg.guest_hi, std::memory_order_relaxed);
      // Sweeping every thread faster than the sample rate is never what was
      // meant: the sweep is the expensive mode and the rate is the cheap one.
      cfg.sweep_interval_us = std::max(cfg.sweep_interval_us, cfg.interval_us);
@@ -329,7 +336,7 @@ index 41d791f..b9c405f 100644
      // Nothing from a previous run may survive into this one: a run that never
      // latches writes no profile, and the absence has to be the answer rather
      // than the last run's file still sitting there to be read as this one's.
-@@ -3044,11 +3110,6 @@ void startSampler(mach_port_t parentTaskPort, uint64_t runtimeBase, const Sample
+@@ -3044,11 +3114,6 @@ void startSampler(mach_port_t parentTaskPort, uint64_t runtimeBase, const Sample
      unlink(cfg.path.c_str());
      unlink((cfg.path + ".windows").c_str());
      unlinkWindowSeries(cfg.path);
@@ -341,7 +348,7 @@ index 41d791f..b9c405f 100644
      pthread_attr_t attr;
      pthread_attr_init(&attr);
      pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-@@ -3076,6 +3137,7 @@ void startSampler(mach_port_t parentTaskPort, uint64_t runtimeBase, const Sample
+@@ -3076,6 +3141,7 @@ void startSampler(mach_port_t parentTaskPort, uint64_t runtimeBase, const Sample
                             .report_s = cfg.report_s,
                             .unwind = cfg.unwind,
                             .range_pinned = cfg.guest_range_pinned,
@@ -396,10 +403,10 @@ index f68547b..3d0f8ab 100644
  void startSampler(mach_port_t parentTaskPort, uint64_t runtimeBase, const SamplerConfig& in);
 diff --git a/scripts/test_profile_paths.py b/scripts/test_profile_paths.py
 new file mode 100644
-index 0000000..9f7b5d5
+index 0000000..4c37aab
 --- /dev/null
 +++ b/scripts/test_profile_paths.py
-@@ -0,0 +1,86 @@
+@@ -0,0 +1,89 @@
 +#!/usr/bin/env python3
 +"""Check concurrent profiler outputs on macOS after a normal CMake build."""
 +
@@ -426,7 +433,8 @@ index 0000000..9f7b5d5
 +        path.write_bytes(b"preserve me\n")
 +    env = {key: value for key, value in os.environ.items()
 +           if not key.startswith("X87_") and key != "STORM_CASE"}
-+    env.update(X87_PROFILE=str(profile), X87_SAMPLE_REPORT="0.25")
++    env.update(X87_PROFILE=str(profile), X87_SAMPLE_REPORT="0.25",
++               X87_GUEST_RANGE="0x10000-0x800000000000", X87_SAMPLE_STICKY="1")
 +    processes = []
 +    completed = set()
 +    try:
@@ -455,6 +463,8 @@ index 0000000..9f7b5d5
 +            sample_path = Path(f"{sample}.{process.pid}")
 +            assert block_path.stat().st_size > 0, output
 +            assert "[leaves]" in sample_path.read_text(), output
++            assert "guest_range 0x10000-0x800000000000\n" in sample_path.read_text(), output
++            assert "sticky yes\n" in sample_path.read_text(), output
 +            assert "end_window " in Path(f"{sample_path}.windows").read_text(), output
 +        for path in sentinels:
 +            assert path.read_bytes() == b"preserve me\n", path

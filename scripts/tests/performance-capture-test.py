@@ -309,6 +309,20 @@ class PerformanceCaptureTests(unittest.TestCase):
             self.assertEqual(capture.block_profiles_summary(root, 8)["status"], "no game profile")
             self.assertEqual(capture.block_profiles_summary(root / "none", 1)["status"], "none")
 
+    def test_summary_location_cache_does_not_escape_its_module_map(self):
+        record = {"header": {"samples": 100},
+                  "modules": [{"base": 4096, "size": 4096, "kind": "macho", "path": "first"}],
+                  "leaves": [{"pc": 4100, "count": 100}],
+                  "stacks": [{"pcs": [4100, 4100], "count": 1} for _ in range(100)]}
+        from unittest.mock import patch
+        with patch.object(capture, "module_location", wraps=capture.module_location) as resolve:
+            first = capture.x87_record_summary(record)
+            self.assertEqual(resolve.call_count, 1)
+        record["modules"][0]["path"] = "second"
+        second = capture.x87_record_summary(record)
+        self.assertEqual(first["top_guest_modules"][0]["module"], "first")
+        self.assertEqual(second["top_guest_modules"][0]["module"], "second")
+
     def test_pid_suffix_outputs_and_legacy_captures(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
