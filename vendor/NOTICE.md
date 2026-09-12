@@ -8,7 +8,7 @@ All are freely redistributable. Local modifications are listed below and in `../
 | `d3d8to9.dll` | [crosire/d3d8to9](https://github.com/crosire/d3d8to9) | v1.15.1 | BSD 3-Clause |
 | `dxvk-1.10.3-x32-d3d9-horizonxi.dll` | [doitsujin/dxvk](https://github.com/doitsujin/dxvk) `x32/d3d9.dll` plus the project patches | v1.10.3+ | zlib |
 | `mtld3d/` | [athei/mtld3d](https://github.com/athei/mtld3d) `ea1b1ca3` plus the included `source.patch` | 0.8.0+, built 2026-09-05 | zlib, see `mtld3d/LICENSE` |
-| `x87sidecar-coop` | [athei/x87sidecar](https://github.com/athei/x87sidecar) `4e9c738` plus `x87sidecar-profile-pid-path.patch` | built 2026-09-03 | MIT |
+| `x87sidecar-coop` | [athei/x87sidecar](https://github.com/athei/x87sidecar) `010f50a` plus `x87sidecar-upstream-integration.patch` | built 2026-09-11 | MIT |
 | `x87sidecar_entitled` | [athei/x87sidecar](https://github.com/athei/x87sidecar) `rosetta_loader` | built 2026-08-12 | MIT |
 
 ## dxvk-1.10.3-x32-d3d9-horizonxi.dll
@@ -34,14 +34,16 @@ both prefix markers must accompany the native D3D9 DLL. See `../docs/MTLD3D-EXPE
 
 ## x87sidecar-coop
 
-This is the unentitled cooperative binary used by the patched Wine runtime: upstream `4e9c738`
-plus `../patches/x87sidecar-profile-pid-path.patch`, which expands `%p` in both `X87_SAMPLE` and
-`X87_PROFILE` to the profiled target's PID. The launcher needs this because its injector and game
-processes inherit one output path but run in separate sidecars. SHA-256
-`81185d42b73a0390712d8cc9d99f5bc9416fb4b31ffdaf7efb26b9675fbd3ad6`. Upstream `4e9c738` carries
-the FMA-contraction default, the block-restart cache reset, and async-signal survival that removed
-the earlier `FFXiMain.dll+0x3d638` geometry stall. The sticky-sampler patch has not been ported
-to this commit. The local patch affects diagnostics only.
+This is the unentitled cooperative binary used by the patched Wine runtime. It is built from
+`rdbell/x87sidecar@1e2e6655c99ce018b219234d6a5e12f05ac265b3`, based on upstream `010f50a` with the PR #31
+automatic profiler PID suffixes and our optional sticky sampler. `x87sidecar-build.json` records
+its binary and source-patch hashes. `../patches/x87sidecar-upstream-integration.patch` is the
+complete source difference from that upstream commit.
+
+Upstream supplies the native x87 state restoration, FPATAN signed-zero correction, tracing,
+and Tahoe detach fixes. The fork additions affect opt-in profiling. The launcher supplies base
+filenames; the sidecar appends `.<target-pid>` to each profiler output. `%p` is now literal text.
+Sticky sampling continues following the selected thread through DLL and runtime calls.
 
 ## x87sidecar_entitled
 

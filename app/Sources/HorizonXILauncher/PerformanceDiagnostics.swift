@@ -97,8 +97,8 @@ enum PerformanceDiagnostics {
 
         if level != "standard-nosample" {
             // Sample the guest x86 program counter without suspending the game thread. Wine
-            // starts one sidecar for the injector and another for the client; the patched
-            // sidecar expands `%p` to its target pid so those profiles cannot overwrite each
+            // starts one sidecar for the injector and another for the client. The sidecar
+            // appends its target PID to the base path so those profiles cannot overwrite each
             // other. Discover within the 32-bit guest address space, choose the thread seen
             // running guest code most often, then keep that thread through DLL calls, Rosetta
             // runtime code, syscalls, and stalls. One kHz costs about 1% of one core and
@@ -106,7 +106,7 @@ enum PerformanceDiagnostics {
             // after it settles. `standard-nosample` preserves every other probe for a clean
             // A/B check of the sampler itself.
             environment["X87_SAMPLE"] = directory
-                .appendingPathComponent("x87-sample-%p.prof").path
+                .appendingPathComponent("x87-sample.prof").path
             environment["X87_SAMPLE_HZ"] = "1000"
             environment["X87_SAMPLE_REPORT"] = "10"
             environment["X87_SAMPLE_WINDOWS"] = "1"

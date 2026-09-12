@@ -1,0 +1,510 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index a5c11ab..529ebdc 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -34,6 +34,9 @@ jobs:
+         # runners give passwordless sudo, so just use that.
+         run: sudo python3 scripts/diagnose_ci.py --output-dir build/ci-diagnostics -- bash scripts/run_tests.sh --no-build
+ 
++      - name: Check concurrent profiler output paths
++        run: sudo python3 scripts/test_profile_paths.py
++
+       - name: Upload test diagnostics
+         if: always()
+         uses: actions/upload-artifact@v4
+diff --git a/README.md b/README.md
+index 8cc05e4..0cd3eeb 100644
+--- a/README.md
++++ b/README.md
+@@ -148,7 +148,12 @@ details.
+ ## Profiling
+ 
+ Both profilers are enabled by naming an output file; neither costs anything
+-when unset.
++when unset. Both always append `.<pid>` to the provided path, using the pid
++of the process the sidecar is attached to, not the sidecar's own. For example,
++`/tmp/game.prof` becomes `/tmp/game.prof.12345`. Paths are otherwise literal;
++there is no placeholder or extension parsing. Wine starts one cooperative
++sidecar per i386 process with the same environment, so the suffix keeps
++those processes from truncating one another's profiles.
+ 
+ ### Sampling profiler: where the guest was
+ 
+@@ -183,7 +188,7 @@ but the program's binaries and debug info.
+ | `[host_syscalls]` | the guest syscall a host-only sample was blocked in, recovered from `x16` at the runtime's syscall dispatcher |
+ | `[stacks]` | folded inclusive stacks, `root;...;leaf count` |
+ 
+-A run leaves `<file>` and `<file>.windows`, the latter one record per report
++A run leaves `<file>.<pid>` and `<file>.<pid>.windows`, the latter one record per report
+ interval holding only that interval's samples, each closed by an
+ `end_window` line so a record cut short by SIGKILL can be dropped. The
+ cumulative profile is the sum of the windows. A sample costs about 10 us,
+@@ -192,11 +197,11 @@ achieved.
+ 
+ | knob | flag | default | effect |
+ |---|---|---|---|
+-| `X87_SAMPLE=<file>` | `--sample=<file>` | off | enable and name the profile |
++| `X87_SAMPLE=<file>` | `--sample=<file>` | off | write the profile to `<file>.<pid>` |
+ | `X87_SAMPLE_HZ=N` | `--sample-hz=N` | 10000 | rate for the latched thread |
+ | `X87_SAMPLE_SWEEP_HZ=N` | `--sweep-hz=N` | 1000 | rate at which all threads are swept while looking for one to latch onto |
+ | `X87_SAMPLE_REPORT=SECS` | | 10 | rewrite interval and window size |
+-| `X87_SAMPLE_WINDOWS=0` | | on | stop writing `<file>.windows` |
++| `X87_SAMPLE_WINDOWS=0` | | on | stop writing `<file>.<pid>.windows` |
+ | `X87_GUEST_RANGE=LO-HI` | `--guest-range=LO-HI` | detected | pin the guest range that marks the thread worth profiling |
+ | `X87_NO_UNWIND=1` | `--no-unwind` | off | leaf pcs only, about half the per-sample cost |
+ 
+@@ -207,7 +212,8 @@ without touching argv.
+ 
+ ```bash
+ X87_PROFILE=/tmp/game.x87 ./x87sidecar_entitled ./program
+-./build/bin/profile_analyze /tmp/game.x87 --rank-by emit --hot-addrs 50
++# Replace 12345 with the target pid printed in the output path.
++./build/bin/profile_analyze /tmp/game.x87.12345 --rank-by emit --hot-addrs 50
+ ```
+ 
+ While translating, the sidecar writes each block's IR to the file the first
+@@ -308,6 +314,7 @@ bash scripts/run_tests.sh                # build + all phases
+ bash scripts/run_tests.sh --no-build     # skip the build
+ bash scripts/run_tests.sh --native-only  # stock Rosetta baseline only
+ bash scripts/run_tests.sh test_arith     # one test
++python3 scripts/test_profile_paths.py    # concurrent profiler output paths
+ bash scripts/run_benchmarks.sh           # build + benchmark table
+ ```
+ 
+diff --git a/rosetta_core/include/rosetta_core/Config.h b/rosetta_core/include/rosetta_core/Config.h
+index f050610..b8e114a 100644
+--- a/rosetta_core/include/rosetta_core/Config.h
++++ b/rosetta_core/include/rosetta_core/Config.h
+@@ -275,7 +275,7 @@ struct RosettaConfig {
+                                     //                  (pre-optimization behaviour).
+ 
+     // X87_PROFILE=<path>  When non-empty, sidecar appends a binary
+-    // record per first-seen IRBlock to this file (full IR stream).
++    // record per first-seen IRBlock to <path>.<target-pid> (full IR stream).
+     // Drives offline fusion-candidate analysis via tools/profile_analyze.
+     std::string profile_path;
+ };
+diff --git a/rosetta_core/src/ConfigEnv.cpp b/rosetta_core/src/ConfigEnv.cpp
+index 1f7f534..8a46f3b 100644
+--- a/rosetta_core/src/ConfigEnv.cpp
++++ b/rosetta_core/src/ConfigEnv.cpp
+@@ -485,9 +485,10 @@ void print_env_help(std::FILE* out) {
+         "                                first time the sidecar sees it, and at exit\n"
+         "                                the per-block execution counters the emitted\n"
+         "                                code keeps in a page shared with the tracee.\n"
++        "                                Output: <file>.<target-pid>.\n"
+         "                                Read with tools/profile_analyze.\n"
+         "  X87_SAMPLE=<file>             sampling profiler: write a guest-pc sample\n"
+-        "                                profile here (rosettax87 only).  Setting it\n"
++        "                                profile to <file>.<target-pid>.  Setting it\n"
+         "                                enables sampling, as X87_PROFILE does for the\n"
+         "                                block profiler.  The tracee is never stopped;\n"
+         "                                host ARM pcs are resolved to guest x86 pcs and\n"
+@@ -496,8 +497,8 @@ void print_env_help(std::FILE* out) {
+         "                                can be read while the target runs, and holds\n"
+         "                                the settings, the thread it latched onto, a\n"
+         "                                leaf histogram and folded stacks.  A run\n"
+-        "                                leaves this file and a <file>.windows next\n"
+-        "                                to it; see X87_SAMPLE_WINDOWS.\n"
++        "                                leaves this file and <file>.<target-pid>.windows\n"
++        "                                next to it; see X87_SAMPLE_WINDOWS.\n"
+         "  X87_SAMPLE_HZ=N               rate for the latched thread, default 10000.  A\n"
+         "                                sample costs ~10 us, so this runs at roughly 1%%\n"
+         "                                of one core per kHz; the profile records the\n"
+@@ -513,12 +514,12 @@ void print_env_help(std::FILE* out) {
+         "                                read a fresher profile mid-run\n"
+         "  X87_SAMPLE_WINDOWS=0          stop writing per-interval window profiles.  On\n"
+         "                                by default: every report interval is also\n"
+-        "                                appended to <file>.windows as a record of its\n"
+-        "                                own, holding only the samples taken during it,\n"
++        "                                appended to <file>.<target-pid>.windows, holding\n"
++        "                                only the samples taken during that interval,\n"
+         "                                so a phase of a session can be read apart from\n"
+         "                                the rest.  The cumulative profile is the sum of\n"
+-        "                                those records.  A previous run's is deleted when\n"
+-        "                                the next one starts\n"
++        "                                those records.  Previous output for the same pid\n"
++        "                                is deleted when the next run starts\n"
+         "  X87_GUEST_RANGE=LO-HI         pin the guest pcs that mark the thread worth\n"
+         "                                profiling.  Normally unnecessary: the sampler\n"
+         "                                reads the guest's own image headers, PE or\n"
+@@ -528,6 +529,9 @@ void print_env_help(std::FILE* out) {
+         "                                image it cannot find.  If\n"
+         "                                nothing runs in the range no profile is\n"
+         "                                written and the reason is logged.\n"
++        "  X87_SAMPLE_STICKY=1           keep the selected thread while it runs outside\n"
++        "                                the guest range; search again only if its thread\n"
++        "                                state can no longer be read\n"
+         "  X87_NO_UNWIND=1               record leaf pcs only, skip the guest stack\n"
+         "                                walk (roughly halves the per-sample cost)\n"
+         "  X87_DISABLE_ALL_FUSIONS=1     disable every peephole fusion\n"
+diff --git a/rosetta_loader/src/main.cpp b/rosetta_loader/src/main.cpp
+index fa03422..6411d2f 100644
+--- a/rosetta_loader/src/main.cpp
++++ b/rosetta_loader/src/main.cpp
+@@ -1100,7 +1100,7 @@ static void print_loader_usage(const char* prog) {
+         "\n"
+         "Sampling profiler (see also the X87_SAMPLE* variables below, which win\n"
+         "over these flags so an app bundle can enable it without touching argv):\n"
+-        "  --sample=<file>       write a guest-pc sample profile here; enables it\n"
++        "  --sample=<file>       write a guest-pc sample profile to <file>.<pid>; enables it\n"
+         "  --sample-hz=<rate>    sample rate for the latched thread, default 10000\n"
+         "                        (a sample costs ~10 us: about 1%% of a core per kHz)\n"
+         "  --sweep-hz=<rate>     rate at which every thread is swept while\n"
+@@ -1111,7 +1111,7 @@ static void print_loader_usage(const char* prog) {
+         "                        found (PE or Mach-O) and its range used\n"
+         "  --no-unwind           record leaf pcs only, skip the guest stack walk\n"
+         "\n"
+-        "A sampling run leaves the named profile and a <file>.windows next to it,\n"
++        "A sampling run leaves <file>.<pid> and <file>.<pid>.windows next to it,\n"
+         "one record per report interval holding that interval's samples alone;\n"
+         "set X87_SAMPLE_WINDOWS=0 to write only the cumulative profile.\n"
+         "\n"
+diff --git a/rosetta_loader/src/sidecar.cpp b/rosetta_loader/src/sidecar.cpp
+index 41d791f..b9c405f 100644
+--- a/rosetta_loader/src/sidecar.cpp
++++ b/rosetta_loader/src/sidecar.cpp
+@@ -1060,15 +1060,17 @@ uint64_t machThreadId(mach_port_t thread) {
+ // One sample: read the thread's ARM pc, resolve it to a guest pc, unwind, and
+ // hand the result to the aggregator.  Nothing is accumulated here and nothing is
+ // looked up — this thread's only job is to be on time.  `record=false` makes it
+-// a discovery probe, which scores a thread without entering the profile.
+-void sampleThread(SamplerCtx* ctx, const guest_pc::Reader& reader, guest_pc::Cache& cache,
++// a discovery probe, which scores a thread without entering the profile. The
++// return value says whether thread_get_state succeeded, so sticky mode can tell
++// a dead subject from a live one running outside the discovery range.
++bool sampleThread(SamplerCtx* ctx, const guest_pc::Reader& reader, guest_pc::Cache& cache,
+                   mach_port_t thread, uint64_t tid, bool record, bool& inRange) {
+     inRange = false;
+     arm_thread_state64_t state{};
+     mach_msg_type_number_t count = ARM_THREAD_STATE64_COUNT;
+     if (thread_get_state(thread, ARM_THREAD_STATE64, reinterpret_cast<thread_state_t>(&state),
+                          &count) != KERN_SUCCESS) {
+-        return;
++        return false;
+     }
+     if (record) {
+         g_counters.samples.fetch_add(1, std::memory_order_relaxed);
+@@ -1184,6 +1186,7 @@ void sampleThread(SamplerCtx* ctx, const guest_pc::Reader& reader, guest_pc::Cac
+         g_counters.total_ns.fetch_add(static_cast<uint64_t>((nowUs() - t0) * 1000.0),
+                                       std::memory_order_relaxed);
+     }
++    return true;
+ }
+ 
+ // Everything the profile is made of, owned by one thread: the histograms, the
+@@ -1198,6 +1201,7 @@ struct AggCtx {
+     double report_s;
+     bool unwind;
+     bool range_pinned;
++    bool sticky;
+     // Per-window delta profiles: how many have been written, and where the one
+     // being filled started, in run seconds and in latched seconds.  A window's
+     // rate has to divide by the latched time inside THAT window, not the run's.
+@@ -1345,6 +1349,7 @@ void emitProfile(FILE* fh, const AggCtx* ctx, const SamplerStats& st, double ela
+         rangeFrom = "main image (detected)";
+     }
+     fprintf(fh, "guest_range_from %s\n", rangeFrom);
++    fprintf(fh, "sticky %s\n", ctx->sticky ? "yes" : "no");
+     // A failed latch writes no profile at all, so a profile always has a
+     // subject.  `latched_thread` is the CURRENT one, not the only one: a run
+     // that re-latched has every thread it followed in [threads], each holding
+@@ -1892,6 +1897,11 @@ void* samplerMain(void* raw) {
+                 "onto the thread that runs the main image\n",
+                 ctx->cfg.path.c_str(), sampleHz, sweepHz);
+     }
++    if (ctx->cfg.sticky) {
++        fprintf(stdout,
++                "[rosettax87] X87_SAMPLE: sticky thread sampling enabled; the selected thread "
++                "is kept until its state is unavailable\n");
++    }
+     fflush(stdout);
+ 
+     double started = nowUs();
+@@ -1903,9 +1913,26 @@ void* samplerMain(void* raw) {
+             // Steady state: one thread, one thread_get_state, no task_threads,
+             // no port churn and no thread_info.
+             bool inRange = false;
+-            sampleThread(ctx, reader, cache, latched, latchedTid, true, inRange);
++            const bool stateAvailable =
++                sampleThread(ctx, reader, cache, latched, latchedTid, true, inRange);
+             const double now = nowUs();
+-            if (inRange) {
++            bool shouldUnlatch = false;
++            if (ctx->cfg.sticky && !stateAvailable) {
++                fprintf(stdout,
++                        "[rosettax87] X87_SAMPLE: unlatched from thread 0x%llx because its "
++                        "state is unavailable; searching again\n",
++                        static_cast<unsigned long long>(latchedTid));
++                fflush(stdout);
++                g_latch.add((now - started) / 1e6,
++                            "unlatched 0x%llx because thread state is unavailable",
++                            static_cast<unsigned long long>(latchedTid));
++                shouldUnlatch = true;
++            } else if (ctx->cfg.sticky) {
++                // Once discovery has found the busiest guest-running thread,
++                // keep following it. The game loop spends most of its time in
++                // DLLs, Rosetta runtime code, syscalls, and waits rather than
++                // inside the launcher's executable image.
++            } else if (inRange) {
+                 lastInRange = now;
+             } else if (now - lastInRange > kUnlatchAfterS * 1e6) {
+                 const double quiet = (now - lastInRange) / 1e6;
+@@ -1917,6 +1944,9 @@ void* samplerMain(void* raw) {
+                 g_latch.add((now - started) / 1e6,
+                             "unlatched 0x%llx after %.1f s outside the image",
+                             static_cast<unsigned long long>(latchedTid), quiet);
++                shouldUnlatch = true;
++            }
++            if (shouldUnlatch) {
+                 {
+                     const std::scoped_lock lock(g_latch.mu);
+                     g_latch.latched = false;
+@@ -2909,14 +2939,40 @@ bool installPortInParent(mach_port_t parentTaskPort, mach_port_t* outServicePort
+     return true;
+ }
+ 
++// A launcher can start several independently wrapped processes with the same
++// profiler environment.  Append the pid of the process whose task port the
++// sidecar received, not the sidecar's own pid, so they cannot truncate one
++// another's output.
++static bool appendTargetPid(std::string& path, pid_t targetPid, const char* variable) {
++    if (targetPid <= 0) {
++        fprintf(stdout,
++                "[rosettax87] %s: cannot append the target pid because it is unavailable; "
++                "profiling disabled\n",
++                variable);
++        return false;
++    }
++
++    path += "." + std::to_string(targetPid);
++    return true;
++}
++
+ bool spawnReceiveThread(mach_port_t servicePort, mach_port_t parentTaskPort) {
+     if (g_rosetta_config != nullptr && !g_rosetta_config->profile_path.empty()) {
+-        const char* path = g_rosetta_config->profile_path.c_str();
+-        g_profile.file = std::fopen(path, "wb");
++        std::string path = g_rosetta_config->profile_path;
++        pid_t targetPid = 0;
++        pid_for_task(parentTaskPort, &targetPid);
++        if (!appendTargetPid(path, targetPid, "X87_PROFILE")) {
++            path.clear();
++        }
++        g_profile.file = path.empty() ? nullptr : std::fopen(path.c_str(), "wb");
+         if (g_profile.file == nullptr) {
+-            fprintf(stdout, "[rosettax87] X87_PROFILE: failed to open '%s' for writing\n", path);
++            if (!path.empty()) {
++                fprintf(stdout, "[rosettax87] X87_PROFILE: failed to open '%s' for writing\n",
++                        path.c_str());
++            }
+         } else {
+-            fprintf(stdout, "[rosettax87] X87_PROFILE: dumping IR streams to '%s'\n", path);
++            fprintf(stdout, "[rosettax87] X87_PROFILE: dumping IR streams to '%s'\n",
++                    path.c_str());
+         }
+         fflush(stdout);
+     }
+@@ -2984,6 +3040,9 @@ void samplerConfigFromEnv(SamplerConfig& cfg) {
+     if (const char* w = getenv("X87_SAMPLE_WINDOWS"); w != nullptr && w[0] != '\0') {
+         cfg.windows = strcmp(w, "0") != 0;
+     }
++    if (env_truthy("X87_SAMPLE_STICKY")) {
++        cfg.sticky = true;
++    }
+     if (env_truthy("X87_NO_UNWIND")) {
+         cfg.unwind = false;
+     }
+@@ -3033,6 +3092,13 @@ void startSampler(mach_port_t parentTaskPort, uint64_t runtimeBase, const Sample
+     // Sweeping every thread faster than the sample rate is never what was
+     // meant: the sweep is the expensive mode and the rate is the cheap one.
+     cfg.sweep_interval_us = std::max(cfg.sweep_interval_us, cfg.interval_us);
++    // The target's pid is needed by both threads and pid_for_task only answers
++    // while it is alive, so read it before touching the output path.
++    pid_t targetPid = 0;
++    pid_for_task(parentTaskPort, &targetPid);
++    if (!appendTargetPid(cfg.path, targetPid, "X87_SAMPLE")) {
++        return;
++    }
+     // Nothing from a previous run may survive into this one: a run that never
+     // latches writes no profile, and the absence has to be the answer rather
+     // than the last run's file still sitting there to be read as this one's.
+@@ -3044,11 +3110,6 @@ void startSampler(mach_port_t parentTaskPort, uint64_t runtimeBase, const Sample
+     unlink(cfg.path.c_str());
+     unlink((cfg.path + ".windows").c_str());
+     unlinkWindowSeries(cfg.path);
+-    // The target's pid is needed by both threads and pid_for_task only answers
+-    // while it is alive, so it is read here, once, before either starts.
+-    pid_t targetPid = 0;
+-    pid_for_task(parentTaskPort, &targetPid);
+-
+     pthread_attr_t attr;
+     pthread_attr_init(&attr);
+     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+@@ -3076,6 +3137,7 @@ void startSampler(mach_port_t parentTaskPort, uint64_t runtimeBase, const Sample
+                            .report_s = cfg.report_s,
+                            .unwind = cfg.unwind,
+                            .range_pinned = cfg.guest_range_pinned,
++                           .sticky = cfg.sticky,
+                            .windows = cfg.windows};
+     pthread_t aggThr;
+     if (pthread_create(&aggThr, &attr, aggregatorMain, agg) != 0) {
+diff --git a/rosetta_loader/src/sidecar.hpp b/rosetta_loader/src/sidecar.hpp
+index f68547b..3d0f8ab 100644
+--- a/rosetta_loader/src/sidecar.hpp
++++ b/rosetta_loader/src/sidecar.hpp
+@@ -59,11 +59,14 @@ void dumpCountersIfEnabled(mach_port_t parentTaskPort);
+ // Guest-pc sampler.
+ //
+ // X87_SAMPLE=<path> enables it and names the profile, exactly like X87_PROFILE.
++// The target PID is always appended to the configured path. This matters for
++// launchers such as wine, where several independently wrapped processes inherit
++// the same environment and would otherwise overwrite one another's profile.
+ // Everything lands in that one self-describing file: the settings it ran with,
+ // which thread it latched onto, the rate it actually achieved, the leaf
+ // histogram and the folded stacks.
+ struct SamplerConfig {
+-    std::string path;  // X87_SAMPLE; empty = disabled
++    std::string path;  // X87_SAMPLE; empty = disabled; target PID appended at startup
+     // X87_SAMPLE_HZ, default 10 kHz.  A sample costs ~10 us, so the rate buys
+     // resolution at almost exactly 1% of one core per kHz, and it holds: 10 kHz
+     // measured 9998 Hz achieved with nothing dropped and the ring under 2% full.
+@@ -87,6 +90,12 @@ struct SamplerConfig {
+     uint64_t guest_lo = 0;
+     uint64_t guest_hi = 0x100000000ULL;
+     bool guest_range_pinned = false;
++    // X87_SAMPLE_STICKY. Discovery still chooses the thread seen running guest
++    // code most often, but once chosen the sampler follows it through library
++    // code, Rosetta runtime code, syscalls, and stalls. It re-enters discovery
++    // only when that thread can no longer be read. This is useful for profiling
++    // a long-lived game loop whose executable delegates most work to DLLs.
++    bool sticky = false;
+     // Profile rewrite interval, and with it the window size below, which is what
+     // sets this rather than durability: every catchable exit path flushes (see
+     // flushSamplerIfEnabled), so it bounds only what an uncatchable kill takes
+@@ -111,8 +120,9 @@ struct SamplerConfig {
+ };
+ 
+ // Overlay X87_SAMPLE / X87_SAMPLE_HZ / X87_SAMPLE_SWEEP_HZ / X87_SAMPLE_REPORT /
+-// X87_GUEST_RANGE / X87_NO_UNWIND onto `cfg`.  Env is how the app bundle enables
+-// this: gamelauncher passes fixed arguments, but applies its [env] table.
++// X87_GUEST_RANGE / X87_SAMPLE_STICKY / X87_NO_UNWIND onto `cfg`. Env is how the
++// app bundle enables this: gamelauncher passes fixed arguments, but applies its
++// [env] table.
+ void samplerConfigFromEnv(SamplerConfig& cfg);
+ 
+ void startSampler(mach_port_t parentTaskPort, uint64_t runtimeBase, const SamplerConfig& in);
+diff --git a/scripts/test_profile_paths.py b/scripts/test_profile_paths.py
+new file mode 100644
+index 0000000..9f7b5d5
+--- /dev/null
++++ b/scripts/test_profile_paths.py
+@@ -0,0 +1,86 @@
++#!/usr/bin/env python3
++"""Check concurrent profiler outputs on macOS after a normal CMake build."""
++
++import os
++from pathlib import Path
++import re
++import signal
++import subprocess
++import tempfile
++
++
++ROOT = Path(__file__).resolve().parent.parent
++BIN = ROOT / "build" / "bin"
++
++
++def check_paths(directory, name):
++    sample = directory / name
++    profile = directory / (name + ".x87")
++    # Include the old window-series naming pattern: cleanup must operate on
++    # the suffixed path, never on the shared configured path.
++    sentinels = [Path(str(base) + suffix) for base in (sample, profile)
++                 for suffix in ("", ".windows", ".0001", ".99999.windows")]
++    for path in sentinels:
++        path.write_bytes(b"preserve me\n")
++    env = {key: value for key, value in os.environ.items()
++           if not key.startswith("X87_") and key != "STORM_CASE"}
++    env.update(X87_PROFILE=str(profile), X87_SAMPLE_REPORT="0.25")
++    processes = []
++    completed = set()
++    try:
++        # One environment-configured sampler and one CLI-configured sampler
++        # use the same paths at the same time. The original loader PID becomes
++        # the target PID across exec; the sidecar is a separate process.
++        for use_env in (True, False):
++            run_env = env.copy()
++            command = [str(BIN / "x87sidecar_entitled")]
++            if use_env:
++                run_env["X87_SAMPLE"] = str(sample)
++            else:
++                command.append(f"--sample={sample}")
++            command += [str(BIN / "tests" / "test_x87_signal_storm"), "none", "1"]
++            processes.append(subprocess.Popen(
++                command, env=run_env, stdout=subprocess.PIPE,
++                stderr=subprocess.STDOUT, text=True, start_new_session=True))
++        for process in processes:
++            # EOF also waits for the sidecar to finish its final counter dump.
++            output, _ = process.communicate(timeout=20)
++            completed.add(process.pid)
++            assert process.returncode == 0, output
++            assert "FAIL" not in output, output
++            assert re.search(r"wrote [1-9][0-9]* block counters", output), output
++            block_path = Path(f"{profile}.{process.pid}")
++            sample_path = Path(f"{sample}.{process.pid}")
++            assert block_path.stat().st_size > 0, output
++            assert "[leaves]" in sample_path.read_text(), output
++            assert "end_window " in Path(f"{sample_path}.windows").read_text(), output
++        for path in sentinels:
++            assert path.read_bytes() == b"preserve me\n", path
++        expected = set(sentinels)
++        for process in processes:
++            expected.update((Path(f"{profile}.{process.pid}"),
++                             Path(f"{sample}.{process.pid}"),
++                             Path(f"{sample}.{process.pid}.windows")))
++        assert set(directory.iterdir()) == expected, list(directory.iterdir())
++        print(f"PASS {name}: two target PIDs, both profilers, windows and preserved files")
++    finally:
++        for process in processes:
++            if process.pid not in completed:
++                # Only this test's process group, including its detached sidecar.
++                try:
++                    os.killpg(process.pid, signal.SIGKILL)
++                except ProcessLookupError:
++                    pass
++                process.communicate(timeout=5)
++
++
++def main():
++    with tempfile.TemporaryDirectory(prefix="x87-profile-paths-") as temporary:
++        for index, name in enumerate(("game.prof", "profile", "literal-%p-%p.prof")):
++            directory = Path(temporary) / str(index)
++            directory.mkdir()
++            check_paths(directory, name)
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/tests/test_x87_signal_context.c b/tests/test_x87_signal_context.c
+index 192376f..4e454fc 100644
+--- a/tests/test_x87_signal_context.c
++++ b/tests/test_x87_signal_context.c
+@@ -241,9 +241,16 @@ static void run_case(int compat, int rewrite, double x) {
+         return;
+     }
+     double deadline = now() + 0.2;
++    /* A signal must land on the exact finish PC. Under stock translation the
++     * 200 ms window can miss it entirely, especially on a busy host. Give a
++     * coverage-starved case a bounded extension without discarding any bad
++     * state or output observed in the original interval. */
++    double coverage_deadline = deadline + 1.8;
+     do {
+         run();
+-    } while (now() < deadline);
++    } while (now() < deadline ||
++             ((observations == 0 || (rewrite && output.replaced == 0)) &&
++              now() < coverage_deadline));
+     atomic_store(&running, 0);
+     void* sender_error;
+     pthread_join(thread, &sender_error);

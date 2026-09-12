@@ -78,8 +78,20 @@ cp -R "$REPO/vendor/wine-locale-fix" "$APP/Contents/Resources/wine-locale-fix"
 # docs/X87-WALL.md). Signed individually below with its own entitlements -- the app's deep-sign
 # strips them otherwise, and without get-task-allow/cs.debugger it cannot attach to the game.
 if [[ -f "$REPO/vendor/x87sidecar-coop" ]]; then
+  python3 - "$REPO" <<'PY'
+import hashlib, json, pathlib, sys
+repo = pathlib.Path(sys.argv[1])
+manifest = json.loads((repo / "vendor/x87sidecar-build.json").read_text())
+for name, digest in manifest["files"].items():
+    if hashlib.sha256((repo / "vendor" / name).read_bytes()).hexdigest() != digest:
+        raise SystemExit(f"x87sidecar checksum mismatch: {name}")
+patch = repo / "patches/x87sidecar-upstream-integration.patch"
+if hashlib.sha256(patch.read_bytes()).hexdigest() != manifest["patch_sha256"]:
+    raise SystemExit("x87sidecar source patch checksum mismatch")
+PY
   # Cooperative-mode sidecar (no entitlements, notarizable); preferred on macOS >= 26.5.2.
   cp "$REPO/vendor/x87sidecar-coop" "$APP/Contents/Resources/x87sidecar-coop"
+  cp "$REPO/vendor/x87sidecar-build.json" "$APP/Contents/Resources/x87sidecar-build.json"
   chmod +x "$APP/Contents/Resources/x87sidecar-coop"
 fi
 # attach-by-pid sidecar: BROKEN on macOS 26.5.2+ (cross-process i-cache flush), so it is no

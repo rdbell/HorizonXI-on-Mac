@@ -81,8 +81,8 @@ struct PerformanceDiagnosticsTest {
         expect(standard.environment["X87_LOG_THROUGHPUT"] == "1",
                "did not enable x87 throughput logging")
         expect(standard.environment["X87_SAMPLE"]?.hasSuffix(
-            "/x87-sample-%p.prof") == true,
-               "did not give each x87 sampler a target-pid profile path")
+            "/x87-sample.prof") == true,
+               "did not give the x87 sampler a base path for automatic PID suffixing")
         expect(standard.environment["X87_SAMPLE_HZ"] == "1000",
                "did not select the low-overhead guest sample rate")
         expect(standard.environment["X87_SAMPLE_REPORT"] == "10",

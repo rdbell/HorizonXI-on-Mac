@@ -1,0 +1,12 @@
+{
+  "source_repository": "https://github.com/rdbell/x87sidecar",
+  "source_commit": "1e2e6655c99ce018b219234d6a5e12f05ac265b3",
+  "upstream_commit": "010f50a93c86d57ac93c395d5f9c283b74a5a6e8",
+  "pr31_commit": "48535de895bf7230cfe6e772b4ebe19d5b041424",
+  "patch_sha256": "be029b710c5e0aa34d6d6596fa71e3f2728f43f9626a1cf73dd93dc415c8823d",
+  "files": {
+    "x87sidecar-coop": "440164ef0a27cadff7ad503d90dec72e4bbc0e62f44ccffc0d59ca93334f8c76"
+  },
+  "profile_paths": "automatic .<target-pid> suffix",
+  "sticky_sampling": true
+}

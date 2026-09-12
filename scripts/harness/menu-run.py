@@ -441,7 +441,7 @@ class MenuRun:
             variables["PERFSCENE_SCENARIO"] = self.args.scenario
             variables["PERFSCENE_MARKERS"] = self.wine_session_path() + "\\perfscene-markers.jsonl"
         if self.args.x87_profile and self.session_dir is not None:
-            variables["X87_PROFILE"] = str(self.session_dir / "x87-block-%p.prof")
+            variables["X87_PROFILE"] = str(self.session_dir / "x87-block.prof")
         for name, value in variables.items():
             launchctl_set(name, value)
             self.set_variables.append(name)
@@ -617,7 +617,10 @@ class MenuRun:
     def collect_profile(self) -> None:
         if not self.args.x87_profile or self.session_dir is None or self.game_pid is None:
             return
-        profile = self.session_dir / f"x87-block-{self.game_pid}.prof"
+        profile = self.session_dir / f"x87-block.prof.{self.game_pid}"
+        legacy = self.session_dir / f"x87-block-{self.game_pid}.prof"
+        if not profile.exists() and legacy.exists():
+            profile = legacy
         complete = profile.is_file() and block_profile_complete(profile)
         self.record["x87_block_profile"] = {
             "file": profile.name, "exists": profile.is_file(), "complete": complete,

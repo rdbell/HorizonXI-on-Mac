@@ -68,7 +68,7 @@ def report(output: Path, bundle: Path | None) -> dict:
     session = Path(json.loads((output / 'active.json').read_text())['session'])
     menu = json.loads((session / 'menu-run.json').read_text())
     pid = menu['game_pid']
-    profile = session / f'x87-sample-{pid}.prof'
+    profile = capture.x87_profile_path(session, 'sample', pid)
     final_record = capture.parse_x87_record(profile.read_text())
     epoch = capture.x87_profile_start_epoch(final_record)
     if epoch is None:

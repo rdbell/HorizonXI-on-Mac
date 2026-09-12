@@ -340,7 +340,9 @@ def file_identity(path: Path) -> dict[str, Any]:
             identity["supported_features"] = {
                 "target_pid_sample_paths": (
                     b"cannot expand %%p because the target pid" in data
+                    or b"cannot append the target pid because it is unavailable" in data
                 ),
+                "automatic_pid_suffix": b"cannot append the target pid because it is unavailable" in data,
                 "guest_pc_sampler": b"x87sidecar guest-pc sample profile" in data,
             }
         except OSError:
@@ -998,13 +1000,26 @@ def fps_window_summary(fps: list[dict[str, float]], start: float, end: float) ->
             "classification": classification}
 
 
+def x87_profile_paths(output: Path, kind: str) -> list[Path]:
+    """Read PID-suffixed outputs and historical captures; exclude windows/temp files."""
+    pattern = rf"x87-{re.escape(kind)}(?:\.prof\.\d+|-\d+\.prof)$"
+    return sorted(path for path in output.glob(f"x87-{kind}*")
+                  if path.is_file() and re.fullmatch(pattern, path.name))
+
+
+def x87_profile_path(output: Path, kind: str, pid: int) -> Path:
+    current = output / f"x87-{kind}.prof.{pid}"
+    legacy = output / f"x87-{kind}-{pid}.prof"
+    return legacy if not current.exists() and legacy.exists() else current
+
+
 def x87_profiles_summary(output: Path, game_pid: int,
                          fps: list[dict[str, float]]) -> dict[str, Any]:
     profiles = []
     game_profile: dict[str, Any] | None = None
     game_record: dict[str, Any] | None = None
     game_windows: list[dict[str, Any]] = []
-    for path in sorted(output.glob("x87-sample-*.prof")):
+    for path in x87_profile_paths(output, "sample"):
         try:
             record = parse_x87_record(path.read_text(errors="replace"))
         except OSError:
@@ -1073,7 +1088,7 @@ def x87_profiles_summary(output: Path, game_pid: int,
 
 def wait_for_guest_profile(output: Path, pid: int, timeout: float = 4.0) -> None:
     """Let a terminating sidecar finish its bounded final profile write."""
-    profile = output / f"x87-sample-{pid}.prof"
+    profile = x87_profile_path(output, "sample", pid)
     windows = Path(str(profile) + ".windows")
     deadline = time.monotonic() + timeout
     previous: tuple[int, int, int, int] | None = None
@@ -1099,7 +1114,7 @@ def wait_for_guest_profile(output: Path, pid: int, timeout: float = 4.0) -> None
 
 def wait_for_block_profile(output: Path, pid: int, timeout: float = 10.0) -> None:
     """The sidecar appends block counters after its target exits; give that write time."""
-    profile = output / f"x87-block-{pid}.prof"
+    profile = x87_profile_path(output, "block", pid)
     if not profile.exists():
         return
     deadline = time.monotonic() + timeout
@@ -1357,9 +1372,9 @@ def block_profile_complete(path: Path) -> bool:
 
 def block_profiles_summary(output: Path, game_pid: int) -> dict[str, Any]:
     profiles = []
-    for path in sorted(output.glob("x87-block-*.prof")):
-        match = re.search(r"x87-block-(\d+)\.prof$", path.name)
-        profile_pid = int(match.group(1)) if match else None
+    for path in x87_profile_paths(output, "block"):
+        match = re.fullmatch(r"x87-block(?:\.prof\.(\d+)|-(\d+)\.prof)", path.name)
+        profile_pid = int(match.group(1) or match.group(2)) if match else None
         profiles.append({
             "file": path.name,
             "role": "game" if profile_pid == game_pid else "auxiliary",

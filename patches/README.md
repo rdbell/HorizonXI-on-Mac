@@ -118,42 +118,33 @@ remain dormant unless their environment variables are set.
 
 ---
 
-# x87sidecar diagnostic profiler patches
+# x87sidecar profiler integration
 
-`x87sidecar-profile-pid-path.patch` applies to `athei/x87sidecar` commit `4e9c738` (v1.6.0 plus
-the FMA-contraction default, the Rosetta block-restart cache reset, and async-signal survival in
-emitted code). It makes `%p` in both `X87_PROFILE` and `X87_SAMPLE` expand to the profiled
-target's PID before any output file is removed or opened. Wine launches one cooperative sidecar
-for Ashita's injector and another for the real game process, and the launcher's own helper
-sidecars add more. All of them inherit the same environment, so a fixed output path lets any of
-them truncate the game's profile. The block profiler needs this most: it writes its counter
-section only after its target exits, and the last sidecar to open a shared path wins.
+`x87sidecar-upstream-integration.patch` applies to upstream `010f50a` and records the complete
+shipped fork delta. It includes PR #31's automatic `.<target-pid>` suffix for `X87_PROFILE` and
+`X87_SAMPLE`, plus opt-in `X87_SAMPLE_STICKY=1`. The old `%p` and sticky patches are retained as
+historical source records; do not apply them on top of the integration patch.
 
-`x87sidecar-sticky-sampler.patch` adds opt-in `X87_SAMPLE_STICKY=1`. Discovery still selects the
-thread seen running guest code most often. Once selected, sticky mode follows that thread through
-DLLs, Rosetta runtime code, syscalls, and long stalls, and only searches again if the thread can no
-longer be read. It was ported to `4e9c738` on 2026-09-04 and applies on top of
-`x87sidecar-profile-pid-path.patch`. The shipped `vendor/x87sidecar-coop` includes both patches,
-so `X87_SAMPLE_STICKY=1` is honored. Without it, coverage falls when the game thread runs outside
-the main executable for long periods.
+Sticky discovery selects the thread seen running guest code most often, then follows that
+thread through DLLs, Rosetta runtime code, syscalls and stalls. It searches again if the thread
+can no longer be read. The launcher samples at 1 kHz over the 32-bit guest address range and
+writes ten-second windows.
 
 ```sh
 git clone https://github.com/athei/x87sidecar.git
 cd x87sidecar
-git checkout 4e9c738
-git apply /path/to/x87sidecar-profile-pid-path.patch
-git apply /path/to/x87sidecar-sticky-sampler.patch
+git checkout 010f50a
+git apply /path/to/x87sidecar-upstream-integration.patch
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel
 cp build/bin/x87sidecar /path/to/HorizonXI-on-Mac/vendor/x87sidecar-coop
 ```
 
-The launcher uses a sample path ending in `x87-sample-%p.prof`, discovers across the broad guest
-range `0x10000-0x800000000000`, samples the selected thread at 1 kHz, and writes ten-second
-windows. `scripts/harness/menu-run.py --x87-profile` sets `X87_PROFILE` to
-`x87-block-%p.prof` inside the capture directory for one launch. Both patches affect only
-opt-in diagnostics. The x87 translation code and normal launches without `X87_SAMPLE` or
-`X87_PROFILE` are unchanged.
+The launcher supplies `x87-sample.prof`; the sidecar writes `x87-sample.prof.<target-pid>` and
+its `.windows` companion. `menu-run.py --x87-profile` supplies `x87-block.prof`, producing
+`x87-block.prof.<target-pid>`. Report readers still accept historical `x87-*-<pid>.prof` files.
+Use base filenames without `%p`, which is now literal text. `vendor/x87sidecar-build.json`
+records the source identity and checksums.
 
 ---
 

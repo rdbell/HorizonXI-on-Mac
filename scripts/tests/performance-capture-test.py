@@ -309,6 +309,30 @@ class PerformanceCaptureTests(unittest.TestCase):
             self.assertEqual(capture.block_profiles_summary(root, 8)["status"], "no game profile")
             self.assertEqual(capture.block_profiles_summary(root / "none", 1)["status"], "none")
 
+    def test_pid_suffix_outputs_and_legacy_captures(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "x87-sample.prof.123").write_text(x87_profile_record(
+                123, "1970-01-01T00:16:50Z", 10, []))
+            (root / "x87-sample-456.prof").write_text(x87_profile_record(
+                456, "1970-01-01T00:16:50Z", 10, []))
+            for suffix in (".tmp", ".windows", ".windows.tmp"):
+                (root / ("x87-sample.prof.123" + suffix)).write_text("ignored")
+            summary = capture.x87_profiles_summary(root, 123, [])
+            self.assertEqual(summary["status"], "captured")
+            self.assertEqual(summary["profile_files"], 2)
+            self.assertEqual(capture.x87_profile_path(root, "sample", 123).name,
+                             "x87-sample.prof.123")
+            self.assertEqual(capture.x87_profile_path(root, "sample", 456).name,
+                             "x87-sample-456.prof")
+            (root / "x87-block.prof.123").write_bytes(b"x87b" + b"CNT0")
+            (root / "x87-block.prof.123.tmp").write_bytes(b"ignored")
+            (root / "x87-block-456.prof").write_bytes(b"x87b")
+            blocks = capture.block_profiles_summary(root, 123)
+            self.assertEqual(blocks["status"], "complete")
+            self.assertEqual(len(blocks["profiles"]), 2)
+            self.assertIn("incomplete", capture.block_profiles_summary(root, 456)["status"])
+
     def test_export_symbols_name_runtime_leaves_and_callers_blame_game_code(self):
         ucrt = Path.home() / ("Library/Application Support/HorizonXI-on-Mac/runtimes/"
                               "wine-cx-26.3.0-1/wine/lib/wine/i386-windows/ucrtbase.dll")

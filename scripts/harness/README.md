@@ -78,7 +78,8 @@ is complete.
 One-launch diagnostic overrides go through `--env NAME=value`, repeatable. Only `X87_`, `DXVK_`,
 `D3D9_`, `MVK_`, and `FFXI_ON_MAC_` names are accepted, they are set with `launchctl setenv`
 just before the launch, and they are removed on every exit path. `--x87-profile` sets
-`X87_PROFILE` to `x87-block-%p.prof` inside the capture directory and, when an analyzer path is
+`X87_PROFILE` to `x87-block.prof` inside the capture directory. The sidecar appends `.<target-pid>`
+to that path. Report readers also accept older `x87-block-<pid>.prof` captures. When an analyzer path is
 given, writes `x87-block-analysis.txt` from the complete game profile. `--no-return` stops at the
 rules screen for a pure boot measurement. `--limit` bounds the game phase, including blocked
 recorder and subprocess waits, to 180 seconds by default. A deadline exits with status 124.
