@@ -7,6 +7,8 @@ from pathlib import Path
 import tempfile
 import threading
 import unittest
+from unittest.mock import patch
+from types import SimpleNamespace
 
 
 SCRIPT = Path(__file__).parents[1] / "harness/capture-performance.py"
@@ -53,6 +55,12 @@ def x87_profile_record(pid, written, elapsed, leaves, *, window=None, complete=T
 
 
 class PerformanceCaptureTests(unittest.TestCase):
+    def test_finds_both_game_names_without_matching_parent_directory(self):
+        rows = "12 /tmp/horizon-loader.exe\n13 /tmp/Final Fantasy XI\n14 /tmp/Final Fantasy XI/helper\n"
+        with patch.object(capture, "run", return_value=SimpleNamespace(stdout=rows)) as command:
+            self.assertEqual(capture.game_pids(), {12, 13})
+            self.assertEqual(command.call_args.args[0], ["/bin/ps", "-Ao", "pid=", "-o", "comm="])
+
     def test_redacts_loader_credentials_and_secret_assignments(self):
         source = (
             "loader --user ronald --pass=correct-horse\n"

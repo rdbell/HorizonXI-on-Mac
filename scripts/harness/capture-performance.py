@@ -98,7 +98,8 @@ def game_pids() -> set[int]:
     found: set[int] = set()
     for line in result.stdout.splitlines():
         pid_text, _, command = line.strip().partition(" ")
-        if pid_text.isdigit() and GAME_NAME in command.lower():
+        if pid_text.isdigit() and (GAME_NAME in command.lower()
+                                  or Path(command).name.lower() == "final fantasy xi"):
             found.add(int(pid_text))
     return found
 

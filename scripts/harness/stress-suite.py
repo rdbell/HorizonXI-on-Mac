@@ -120,7 +120,7 @@ def main():
     if not a.execute: return 0
     if not a.output: p.error('--execute requires --output outside Git')
     processes=call(['ps','-axo','pid=,comm='],text=True).stdout.lower()
-    if any(name in processes for name in ('horizon-loader.exe','ffxi-on-mac.app/contents/macos','wineserver')):
+    if any(name in processes for name in ('horizon-loader.exe','final fantasy xi','ffxi-on-mac.app/contents/macos','wineserver')):
         p.error('Close the game, launcher and Wine before running the suite')
     root=a.output.expanduser().resolve()
     existing=root

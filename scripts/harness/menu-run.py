@@ -47,12 +47,12 @@ PREFIX = Path.home() / "Applications/FFXI on Mac Wine.app/Contents/SharedSupport
 # Process names the sweep may stop. Matching is by comm suffix only.
 RELATED_SUFFIXES = (
     "/FFXI-on-Mac", "/wine", "/wine-preloader", "/wine64-preloader", "/wineserver",
-    "/x87sidecar-coop", "/x87sidecar_entitled", "Ashita-cli.exe", "horizon-loader.exe",
+    "/x87sidecar-coop", "/x87sidecar_entitled", "Ashita-cli.exe", "horizon-loader.exe", "Final Fantasy XI",
     "wineboot.exe", "pol.exe", "FFXiMain.dll", "explorer.exe", "plugplay.exe", "rpcss.exe",
     "svchost.exe", "winedevice.exe", "services.exe", "conhost.exe", "winedbg", "winedbg.exe",
 )
 SIDECAR_SUFFIXES = ("/x87sidecar-coop", "/x87sidecar_entitled")
-GAME_SUFFIXES = ("horizon-loader.exe", "Ashita-cli.exe", "pol.exe", "FFXiMain.dll")
+GAME_SUFFIXES = ("horizon-loader.exe", "Final Fantasy XI", "Ashita-cli.exe", "pol.exe", "FFXiMain.dll")
 
 # launchd variables that must be clear before a run so an old experiment cannot leak in.
 GUARDED_VARIABLES = ("X87_PROFILE", "X87_SAMPLE", "X87_ENABLE_FMA_CONTRACT",

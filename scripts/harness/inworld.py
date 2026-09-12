@@ -81,14 +81,15 @@ def client_comms():
     """Lowercased `comm` of every client-side process, for spotting the injector."""
     out = subprocess.run(["ps", "-Ao", "comm="], capture_output=True, text=True).stdout
     return [c.strip().lower() for c in out.splitlines()
-            if "horizon-loader" in c.lower() or "ashita" in c.lower()]
+            if "horizon-loader" in c.lower() or "ashita" in c.lower()
+            or c.strip().lower().endswith("/final fantasy xi")]
 
 
 def loader_pid_is_ready(pid):
     """True only for horizon-loader.exe -- the process that loads FFXiMain and renders."""
     out = subprocess.run(["ps", "-o", "comm=", "-p", str(pid)],
                          capture_output=True, text=True).stdout.lower()
-    return "horizon-loader" in out
+    return "horizon-loader" in out or out.strip().endswith("/final fantasy xi")
 
 
 def thread_times():
