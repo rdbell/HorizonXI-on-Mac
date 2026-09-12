@@ -229,7 +229,7 @@ struct Install: Identifiable, Hashable {
     var sharedSupport: URL { wrapper.appendingPathComponent("Contents/SharedSupport") }
     var wine: URL { wineOverride ?? sharedSupport.appendingPathComponent("wine/bin/wine") }
     var wineserver: URL { wine.deletingLastPathComponent().appendingPathComponent("wineserver") }
-    var prefix: URL { sharedSupport.appendingPathComponent(prefixName) }
+    var prefix: URL { URL(fileURLWithPath: "/Users/developer/go/src/github.com/rdbell/ximac/benchmarks/20260911-wine-cx5-validation/game-prefix", isDirectory: true) }
     var driveC: URL { prefix.appendingPathComponent("drive_c") }
     var gameDir: URL { gameDirOverride ?? driveC.appendingPathComponent("HorizonXI") }
 

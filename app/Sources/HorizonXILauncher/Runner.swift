@@ -565,7 +565,7 @@ final class Runner: ObservableObject {
             // copy; fix that before anything tries to load one. See relinkStrayDylibs.
             RendererSetup.relinkStrayDylibs(install) { log($0) }
             do {
-                try WineLocaleFix.apply(to: WineRuntime.root(in: WineRuntime.applicationSupport), log: log)
+                // Validation candidate: leave the selected upstream runtime unmodified.
                 try RendererSetup.apply(perf.renderer, to: launchInstall) { log($0) }
             } catch {
                 await MainActor.run { [weak self] in

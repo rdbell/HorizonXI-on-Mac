@@ -19,9 +19,7 @@ enum WineRuntime {
     }
 
     static func root(in applicationSupport: URL) -> URL {
-        applicationSupport
-            .appendingPathComponent("HorizonXI-on-Mac/runtimes", isDirectory: true)
-            .appendingPathComponent(version, isDirectory: true)
+        URL(fileURLWithPath: ProcessInfo.processInfo.environment["FFXI_ON_MAC_TEST_RUNTIME"] ?? "/Users/developer/go/src/github.com/rdbell/ximac/benchmarks/20260911-wine-cx5-validation/cx5", isDirectory: true)
     }
 
     static func executable(in applicationSupport: URL) -> URL {
