@@ -6,7 +6,11 @@ import AppKit
 @MainActor
 final class Runner: ObservableObject {
     @Published var log: String = ""
-    @Published var running = false
+    @Published var running = false {
+        didSet {
+            if !running { LauncherVisibility.shared.gameEnded() }
+        }
+    }
     @Published var busy = false { didSet { Runner.workInFlight = busy } }
 
     /// Read by the app delegate on quit. Downloads and installs are child processes of this app,
@@ -710,6 +714,7 @@ final class Runner: ObservableObject {
                 let pids = await Task.detached { Self.gamePIDs() }.value
                 if pids.isEmpty { break }
                 if let s = await MainActor.run(body: { WindowMemory.currentSize(pids: pids, scale: scale) }) {
+                    LauncherVisibility.shared.gameWindowAppeared()
                     if self?.firstWindowSize == nil { self?.firstWindowSize = s }
                     self?.lastWindowSize = s
                 }

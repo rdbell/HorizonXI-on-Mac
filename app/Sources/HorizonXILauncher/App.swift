@@ -6,6 +6,12 @@ import UniformTypeIdentifiers
 /// processes. Silently, and with the UI reverting to its "nothing installed yet" state -- so the
 /// only evidence a 6 GB download ever happened was the folder on disk. Ask first.
 final class LauncherDelegate: NSObject, NSApplicationDelegate {
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        // Opening the app in Finder while playing restores the existing window.
+        // Returning false prevents SwiftUI from opening an extra WindowGroup window.
+        !LauncherVisibility.shared.reopen()
+    }
+
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard Runner.workInFlight else { return .terminateNow }
         let a = NSAlert()
