@@ -151,6 +151,12 @@ the launcher `development` update includes the PID-path migration, reporting imp
 vendored integrated sidecar and this report. No published history is rewritten. The existing
 launcher archive checkout is preserved.
 
+Final restoration verified all 34 inventoried installed-app file hashes and all six protected
+original prefix/runtime hashes unchanged. Both valid city runs and both cx5 gameplay smoke
+tests restored 44 saved file states and launcher preferences. The temporary server command
+was removed after verifying its hash; no related game processes or test launchd overrides
+remained. The known-good installed app is ready for the user's normal play testing.
+
 The next performance experiment should isolate the native-state boundary conversion while
 retaining its signal-context/FXSAVE correctness tests. An experimental revert could establish
 causality in the fixed city scenes, but would not be a shippable fix. Optimize the conversion
