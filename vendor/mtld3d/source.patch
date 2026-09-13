@@ -55,6 +55,151 @@ index f36189a..f8f4240 100644
  ## Doc comments
  
  - Use `///` for items, `//` for fn-body and inline notes.
+diff --git a/docs/FRAME-INTERPOLATION-POC.md b/docs/FRAME-INTERPOLATION-POC.md
+new file mode 100644
+index 0000000..e7ee11a
+--- /dev/null
++++ b/docs/FRAME-INTERPOLATION-POC.md
+@@ -0,0 +1,139 @@
++# MetalFX frame interpolation experiment, revision 2
++
++This session-only experiment defaults to off. The first manual test reported
++warping, sharpness flicker and uneven motion. Revision 2 addresses the resolution
++mismatch and changes presentation timing. Motion and depth quality remain open.
++
++## What changed
++
++Real and generated images now come from matching private textures, bounded to
++1280 by 720. Both use the same final scaling shader. This makes the whole image
++softer than normal full-resolution presentation, instead of deliberately
++alternating a 720p image with a full-resolution image. MetalFX can still filter
++its generated image differently. Turning interpolation off restores ordinary
++full-resolution presentation.
++
++The renderer now waits for GPU completion before requesting drawable presentation.
++The callback never waits for a timer, drawable or GPU operation. A regular host-time
++timeline replaces deadlines derived independently from each CPU frame. Late pairs
++advance to the next available source slot; they do not bunch up to catch up.
++The timeline begins with one source period of headroom, adding about one source
++frame of buffering. It is not an input-latency improvement.
++
++The cached display refresh ceiling determines compatible target rates. Examples
++with no lower user cap:
++
++| Display ceiling | Real-frame target | Presentation target |
++| --- | --- | --- |
++| 120 Hz | 60 FPS | 120 FPS |
++| 60 Hz | 30 FPS | 60 FPS |
++| 144 Hz | 36 FPS | 72 FPS |
++
++The output uses an integer number of refresh periods and the source is capped at
++60. A lower existing frame cap may reduce these targets further. Combinations
++below approximately 30 source FPS suspend the experiment. Unknown refresh uses
++a logged 60/120 assumption. This is not display-link phase locking, and a
++variable-refresh display may behave differently from its reported ceiling.
++Actual display timing still needs measurement during manual testing.
++
++## Inputs and limits
++
++MetalFX receives consecutive private SDR snapshots. A bounded GPU block search
++estimates current-to-previous motion. The search is unchanged in revision 2.
++
++Depth remains a **synthetic flat plane**, with virtual camera near/far 0.1/1000,
++vertical FOV 60 degrees, and conventional Z at 0.5. These are explicit approximations,
++not recovered FFXI geometry. No separate UI mask, object motion, disocclusion ground
++truth or camera-cut signal is available. Text, nameplates and effects may still warp
++or leave trails. Poor results do not establish how MetalFX would behave with correct
++engine inputs.
++
++HDR suspends interpolation without changing the HDR setting. The motion search
++covers roughly 32 pixels at the interpolation resolution. Fast turns and scene
++cuts can defeat it. Toggle off/on to reset history after an abrupt transition.
++This experiment does not increase the game's rendered FPS.
++
++## Timing evidence
++
++After a few seconds, reopen Graphics Settings to see the median and 95th percentile
++displayed-frame intervals, late frames, and long gaps. This summary refreshes on
++source-frame reports, roughly every two seconds. It is unavailable until there
++are displayed samples.
++
++The `mtld3d::interpolation` log target records:
++
++- Source, encoded, requested and confirmed-displayed counts separately.
++- Actual interval minimum, median, p95 and maximum from the latest 240 samples.
++- Deadline error, short intervals, long gaps and displayed content reversals.
++- Skipped source slots, completed-but-stale pairs, and callback delivery reordering.
++- Selected resolution, display ceiling, source/output targets and unknown-refresh
++  assumptions. Debug logging includes requested and actual times for each drawable.
++
++Samples are sorted by actual presented time before measuring intervals, because
++callback delivery order is not necessarily display order. Only callbacks with a
++positive finite presented time count. These callbacks are compositor evidence;
++no external measurement of physical display scanout has been performed.
++
++At a steady 120 presentations per second, intervals should cluster around 8.33 ms.
++At 60 they should cluster around 16.67 ms. A large gap between median and p95, short
++intervals, or rising skipped slots indicates that pacing or throughput still needs
++work. FPS totals alone cannot establish smooth motion.
++
++## Ownership and fallback
++
++The existing three-drawable pool bounds pending presentation. A completion-owned
++retain keeps each drawable alive until it is requested or discarded. Snapshot
++copies finish before presentation is requested, so later reuse of the input
++textures cannot overwrite a displayed drawable.
++
++Mode, picture, geometry, queue and display changes reset history. New sessions
++invalidate old completion callbacks. GPU failures stop interpolation. A failed
++second-drawable acquisition falls back instead of repeating its timeout every
++frame. Frames older than 100 ms at completion and out-of-order completed pairs
++are discarded. Already requested drawables can remain queued briefly during a
++mode change. PE resource-retirement counters keep their original meaning.
++
++## Rules check
++
++- Session atomics, resource ownership and two short timing locks stay in the Unix
++  presentation path. The timing samples are bounded to 240. No worker, dependency,
++  PE wire field or runtime configuration key is introduced.
++- Existing typed objc2 APIs own MetalFX and drawable operations. There are no new
++  raw selectors, Clone/Copy derives or lint suppressions.
++- Existing fullscreen copy and pipeline creation code is reused. Normal D3D draws,
++  depth storage and the disabled presentation path remain independent of the POC.
++- The accepted installed app and both prior packages remain available. No commit,
++  push, installation or launch was requested for this revision.
++- The user's no-testing instruction takes precedence over the repository's normal
++  test gates. Only a production build and package integrity checks are performed.
++
++## Manual testing
++
++Use `packaged-frame-interpolation-v2/FFXI-on-Mac Frame Interpolation v2.app`
++beside the preserved first candidate in `packaged-frame-interpolation`. The accepted
++baseline remains in `packaged-picture-controls` and `/Applications`.
++
++Use local Docker LSB with Hxitest only. Open Graphics Settings with Command-comma,
++turn HDR off, and enable the interpolation experiment. Begin on a 120 Hz display
++in a scene that can render at least 60 FPS without interpolation. Inspect slow
++pans and fine text for sharpness alternation. Reopen Settings after a few seconds
++and record its interval statistics. Then try a more demanding scene and watch for
++rising gaps or skipped slots in the logs.
++
++The generated-only checkbox displays interpolated images at source cadence for
++artifact inspection. It intentionally does not double the presentation rate.
++Turning interpolation off restores the normal full-resolution image.
++
++The launcher uses the existing game installation and prefix when Play is clicked.
++WINEDLLPATH selects the Unix renderer from this candidate bundle; prefix shims are
++unchanged from the baseline. Quit the candidate and launch the installed app to
++return to the accepted renderer. Packaging does not launch either app or register
++the candidate with Launch Services.
++
++## Validation status
++
++The production x86_64 Rust build passed. Source review covered matched snapshots,
++callback retention, cancellation, scheduling serialization, bounded resource use
++and cadence statistics. No tests, capability probes, game launches or runtime
++measurements were performed by the agent for revision 2. Visual improvement and
++actual display cadence await the user's manual test.
 diff --git a/docs/NATIVE-HOST.md b/docs/NATIVE-HOST.md
 new file mode 100644
 index 0000000..70770df
@@ -1212,7 +1357,7 @@ index 0000000..be32448
 ++    return 1;
 ++}
 diff --git a/unix/Cargo.toml b/unix/Cargo.toml
-index c07f342..f2e5221 100644
+index c07f342..d4d9b15 100644
 --- a/unix/Cargo.toml
 +++ b/unix/Cargo.toml
 @@ -35,6 +35,12 @@ objc2 = { version = "0.6", features = ["disable-encoding-assertions"] }
@@ -1228,6 +1373,15 @@ index c07f342..f2e5221 100644
      "NSColorSpace",
      "NSEvent",
      "NSGraphics",
+@@ -77,7 +83,7 @@ objc2-metal = { version = "0.3", features = [
+     "MTLTypes",
+     "MTLVertexDescriptor",
+ ] }
+-objc2-metal-fx = { version = "0.3", features = ["MTLFXSpatialScaler"] }
++objc2-metal-fx = { version = "0.3", features = ["MTLFXSpatialScaler", "MTLFXFrameInterpolator"] }
+ objc2-quartz-core = { version = "0.3", features = ["CAMetalLayer", "objc2-metal"] }
+ rustc-hash = "2"
+ strum = { version = "0.28", default-features = false }
 diff --git a/unix/shared/src/ffi_boundary.rs b/unix/shared/src/ffi_boundary.rs
 index ee5bd6b..4e6b6f6 100644
 --- a/unix/shared/src/ffi_boundary.rs
@@ -1389,18 +1543,21 @@ index 1e64203..6ecfc66 100644
          Thunks::DestroyCommandQueue => arp!(handlers::destroy_command_queue_handler),
          Thunks::CreateBackbuffer => arp!(handlers::create_backbuffer_handler),
 diff --git a/unix/unix/src/metal.rs b/unix/unix/src/metal.rs
-index 187cbb5..a6c1ee6 100644
+index 187cbb5..d11359a 100644
 --- a/unix/unix/src/metal.rs
 +++ b/unix/unix/src/metal.rs
-@@ -8,6 +8,7 @@ pub mod handle;
+@@ -6,8 +6,10 @@ mod command;
+ mod device;
+ pub mod handle;
  mod macdrv;
++mod interpolation;
  mod null_texture;
  mod pipeline;
 +mod picture;
  mod present;
  mod sampler;
  mod shader;
-@@ -23,7 +24,7 @@ pub use command::{BlitArgs, blit_texture_to_buffer, submit_frame, wait_for_gpu_r
+@@ -23,7 +25,7 @@ pub use command::{BlitArgs, blit_texture_to_buffer, submit_frame, wait_for_gpu_r
  pub use device::{create_command_queue, default_device_info, destroy_command_queue};
  pub use macdrv::{
      LayerAttachRequest, PresentPacing, attach_metal_layer, declare_latency_critical_activity,
@@ -1410,7 +1567,7 @@ index 187cbb5..a6c1ee6 100644
  pub use mtld3d_shared::perf::init_tracking_enabled;
  pub use pipeline::{create_render_pipeline, destroy_render_pipeline};
 diff --git a/unix/unix/src/metal/command.rs b/unix/unix/src/metal/command.rs
-index 18e1be0..ebaa1d4 100644
+index 18e1be0..b0b2def 100644
 --- a/unix/unix/src/metal/command.rs
 +++ b/unix/unix/src/metal/command.rs
 @@ -294,6 +294,11 @@ impl core::fmt::Display for BlitSite {
@@ -1425,61 +1582,253 @@ index 18e1be0..ebaa1d4 100644
      params.drawable_wait_ns = 0;
      mtld3d_shared::crumb!("submit:enter", params.queue_handle.raw(), params.pass_count);
      mtld3d_shared::crumb!("submit:queueret", params.queue_handle.raw());
-@@ -456,6 +461,9 @@ pub fn submit_frame(params: &mut SubmitFrameParams) -> bool {
+@@ -456,126 +461,135 @@ pub fn submit_frame(params: &mut SubmitFrameParams) -> bool {
              // the layer's own surface. Whatever the two sizes are, present
              // resolves them here — nothing downstream can, since the
              // compositor sees only a finished drawable.
+-            let device = cmd_buf.device();
+-            let geometry = PresentGeometry {
+-                src: (present_texture.width(), present_texture.height()),
+-                dst: (drawable_texture.width(), drawable_texture.height()),
+-            };
+-            // An enlargement the geometry has not settled on yet takes the
+-            // shader rather than building a scaler for a size that is about
+-            // to change again. See `SETTLED_PRESENTS`.
+-            let route = match present_route(
+-                geometry.src,
+-                geometry.dst,
+-                super::upscale::is_available(&device),
 +            // The processed image is private to presentation; game readbacks use the original.
 +            let processed = super::picture::encode(&cmd_buf, &present_texture);
 +            let present_texture = processed.as_deref().unwrap_or(&present_texture);
-             let device = cmd_buf.device();
-             let geometry = PresentGeometry {
-                 src: (present_texture.width(), present_texture.height()),
-@@ -498,7 +506,7 @@ pub fn submit_frame(params: &mut SubmitFrameParams) -> bool {
-                 match route {
-                     PresentRoute::Upscale => encode_hdr_present_upscaled(
-                         &cmd_buf,
++            if !super::interpolation::should_visit() || !super::interpolation::present(
++                &cmd_buf, present_texture, &layer, &drawable,
+             ) {
+-                PresentRoute::Upscale if !present_geometry_settled(geometry) => {
+-                    PresentRoute::Stretch
+-                }
+-                route => route,
+-            };
+-            // Reads what the main thread last published and queues the next
+-            // refresh when due. Deriving it here would mean walking
+-            // NSView.window on this thread, which is what crashes inside
+-            // AppKit while the main thread rebuilds window and screen state.
+-            // Polled every present, not only under HDR: the refresh it queues
+-            // is also what reconciles the layer with the display the window is
+-            // on, and a session that started SDR has to notice a panel with
+-            // headroom appearing under it.
+-            let current = super::macdrv::current_headroom();
+-            // The pointer check rides the present cadence so a system tool
+-            // taking the pointer is noticed without a wakeup of its own.
+-            super::macdrv::poll_capture_from_present();
+-            // The layer follows that display, so its pixel format can change
+-            // between two presents. Take the route from the drawable we are
+-            // about to write rather than from a latch read a moment earlier: a
+-            // float drawable must run the HDR pass whatever the latch says,
+-            // and a BGRA8 drawable must not, because the HDR pipelines declare
+-            // a float colour attachment.
+-            let hdr = drawable_texture.pixelFormat() == MTLPixelFormat::RGBA16Float;
+-
+-            let presented = if hdr {
+-                match route {
+-                    PresentRoute::Upscale => encode_hdr_present_upscaled(
+-                        &cmd_buf,
 -                        &present_texture,
-+                        present_texture,
-                         &drawable_texture,
-                         current,
-                     ),
-@@ -506,7 +514,7 @@ pub fn submit_frame(params: &mut SubmitFrameParams) -> bool {
-                     // one encode covers both an exact present and a
-                     // minification.
-                     PresentRoute::Copy | PresentRoute::Stretch => {
+-                        &drawable_texture,
+-                        current,
+-                    ),
+-                    // The tone-map pass samples through `filter::linear`, so
+-                    // one encode covers both an exact present and a
+-                    // minification.
+-                    PresentRoute::Copy | PresentRoute::Stretch => {
 -                        encode_hdr_present(&cmd_buf, &present_texture, &drawable_texture, current)
-+                        encode_hdr_present(&cmd_buf, present_texture, &drawable_texture, current)
++                let device = cmd_buf.device();
++                let geometry = PresentGeometry {
++                    src: (present_texture.width(), present_texture.height()),
++                    dst: (drawable_texture.width(), drawable_texture.height()),
++                };
++                // An enlargement the geometry has not settled on yet takes the
++                // shader rather than building a scaler for a size that is about
++                // to change again. See `SETTLED_PRESENTS`.
++                let route = match present_route(
++                    geometry.src,
++                    geometry.dst,
++                    super::upscale::is_available(&device),
++                ) {
++                    PresentRoute::Upscale if !present_geometry_settled(geometry) => {
++                        PresentRoute::Stretch
                      }
-                 }
-             } else {
-@@ -521,13 +529,13 @@ pub fn submit_frame(params: &mut SubmitFrameParams) -> bool {
-                         super::upscale::encode(
+-                }
+-            } else {
+-                match route {
+-                    // Extents match: the blit below is exact and cheaper than
+-                    // a render pass.
+-                    PresentRoute::Copy => false,
+-                    // A scaler Metal declines after `is_available` said yes
+-                    // still has to write every drawable pixel, so it falls
+-                    // through to the stretch rather than to the blit.
+-                    PresentRoute::Upscale => {
+-                        super::upscale::encode(
++                    route => route,
++                };
++                // Reads what the main thread last published and queues the next
++                // refresh when due. Deriving it here would mean walking
++                // NSView.window on this thread, which is what crashes inside
++                // AppKit while the main thread rebuilds window and screen state.
++                // Polled every present, not only under HDR: the refresh it queues
++                // is also what reconciles the layer with the display the window is
++                // on, and a session that started SDR has to notice a panel with
++                // headroom appearing under it.
++                let current = super::macdrv::current_headroom();
++                // The pointer check rides the present cadence so a system tool
++                // taking the pointer is noticed without a wakeup of its own.
++                super::macdrv::poll_capture_from_present();
++                // The layer follows that display, so its pixel format can change
++                // between two presents. Take the route from the drawable we are
++                // about to write rather than from a latch read a moment earlier: a
++                // float drawable must run the HDR pass whatever the latch says,
++                // and a BGRA8 drawable must not, because the HDR pipelines declare
++                // a float colour attachment.
++                let hdr = drawable_texture.pixelFormat() == MTLPixelFormat::RGBA16Float;
++
++                let presented = if hdr {
++                    match route {
++                        PresentRoute::Upscale => encode_hdr_present_upscaled(
                              &cmd_buf,
-                             &device,
+-                            &device,
 -                            &present_texture,
 +                            present_texture,
                              &drawable_texture,
-                             MTLFXSpatialScalerColorProcessingMode::Perceptual,
+-                            MTLFXSpatialScalerColorProcessingMode::Perceptual,
 -                        ) || encode_present_copy(&cmd_buf, &present_texture, &drawable_texture)
-+                        ) || encode_present_copy(&cmd_buf, present_texture, &drawable_texture)
++                            current,
++                        ),
++                        // The tone-map pass samples through `filter::linear`, so
++                        // one encode covers both an exact present and a
++                        // minification.
++                        PresentRoute::Copy | PresentRoute::Stretch => {
++                            encode_hdr_present(&cmd_buf, present_texture, &drawable_texture, current)
++                        }
                      }
-                     PresentRoute::Stretch => {
+-                    PresentRoute::Stretch => {
 -                        encode_present_copy(&cmd_buf, &present_texture, &drawable_texture)
-+                        encode_present_copy(&cmd_buf, present_texture, &drawable_texture)
++                } else {
++                    match route {
++                        // Extents match: the blit below is exact and cheaper than
++                        // a render pass.
++                        PresentRoute::Copy => false,
++                        // A scaler Metal declines after `is_available` said yes
++                        // still has to write every drawable pixel, so it falls
++                        // through to the stretch rather than to the blit.
++                        PresentRoute::Upscale => {
++                            super::upscale::encode(
++                                &cmd_buf,
++                                &device,
++                                present_texture,
++                                &drawable_texture,
++                                MTLFXSpatialScalerColorProcessingMode::Perceptual,
++                            ) || encode_present_copy(&cmd_buf, present_texture, &drawable_texture)
++                        }
++                        PresentRoute::Stretch => {
++                            encode_present_copy(&cmd_buf, present_texture, &drawable_texture)
++                        }
++                    }
++                };
++                if !presented {
++                    if hdr {
++                        // No blit fallback on the HDR layer: a `copyFromTexture`
++                        // from the BGRA8 backbuffer into an RGBA16Float drawable
++                        // is invalid API use, so Metal kills the command buffer
++                        // and the drawable is presented with nothing written,
++                        // which reads as magenta noise. A defined black frame is
++                        // the only correct fallback here.
++                        mtld3d_shared::log_once_warn!(
++                            target: LOG_TARGET,
++                            "present: HDR present pass failed to encode {}x{} → {}x{}; \
++                             presenting a cleared drawable instead",
++                            geometry.src.0, geometry.src.1, geometry.dst.0, geometry.dst.1,
++                        );
++                        clear_drawable(&cmd_buf, &drawable_texture);
++                    } else {
++                        encode_present_blit(
++                            &cmd_buf,
++                            present_texture,
++                            &drawable_texture,
++                            route,
++                            params.present_texture.raw(),
++                        );
                      }
                  }
-             };
-@@ -549,7 +557,7 @@ pub fn submit_frame(params: &mut SubmitFrameParams) -> bool {
+-            };
+-            if !presented {
+-                if hdr {
+-                    // No blit fallback on the HDR layer: a `copyFromTexture`
+-                    // from the BGRA8 backbuffer into an RGBA16Float drawable
+-                    // is invalid API use, so Metal kills the command buffer
+-                    // and the drawable is presented with nothing written,
+-                    // which reads as magenta noise. A defined black frame is
+-                    // the only correct fallback here.
+-                    mtld3d_shared::log_once_warn!(
+-                        target: LOG_TARGET,
+-                        "present: HDR present pass failed to encode {}x{} → {}x{}; \
+-                         presenting a cleared drawable instead",
+-                        geometry.src.0, geometry.src.1, geometry.dst.0, geometry.dst.1,
+-                    );
+-                    clear_drawable(&cmd_buf, &drawable_texture);
++
++                mtld3d_shared::crumb!("submit:present", params.drawable_wait_ns);
++                // Throttle presents to `1/panel_max_hz` when the guest asked
++                // for vsync (PE-side `D3DPRESENT_INTERVAL_*` mapping). On a
++                // ProMotion panel the system adapts the panel rate to whatever
++                // sub-max cadence we sustain under the cap, so fractional
++                // production rates display at their actual rate. `0.0` means
++                // free-run (D3DPRESENT_INTERVAL_IMMEDIATE) — drop the throttle.
++                let drawable_obj = ProtocolObject::from_ref(&*drawable);
++                let min_duration = super::macdrv::min_present_duration_sec();
++                if min_duration > 0.0 {
++                    cmd_buf.presentDrawable_afterMinimumDuration(drawable_obj, min_duration);
                  } else {
-                     encode_present_blit(
-                         &cmd_buf,
+-                    encode_present_blit(
+-                        &cmd_buf,
 -                        &present_texture,
-+                        present_texture,
-                         &drawable_texture,
-                         route,
-                         params.present_texture.raw(),
-@@ -592,6 +600,7 @@ pub fn submit_frame(params: &mut SubmitFrameParams) -> bool {
+-                        &drawable_texture,
+-                        route,
+-                        params.present_texture.raw(),
+-                    );
++                    cmd_buf.presentDrawable(drawable_obj);
++                }
++                // Debug and trace output only, so the per-frame block allocation
++                // and handler registration are skipped when the target is off.
++                if log::log_enabled!(target: PRESENT_LOG_TARGET, log::Level::Debug) {
++                    register_presented_probe(&drawable, params.submit_seq, params.drawable_wait_ns);
+                 }
+             }
+-
+-            mtld3d_shared::crumb!("submit:present", params.drawable_wait_ns);
+-            // Throttle presents to `1/panel_max_hz` when the guest asked
+-            // for vsync (PE-side `D3DPRESENT_INTERVAL_*` mapping). On a
+-            // ProMotion panel the system adapts the panel rate to whatever
+-            // sub-max cadence we sustain under the cap, so fractional
+-            // production rates display at their actual rate. `0.0` means
+-            // free-run (D3DPRESENT_INTERVAL_IMMEDIATE) — drop the throttle.
+-            let drawable_obj = ProtocolObject::from_ref(&*drawable);
+-            let min_duration = super::macdrv::min_present_duration_sec();
+-            if min_duration > 0.0 {
+-                cmd_buf.presentDrawable_afterMinimumDuration(drawable_obj, min_duration);
+-            } else {
+-                cmd_buf.presentDrawable(drawable_obj);
+-            }
+-            // Debug and trace output only, so the per-frame block allocation
+-            // and handler registration are skipped when the target is off.
+-            if log::log_enabled!(target: PRESENT_LOG_TARGET, log::Level::Debug) {
+-                register_presented_probe(&drawable, params.submit_seq, params.drawable_wait_ns);
+-            }
++        } else {
++            super::interpolation::invalidate();
+         }
+     }
+ 
+@@ -592,6 +606,7 @@ pub fn submit_frame(params: &mut SubmitFrameParams) -> bool {
              .expect("PE wire pointer fits host address space (unix is 64-bit)");
          let seq = params.submit_seq;
          let failed_seq_ptr = params.failed_submit_seq_ptr;
@@ -1487,7 +1836,7 @@ index 18e1be0..ebaa1d4 100644
          let handler = RcBlock::new(
              move |cb_ptr: core::ptr::NonNull<ProtocolObject<dyn MTLCommandBuffer>>| {
                  // Tripwire: a command buffer the GPU rejected discards every
-@@ -606,6 +615,12 @@ pub fn submit_frame(params: &mut SubmitFrameParams) -> bool {
+@@ -606,6 +621,12 @@ pub fn submit_frame(params: &mut SubmitFrameParams) -> bool {
                  // SAFETY: Metal invokes the block with the completed command
                  // buffer; the pointer is valid for the handler's duration.
                  let cb = unsafe { cb_ptr.as_ref() };
@@ -1500,7 +1849,7 @@ index 18e1be0..ebaa1d4 100644
                  // The failure is recorded before the retirement bump below:
                  // both stores are `Release`, so a PE-side `Acquire` load of
                  // `coherent_seq` that observes this seq observes the failure
-@@ -644,6 +659,12 @@ pub fn submit_frame(params: &mut SubmitFrameParams) -> bool {
+@@ -644,6 +665,12 @@ pub fn submit_frame(params: &mut SubmitFrameParams) -> bool {
  
      mtld3d_shared::crumb!("submit:commit");
      cmd_buf.commit();
@@ -1513,7 +1862,16 @@ index 18e1be0..ebaa1d4 100644
      mtld3d_shared::crumb!("submit:done");
      true
  }
-@@ -2862,6 +2883,9 @@ fn encode_readback_resolve(
+@@ -1096,7 +1123,7 @@ fn encode_hdr_present(
+ ///
+ /// Returns `false` (with an error at the call site of `ensure_resources`)
+ /// if pipeline creation failed.
+-fn encode_present_copy(
++pub fn encode_present_copy(
+     cmd_buf: &ProtocolObject<dyn MTLCommandBuffer>,
+     src: &ProtocolObject<dyn MTLTexture>,
+     dst: &ProtocolObject<dyn MTLTexture>,
+@@ -2862,6 +2889,9 @@ fn encode_readback_resolve(
  pub fn blit_texture_to_buffer(args: &BlitArgs) -> bool {
      use core::{ffi::c_void, ptr::NonNull};
  
@@ -1523,7 +1881,7 @@ index 18e1be0..ebaa1d4 100644
      let to_usize =
          |v: u64| usize::try_from(v).expect("PE wire u64 fits unix host usize (unix is 64-bit)");
      let BlitArgs {
-@@ -3024,8 +3048,15 @@ pub fn blit_texture_to_buffer(args: &BlitArgs) -> bool {
+@@ -3024,8 +3054,15 @@ pub fn blit_texture_to_buffer(args: &BlitArgs) -> bool {
      }
  
      blit.endEncoding();
@@ -1539,8 +1897,1095 @@ index 18e1be0..ebaa1d4 100644
      // dst_buffer drops here — Metal wrapper released, caller's memory
      // untouched (deallocator was None).
      true
+diff --git a/unix/unix/src/metal/interpolation.msl b/unix/unix/src/metal/interpolation.msl
+new file mode 100644
+index 0000000..e68e5bd
+--- /dev/null
++++ b/unix/unix/src/metal/interpolation.msl
+@@ -0,0 +1,62 @@
++#include <metal_stdlib>
++using namespace metal;
++
++struct Vertex { float4 position [[position]]; float2 uv; };
++vertex Vertex interpolation_vs(uint id [[vertex_id]]) {
++    float2 uv = float2((id << 1) & 2, id & 2);
++    return {float4(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0, 0, 1), uv};
++}
++
++constexpr sampler linear_sampler(coord::normalized, address::clamp_to_edge, filter::linear);
++float luminance(float3 c) { return dot(c, float3(0.299, 0.587, 0.114)); }
++
++// Search current -> previous, in source-image pixels. Equal-cost candidates
++// prefer zero/small motion, so static flat regions do not invent movement.
++fragment float2 interpolation_search(Vertex in [[stage_in]],
++    texture2d<float> current [[texture(0)]], texture2d<float> previous [[texture(1)]]) {
++    float2 pixel = 1.0 / float2(current.get_width(), current.get_height());
++    float best = INFINITY;
++    float2 motion = 0;
++    for (int y = -4; y <= 4; ++y) {
++        for (int x = -4; x <= 4; ++x) {
++            float2 candidate = float2(x, y) * 8.0;
++            float error = dot(candidate, candidate) * 0.000002;
++            for (int by = -1; by <= 1; ++by) {
++                for (int bx = -1; bx <= 1; ++bx) {
++                    float2 uv = in.uv + float2(bx, by) * pixel * 3.0;
++                    float a = luminance(current.sample(linear_sampler, uv).rgb);
++                    float b = luminance(previous.sample(linear_sampler, uv + candidate * pixel).rgb);
++                    error += abs(a - b);
++                }
++            }
++            if (error < best) { best = error; motion = candidate; }
++        }
++    }
++    // One small refinement around the coarse match. The fixed search bounds
++    // bound cost even during large effects or a scene transition.
++    float2 coarse = motion;
++    for (int y = -1; y <= 1; ++y) {
++        for (int x = -1; x <= 1; ++x) {
++            float2 candidate = coarse + float2(x, y) * 2.0;
++            float error = dot(candidate, candidate) * 0.000002;
++            for (int by = -1; by <= 1; ++by) {
++                for (int bx = -1; bx <= 1; ++bx) {
++                    float2 uv = in.uv + float2(bx, by) * pixel * 3.0;
++                    error += abs(luminance(current.sample(linear_sampler, uv).rgb)
++                        - luminance(previous.sample(linear_sampler, uv + candidate * pixel).rgb));
++                }
++            }
++            if (error < best) { best = error; motion = candidate; }
++        }
++    }
++    // Unmatched content, cuts and flashes have no trustworthy correspondence.
++    // This only suppresses dubious motion; it is not scene-cut detection.
++    return best < 0.9 ? motion : float2(0);
++}
++
++fragment float2 interpolation_motion(Vertex in [[stage_in]], texture2d<float> grid [[texture(0)]]) {
++    return grid.sample(linear_sampler, in.uv).xy;
++}
++
++// Explicit virtual plane for the image-only experiment. This is not scene Z.
++fragment float interpolation_depth() { return 0.5; }
+diff --git a/unix/unix/src/metal/interpolation.rs b/unix/unix/src/metal/interpolation.rs
+new file mode 100644
+index 0000000..755125b
+--- /dev/null
++++ b/unix/unix/src/metal/interpolation.rs
+@@ -0,0 +1,387 @@
++//! Opt-in MetalFX experiment with approximate inputs and bounded dual presentation.
++
++use core::ptr::NonNull;
++use std::{
++    sync::{
++        Arc, Mutex,
++        atomic::{AtomicBool, AtomicU64, Ordering},
++    },
++    time::{Duration, Instant},
++};
++
++use block2::RcBlock;
++use objc2::runtime::ProtocolObject;
++use objc2_metal::{MTLCommandBuffer, MTLCommandBufferStatus, MTLPixelFormat, MTLTexture};
++use objc2_quartz_core::{CACurrentMediaTime, CAMetalDrawable, CAMetalLayer};
++
++use super::{command, macdrv};
++
++mod gpu;
++mod timing;
++
++static ENABLED: AtomicBool = AtomicBool::new(false);
++static PREVIEW: AtomicBool = AtomicBool::new(false);
++static REVISION: AtomicU64 = AtomicU64::new(1);
++static STATE: Mutex<Option<Session>> = Mutex::new(None);
++static STATUS: Mutex<&'static str> = Mutex::new("Interpolation is off.");
++static SOURCE: AtomicU64 = AtomicU64::new(0);
++static GENERATED: AtomicU64 = AtomicU64::new(0);
++static SUBMITTED_REAL: AtomicU64 = AtomicU64::new(0);
++static SUBMITTED_GENERATED: AtomicU64 = AtomicU64::new(0);
++static DISPLAYED_REAL: AtomicU64 = AtomicU64::new(0);
++static DISPLAYED_GENERATED: AtomicU64 = AtomicU64::new(0);
++static PANEL_HZ: AtomicU64 = AtomicU64::new(0);
++static CADENCE_STATUS: Mutex<String> = Mutex::new(String::new());
++static GPU_FAILED: AtomicBool = AtomicBool::new(false);
++
++struct Session {
++    resources: Option<gpu::Resources>,
++    revision: u64,
++    queue: usize,
++    layer: usize,
++    source_size: (usize, usize),
++    drawable_size: (usize, usize),
++    last_source: Instant,
++    next_source: Instant,
++    period: f64,
++    pacer: Arc<timing::Pacer>,
++    seeded: bool,
++    last_report: Instant,
++    report_counts: [u64; 3],
++}
++
++impl Drop for Session {
++    fn drop(&mut self) {
++        self.pacer.invalidate();
++    }
++}
++
++pub fn settings() -> (bool, bool) {
++    (
++        ENABLED.load(Ordering::Acquire),
++        PREVIEW.load(Ordering::Acquire),
++    )
++}
++
++pub fn configure(enabled: bool, preview: bool) {
++    PREVIEW.store(preview, Ordering::Release);
++    ENABLED.store(enabled, Ordering::Release);
++    GPU_FAILED.store(false, Ordering::Release);
++    if !enabled {
++        CLEANUP.store(true, Ordering::Release);
++    }
++    invalidate();
++    CADENCE_STATUS.lock().unwrap().clear();
++    set_status(if enabled {
++        "Requested; waiting for a supported SDR frame."
++    } else {
++        "Interpolation is off."
++    });
++    log::info!(target: "mtld3d::interpolation", "requested={enabled} generated_only={preview}; approximate motion and flat depth");
++}
++
++/// Publish resets without making the AppKit thread wait for Metal or a drawable.
++pub fn invalidate() {
++    REVISION.fetch_add(1, Ordering::Release);
++}
++
++pub fn detach() {
++    invalidate();
++    if let Ok(mut state) = STATE.try_lock() {
++        *state = None;
++    }
++}
++
++pub fn status() -> String {
++    format!(
++        "{}\n{}",
++        *STATUS.lock().unwrap(),
++        *CADENCE_STATUS.lock().unwrap()
++    )
++}
++
++/// Published by the existing main-thread display refresh; never query AppKit here.
++pub fn set_display_hz(hz: f64) {
++    let hz = if hz.is_finite() && hz > 0.0 { hz } else { 0.0 };
++    if PANEL_HZ.swap(hz.to_bits(), Ordering::AcqRel) != hz.to_bits() {
++        invalidate();
++    }
++}
++
++fn source_period(minimum: f64) -> f64 {
++    let panel = f64::from_bits(PANEL_HZ.load(Ordering::Acquire));
++    let desired = 2.0 / minimum.max(1.0 / 60.0);
++    if panel <= 0.0 {
++        return 2.0 / desired;
++    }
++    // An integer number of display refreshes per output avoids a 120-on-144
++    // beat pattern. Variable refresh and exact vblank phase still need measurement.
++    2.0 * (panel / desired).ceil().max(1.0) / panel
++}
++
++fn set_status(message: &'static str) {
++    let mut status = STATUS.lock().unwrap();
++    if *status != message {
++        *status = message;
++        log::info!(target: "mtld3d::interpolation", "{message}");
++    }
++}
++
++/// Return true only when this path scheduled the supplied real drawable.
++///
++/// The caller owns the command buffer and commits it after PE retirement handlers
++/// are installed. All work uses that buffer's ordered queue. No worker, extra
++/// submission or PE lifetime counter is introduced.
++pub fn present(
++    cb: &ProtocolObject<dyn MTLCommandBuffer>,
++    source: &ProtocolObject<dyn MTLTexture>,
++    layer: &CAMetalLayer,
++    real: &ProtocolObject<dyn CAMetalDrawable>,
++) -> bool {
++    if !ENABLED.load(Ordering::Acquire) {
++        // Discard optional resources on the first off-frame only. Most baseline
++        // frames return after the atomic branch in the caller.
++        *STATE.lock().unwrap() = None;
++        CLEANUP.store(false, Ordering::Release);
++        return false;
++    }
++    let sequence = SOURCE.fetch_add(1, Ordering::Relaxed) + 1;
++    let target = real.texture();
++    let minimum = macdrv::min_present_duration_sec();
++    if target.pixelFormat() != MTLPixelFormat::BGRA8Unorm || minimum > 1.0 / 30.0 {
++        *STATE.lock().unwrap() = None;
++        set_status("Suspended: requires SDR and a frame limit of at least 30.");
++        return false;
++    }
++    if GPU_FAILED.load(Ordering::Acquire) {
++        *STATE.lock().unwrap() = None;
++        set_status("Disabled after a GPU error. Toggle off/on to retry.");
++        return false;
++    }
++    let revision = REVISION.load(Ordering::Acquire);
++    let interval = source_period(minimum);
++    if interval > 1.0 / 29.0 {
++        *STATE.lock().unwrap() = None;
++        set_status("Suspended: refresh/cap combination is below 30 source FPS.");
++        return false;
++    }
++    let queue = &*cb.commandQueue() as *const _ as *const () as usize;
++    let layer_id = core::ptr::from_ref(layer) as usize;
++    let source_size = (source.width(), source.height());
++    let drawable_size = (target.width(), target.height());
++    let mut slot = STATE.lock().unwrap();
++    let rebuild = slot.as_ref().is_none_or(|state| {
++        state.revision != revision
++            || state.queue != queue
++            || state.layer != layer_id
++            || state.source_size != source_size
++            || state.drawable_size != drawable_size
++            || (state.period - interval).abs() > 0.000001
++    });
++    if rebuild {
++        CADENCE_STATUS.lock().unwrap().clear();
++        let size = interpolation_size(drawable_size);
++        let resources = match gpu::Resources::new(&cb.device(), size) {
++            Ok(resources) => Some(resources),
++            Err(message) => {
++                set_status(message);
++                None
++            }
++        };
++        log::info!(target: "mtld3d::interpolation", "v2 matched_size={}x{} panel_hz={} source_target_fps={:.3} output_target_fps={:.3} unknown_refresh_assumption={}",
++            size.0, size.1, f64::from_bits(PANEL_HZ.load(Ordering::Acquire)), 1.0 / interval,
++            2.0 / interval, PANEL_HZ.load(Ordering::Acquire) == 0);
++        let now = Instant::now();
++        *slot = Some(Session {
++            resources,
++            revision,
++            queue,
++            layer: layer_id,
++            source_size,
++            drawable_size,
++            last_source: now,
++            next_source: now,
++            period: interval,
++            pacer: timing::Pacer::new(revision, interval, PREVIEW.load(Ordering::Acquire)),
++            seeded: false,
++            last_report: now,
++            report_counts: counts(),
++        });
++    }
++    let state = slot.as_mut().expect("session initialized");
++    if state.resources.is_none() {
++        return false;
++    }
++
++    let now = Instant::now();
++    if let Some(wait) = state.next_source.checked_duration_since(now) {
++        // At most one source interval; never wait on a backlog or the GPU here.
++        std::thread::sleep(wait.min(Duration::from_secs_f64(interval)));
++    }
++    let now = Instant::now();
++    let gap = now.duration_since(state.last_source).as_secs_f64();
++    let reset = !state.seeded || gap > 0.100;
++    let dt = now
++        .duration_since(state.last_source)
++        .as_secs_f32()
++        .clamp(1.0 / 1000.0, 0.100);
++    state.last_source = now;
++    let next = state.next_source + Duration::from_secs_f64(interval);
++    state.next_source = if next > now {
++        next
++    } else {
++        now + Duration::from_secs_f64(interval)
++    };
++    let source_time = CACurrentMediaTime();
++    let completion = RcBlock::new(move |ptr: NonNull<ProtocolObject<dyn MTLCommandBuffer>>| {
++        // SAFETY: Metal supplies the completed live buffer for this callback.
++        let buffer = unsafe { ptr.as_ref() };
++        if buffer.status() == MTLCommandBufferStatus::Error {
++            GPU_FAILED.store(true, Ordering::Release);
++            invalidate();
++            log::error!(target: "mtld3d::interpolation", "GPU work failed; interpolation disabled: {:?}", buffer.error());
++        }
++    });
++    // SAFETY: the buffer copies the callback; it owns no game or AppKit pointers.
++    unsafe { cb.addCompletedHandler(RcBlock::as_ptr(&completion)) };
++    let Some(images) = state
++        .resources
++        .as_mut()
++        .expect("resources checked")
++        .encode(cb, source, dt, reset)
++    else {
++        state.resources = None;
++        state.pacer.invalidate();
++        set_status("Interpolation encoding failed; ordinary presentation is active.");
++        return false;
++    };
++    state.seeded = true;
++    if !reset {
++        GENERATED.fetch_add(1, Ordering::Relaxed);
++    }
++    let preview = PREVIEW.load(Ordering::Acquire);
++    // The first frame only initializes history, so its generated output is not
++    // counted or displayed. MetalFX still sees it as its previous encoded frame.
++    let extra = if !reset && !preview && layer.maximumDrawableCount() >= 3 {
++        layer.nextDrawable()
++    } else {
++        None
++    };
++    if !reset && !preview && extra.is_none() {
++        state.resources = None;
++        state.pacer.invalidate();
++        set_status("No spare drawable; ordinary presentation is active. Toggle to retry.");
++        return false;
++    }
++    let show_generated = !reset && (preview || extra.is_some());
++    // Main-thread toggles never block on the renderer's state lock. Honor a
++    // changed mode before queuing presentation; the next frame rebuilds history.
++    if REVISION.load(Ordering::Acquire) != revision {
++        state.seeded = false;
++        return false;
++    }
++    let real_source = if preview && show_generated {
++        &*images.generated
++    } else {
++        &*images.real
++    };
++    if !command::encode_present_copy(cb, real_source, &target) {
++        state.seeded = false;
++        state.pacer.invalidate();
++        state.resources = None;
++        set_status("Presentation copy failed; ordinary presentation is active.");
++        return false;
++    }
++    let mut generated = None;
++    if let Some(extra) = extra {
++        let extra_target = extra.texture();
++        if extra_target.pixelFormat() == target.pixelFormat()
++            && (extra_target.width(), extra_target.height()) == drawable_size
++            && command::encode_present_copy(cb, &images.generated, &extra_target)
++        {
++            generated = Some(extra);
++        } else {
++            state.seeded = false;
++            set_status("Generated drawable skipped after a display change or copy failure.");
++        }
++    }
++    timing::enqueue(
++        cb,
++        timing::Pair {
++            real,
++            generated: generated.as_deref(),
++            real_is_generated: preview && show_generated,
++            sequence,
++            source_time,
++            pacer: Arc::clone(&state.pacer),
++        },
++    );
++    if state.seeded {
++        set_status(if reset {
++            "Warming interpolation history."
++        } else if preview {
++            "Generated-only preview; approximate inputs."
++        } else if show_generated {
++            "Matched 720p pair; approximate motion/depth."
++        } else {
++            "Real frames only: no spare drawable for interpolation."
++        });
++    }
++    report(state);
++    // Keep normal display/headroom and cursor ownership reconciliation ticking.
++    macdrv::current_headroom();
++    macdrv::poll_capture_from_present();
++    true
++}
++
++/// Visit once to release resources after disabling; otherwise only read atomics.
++pub fn should_visit() -> bool {
++    ENABLED.load(Ordering::Acquire) || CLEANUP.load(Ordering::Acquire)
++}
++
++static CLEANUP: AtomicBool = AtomicBool::new(false);
++
++fn interpolation_size(size: (usize, usize)) -> (usize, usize) {
++    // Integer arithmetic keeps geometry bounded, preserves aspect to 8 pixels,
++    // and guarantees a nonempty motion grid even for a tiny resized window.
++    let width = size.0.clamp(8, 16384);
++    let height = size.1.clamp(8, 16384);
++    let scaled = if width <= 1280 && height <= 720 {
++        (width, height)
++    } else if width * 720 > height * 1280 {
++        (1280, height * 1280 / width)
++    } else {
++        (width * 720 / height, 720)
++    };
++    ((scaled.0 / 8 * 8).max(8), (scaled.1 / 8 * 8).max(8))
++}
++
++fn counts() -> [u64; 3] {
++    [
++        SOURCE.load(Ordering::Relaxed),
++        DISPLAYED_REAL.load(Ordering::Relaxed),
++        DISPLAYED_GENERATED.load(Ordering::Relaxed),
++    ]
++}
++
++fn report(state: &mut Session) {
++    let elapsed = state.last_report.elapsed().as_secs_f64();
++    if elapsed < 2.0 {
++        return;
++    }
++    let current = counts();
++    let rates: Vec<_> = current
++        .iter()
++        .zip(state.report_counts)
++        .map(|(now, before)| {
++            f64::from(u32::try_from(now.saturating_sub(before)).unwrap_or(u32::MAX)) / elapsed
++        })
++        .collect();
++    log::info!(target: "mtld3d::interpolation",
++        "source_fps={:.1} displayed_real_fps={:.1} displayed_generated_fps={:.1} encoded={} submitted_real={} submitted_generated={} displayed_real={} displayed_generated={}",
++        rates[0], rates[1], rates[2], GENERATED.load(Ordering::Relaxed),
++        SUBMITTED_REAL.load(Ordering::Relaxed), SUBMITTED_GENERATED.load(Ordering::Relaxed), current[1], current[2]);
++    *CADENCE_STATUS.lock().unwrap() = state.pacer.summary();
++    state.last_report = Instant::now();
++    state.report_counts = current;
++}
+diff --git a/unix/unix/src/metal/interpolation/gpu.rs b/unix/unix/src/metal/interpolation/gpu.rs
+new file mode 100644
+index 0000000..825ee9f
+--- /dev/null
++++ b/unix/unix/src/metal/interpolation/gpu.rs
+@@ -0,0 +1,301 @@
++//! Bounded image-derived motion and MetalFX resources for the SDR experiment.
++
++use core::ptr::NonNull;
++use std::sync::Mutex;
++
++use block2::RcBlock;
++use objc2::{rc::Retained, runtime::ProtocolObject};
++use objc2_foundation::NSString;
++use objc2_metal::{
++    MTLCommandBuffer, MTLCommandEncoder, MTLDevice, MTLLibrary, MTLLoadAction, MTLPixelFormat,
++    MTLPrimitiveType, MTLRenderCommandEncoder, MTLRenderPassDescriptor, MTLRenderPipelineState,
++    MTLResource, MTLStorageMode, MTLStoreAction, MTLTexture, MTLTextureDescriptor, MTLTextureUsage,
++};
++use objc2_metal_fx::{
++    MTLFXFrameInterpolator, MTLFXFrameInterpolatorBase, MTLFXFrameInterpolatorDescriptor,
++};
++
++use super::super::{command, present};
++
++pub struct Resources {
++    interpolator: Retained<ProtocolObject<dyn MTLFXFrameInterpolator>>,
++    colors: [Retained<ProtocolObject<dyn MTLTexture>>; 2],
++    output: Retained<ProtocolObject<dyn MTLTexture>>,
++    depth: Retained<ProtocolObject<dyn MTLTexture>>,
++    motion: Retained<ProtocolObject<dyn MTLTexture>>,
++    grid: Retained<ProtocolObject<dyn MTLTexture>>,
++    search: Retained<ProtocolObject<dyn MTLRenderPipelineState>>,
++    expand: Retained<ProtocolObject<dyn MTLRenderPipelineState>>,
++    plane: Retained<ProtocolObject<dyn MTLRenderPipelineState>>,
++    index: usize,
++}
++
++/// Both images have identical geometry, format and presentation filtering.
++pub struct Images {
++    pub real: Retained<ProtocolObject<dyn MTLTexture>>,
++    pub generated: Retained<ProtocolObject<dyn MTLTexture>>,
++}
++
++// SAFETY: only Metal objects, with no AppKit affinity. The owner serializes all
++// property changes and encoding under its mutex and uses exactly one Metal queue.
++unsafe impl Send for Resources {}
++
++impl Resources {
++    pub fn new(
++        device: &ProtocolObject<dyn MTLDevice>,
++        size: (usize, usize),
++    ) -> Result<Self, &'static str> {
++        if !objc2::available!(macos = 26.0) {
++            return Err("MetalFX frame interpolation requires macOS 26.");
++        }
++        // SAFETY: the availability guard precedes every reference to the macOS 26 class.
++        if !unsafe { MTLFXFrameInterpolatorDescriptor::supportsDevice(device) } {
++            return Err("This device does not support MetalFX frame interpolation.");
++        }
++        // SAFETY: the class is available; the descriptor is local to this call.
++        let descriptor = unsafe { MTLFXFrameInterpolatorDescriptor::new() };
++        // SAFETY: color and output resources below use this exact format.
++        unsafe { descriptor.setColorTextureFormat(MTLPixelFormat::BGRA8Unorm) };
++        // SAFETY: output is a private BGRA8 texture matching the descriptor.
++        unsafe { descriptor.setOutputTextureFormat(MTLPixelFormat::BGRA8Unorm) };
++        // SAFETY: the synthetic plane is stored in a matching R32Float texture.
++        unsafe { descriptor.setDepthTextureFormat(MTLPixelFormat::R32Float) };
++        // SAFETY: motion below has two half-float pixel-displacement channels.
++        unsafe { descriptor.setMotionTextureFormat(MTLPixelFormat::RG16Float) };
++        // SAFETY: size is clamped and nonzero by the caller.
++        unsafe { descriptor.setInputWidth(size.0) };
++        // SAFETY: same validated size.
++        unsafe { descriptor.setInputHeight(size.1) };
++        // SAFETY: no temporal scaler is attached; colors and output share this size.
++        unsafe { descriptor.setOutputWidth(size.0) };
++        // SAFETY: same validated size.
++        unsafe { descriptor.setOutputHeight(size.1) };
++        // SAFETY: descriptor and device are live and local; failure is a normal fallback.
++        let interpolator = unsafe { descriptor.newFrameInterpolatorWithDevice(device) }
++            .ok_or("MetalFX declined the interpolation descriptor.")?;
++        // SAFETY: these immutable usage requirements belong to this live interpolator.
++        let color_usage = unsafe { interpolator.colorTextureUsage() };
++        // SAFETY: same instance and immutable property.
++        let depth_usage = unsafe { interpolator.depthTextureUsage() };
++        // SAFETY: same instance and immutable property.
++        let motion_usage = unsafe { interpolator.motionTextureUsage() };
++        // SAFETY: same instance and immutable property.
++        let output_usage = unsafe { interpolator.outputTextureUsage() };
++        let colors = [
++            texture(
++                device,
++                size,
++                MTLPixelFormat::BGRA8Unorm,
++                color_usage,
++                "color-a",
++            )?,
++            texture(
++                device,
++                size,
++                MTLPixelFormat::BGRA8Unorm,
++                color_usage,
++                "color-b",
++            )?,
++        ];
++        let output = texture(
++            device,
++            size,
++            MTLPixelFormat::BGRA8Unorm,
++            output_usage,
++            "output",
++        )?;
++        let depth = texture(
++            device,
++            size,
++            MTLPixelFormat::R32Float,
++            depth_usage,
++            "virtual-depth",
++        )?;
++        let motion = texture(
++            device,
++            size,
++            MTLPixelFormat::RG16Float,
++            motion_usage,
++            "motion",
++        )?;
++        let grid = texture(
++            device,
++            (size.0 / 8, size.1 / 8),
++            MTLPixelFormat::RG16Float,
++            MTLTextureUsage::ShaderRead,
++            "motion-grid",
++        )?;
++        let library = device
++            .newLibraryWithSource_options_error(
++                &NSString::from_str(include_str!("../interpolation.msl")),
++                None,
++            )
++            .map_err(|error| {
++                log::warn!(target: "mtld3d::interpolation", "shader compilation failed: {error}");
++                "Interpolation shader compilation failed; ordinary presentation is active."
++            })?;
++        let vertex = library
++            .newFunctionWithName(&NSString::from_str("interpolation_vs"))
++            .ok_or("Interpolation vertex shader is missing.")?;
++        let pipeline = |name: &str, format| {
++            let fragment = library.newFunctionWithName(&NSString::from_str(name))?;
++            present::build_pipeline(device, &vertex, &fragment, format, name)
++        };
++        let search = pipeline("interpolation_search", MTLPixelFormat::RG16Float)
++            .ok_or("Motion search pipeline failed.")?;
++        let expand = pipeline("interpolation_motion", MTLPixelFormat::RG16Float)
++            .ok_or("Motion expansion pipeline failed.")?;
++        let plane = pipeline("interpolation_depth", MTLPixelFormat::R32Float)
++            .ok_or("Synthetic depth pipeline failed.")?;
++        Ok(Self {
++            interpolator,
++            colors,
++            output,
++            depth,
++            motion,
++            grid,
++            search,
++            expand,
++            plane,
++            index: 0,
++        })
++    }
++
++    /// Snapshot current color and encode one midpoint, priming history on reset.
++    pub fn encode(
++        &mut self,
++        cb: &ProtocolObject<dyn MTLCommandBuffer>,
++        source: &ProtocolObject<dyn MTLTexture>,
++        dt: f32,
++        reset: bool,
++    ) -> Option<Images> {
++        let current = &self.colors[self.index];
++        let previous = &self.colors[1 - self.index];
++        if !command::encode_present_copy(cb, source, current) {
++            return None;
++        }
++        if reset && !command::encode_present_copy(cb, source, previous) {
++            return None;
++        }
++        pass(cb, &self.search, &self.grid, &[current, previous])?;
++        pass(cb, &self.expand, &self.motion, &[&self.grid])?;
++        pass(cb, &self.plane, &self.depth, &[])?;
++        let fx = &self.interpolator;
++        // SAFETY: all private textures have the exact descriptor geometry and required usage.
++        unsafe { fx.setColorTexture(Some(current)) };
++        // SAFETY: this is an independent snapshot of the previous encoded source image.
++        unsafe { fx.setPrevColorTexture(Some(previous)) };
++        // SAFETY: this explicit experimental plane matches the depth descriptor.
++        unsafe { fx.setDepthTexture(Some(&self.depth)) };
++        // SAFETY: the shader supplies current-to-previous motion in color-image pixels.
++        unsafe { fx.setMotionTexture(Some(&self.motion)) };
++        // SAFETY: output uses private storage and the usage bits MetalFX requested.
++        unsafe { fx.setOutputTexture(Some(&self.output)) };
++        // SAFETY: pixel displacements require unit scale.
++        unsafe { fx.setMotionVectorScaleX(1.0) };
++        // SAFETY: same coordinate convention for both axes.
++        unsafe { fx.setMotionVectorScaleY(1.0) };
++        // SAFETY: caller clamps dt to a finite, positive frame interval.
++        unsafe { fx.setDeltaTime(dt) };
++        // SAFETY: explicit virtual-camera parameters for this approximate-depth experiment.
++        unsafe { fx.setNearPlane(0.1) };
++        // SAFETY: far is greater than the positive near distance.
++        unsafe { fx.setFarPlane(1000.0) };
++        // SAFETY: valid vertical FOV in degrees; this is not a recovered FFXI camera.
++        unsafe { fx.setFieldOfView(60.0) };
++        let aspect = f32::from(u16::try_from(current.width()).ok()?)
++            / f32::from(u16::try_from(current.height()).ok()?);
++        // SAFETY: nonzero dimensions define the virtual image aspect.
++        unsafe { fx.setAspectRatio(aspect) };
++        // SAFETY: input is unjittered.
++        unsafe { fx.setJitterOffsetX(0.0) };
++        // SAFETY: input is unjittered.
++        unsafe { fx.setJitterOffsetY(0.0) };
++        // SAFETY: synthetic depth uses conventional Z explicitly, overriding Apple's default.
++        unsafe { fx.setDepthReversed(false) };
++        // SAFETY: no separate UI layer is supplied; UI is explicitly part of scene color.
++        unsafe { fx.setIsUITextureComposited(false) };
++        // SAFETY: previous holds last encoded source, or reset initializes both to current.
++        unsafe { fx.setShouldResetHistory(reset) };
++        // Keep the interpolator alive even if a settings change drops Resources before retirement.
++        let retained = Mutex::new(Some(InterpolatorLease(
++            Retained::into_raw(fx.clone()) as usize
++        )));
++        let release = RcBlock::new(move |_cb: NonNull<ProtocolObject<dyn MTLCommandBuffer>>| {
++            // Taking the lease is idempotent. Dropping an uncommitted buffer also
++            // drops this captured owner, so an abandoned encode cannot leak it.
++            drop(retained.lock().unwrap().take());
++        });
++        // SAFETY: command buffer copies the handler; its lifetime includes GPU completion.
++        unsafe { cb.addCompletedHandler(RcBlock::as_ptr(&release)) };
++        // SAFETY: no encoder is open; all textures use tracked hazards on this one queue.
++        unsafe { fx.encodeToCommandBuffer(cb) };
++        self.index = 1 - self.index;
++        Some(Images {
++            real: current.clone(),
++            generated: self.output.clone(),
++        })
++    }
++}
++
++fn texture(
++    device: &ProtocolObject<dyn MTLDevice>,
++    size: (usize, usize),
++    format: MTLPixelFormat,
++    usage: MTLTextureUsage,
++    name: &str,
++) -> Result<Retained<ProtocolObject<dyn MTLTexture>>, &'static str> {
++    let descriptor = MTLTextureDescriptor::new();
++    // SAFETY: caller supplies a nonzero width bounded to 1280 pixels.
++    unsafe { descriptor.setWidth(size.0) };
++    // SAFETY: caller supplies a nonzero height bounded to 720 pixels.
++    unsafe { descriptor.setHeight(size.1) };
++    descriptor.setPixelFormat(format);
++    descriptor.setStorageMode(MTLStorageMode::Private);
++    descriptor.setUsage(usage | MTLTextureUsage::ShaderRead | MTLTextureUsage::RenderTarget);
++    let texture = device
++        .newTextureWithDescriptor(&descriptor)
++        .ok_or("Interpolation texture allocation failed.")?;
++    texture.setLabel(Some(&NSString::from_str(&format!(
++        "mtld3d-interpolation-{name}"
++    ))));
++    Ok(texture)
++}
++
++fn pass(
++    cb: &ProtocolObject<dyn MTLCommandBuffer>,
++    pipeline: &ProtocolObject<dyn MTLRenderPipelineState>,
++    target: &ProtocolObject<dyn MTLTexture>,
++    inputs: &[&ProtocolObject<dyn MTLTexture>],
++) -> Option<()> {
++    let descriptor = MTLRenderPassDescriptor::new();
++    // SAFETY: Metal guarantees attachment slot zero exists.
++    let attachment = unsafe { descriptor.colorAttachments().objectAtIndexedSubscript(0) };
++    attachment.setTexture(Some(target));
++    attachment.setLoadAction(MTLLoadAction::DontCare);
++    attachment.setStoreAction(MTLStoreAction::Store);
++    let encoder = cb.renderCommandEncoderWithDescriptor(&descriptor)?;
++    encoder.setLabel(Some(&NSString::from_str("mtld3d-interpolation-input")));
++    encoder.setRenderPipelineState(pipeline);
++    for (index, texture) in inputs.iter().enumerate() {
++        // SAFETY: inputs are live retained textures; the command buffer retains GPU references.
++        unsafe { encoder.setFragmentTexture_atIndex(Some(texture), index) };
++    }
++    // SAFETY: the vertex function generates its three positions without vertex buffers.
++    unsafe { encoder.drawPrimitives_vertexStart_vertexCount(MTLPrimitiveType::Triangle, 0, 3) };
++    encoder.endEncoding();
++    Some(())
++}
++
++/// A retained Metal object released on completion, or when an unused block drops.
++struct InterpolatorLease(usize);
++
++impl Drop for InterpolatorLease {
++    fn drop(&mut self) {
++        // SAFETY: the constructor transfers exactly one retain into this unique
++        // owner. Metal object releases have no AppKit thread affinity.
++        drop(unsafe {
++            Retained::from_raw(self.0 as *mut ProtocolObject<dyn MTLFXFrameInterpolator>)
++        });
++    }
++}
+diff --git a/unix/unix/src/metal/interpolation/timing.rs b/unix/unix/src/metal/interpolation/timing.rs
+new file mode 100644
+index 0000000..43e7268
+--- /dev/null
++++ b/unix/unix/src/metal/interpolation/timing.rs
+@@ -0,0 +1,313 @@
++//! GPU-ready presentation and a bounded record of actual drawable display times.
++
++use core::ptr::NonNull;
++use std::{
++    sync::{
++        Arc, Mutex,
++        atomic::{AtomicU64, Ordering},
++    },
++    time::Duration,
++};
++
++use block2::RcBlock;
++use objc2::{rc::Retained, runtime::ProtocolObject};
++use objc2_metal::{MTLCommandBuffer, MTLCommandBufferStatus, MTLDrawable};
++use objc2_quartz_core::{CACurrentMediaTime, CAMetalDrawable};
++
++static EPOCH: AtomicU64 = AtomicU64::new(0);
++const MAX_SAMPLES: usize = 240;
++const READY_MARGIN: f64 = 0.001;
++
++/// Each session owns a separate clock, including callbacks still in flight.
++pub struct Pacer {
++    epoch: u64,
++    revision: u64,
++    period: f64,
++    preview: bool,
++    state: Mutex<Clock>,
++    presentation: Mutex<()>,
++}
++
++struct Clock {
++    next_first: f64,
++    last_sequence: u64,
++    skipped_slots: u64,
++    stale_pairs: u64,
++    callback_reorders: u64,
++    max_display_time: f64,
++    samples: Vec<Sample>,
++}
++
++struct Sample {
++    time: f64,
++    deadline: f64,
++    order: u64,
++}
++
++impl Pacer {
++    pub fn new(revision: u64, period: f64, preview: bool) -> Arc<Self> {
++        Arc::new(Self {
++            epoch: EPOCH.fetch_add(1, Ordering::AcqRel) + 1,
++            revision,
++            period,
++            preview,
++            presentation: Mutex::new(()),
++            state: Mutex::new(Clock {
++                next_first: 0.0,
++                last_sequence: 0,
++                skipped_slots: 0,
++                stale_pairs: 0,
++                callback_reorders: 0,
++                max_display_time: 0.0,
++                samples: Vec::new(),
++            }),
++        })
++    }
++
++    pub fn invalidate(&self) {
++        // Only this clock may invalidate its epoch. Dropping an old session
++        // after a replacement was created must not cancel the new session.
++        let _ = EPOCH.compare_exchange(
++            self.epoch,
++            self.epoch + 1,
++            Ordering::AcqRel,
++            Ordering::Acquire,
++        );
++    }
++
++    fn current(&self) -> bool {
++        self.epoch == EPOCH.load(Ordering::Acquire)
++            && self.revision == super::REVISION.load(Ordering::Acquire)
++            && super::ENABLED.load(Ordering::Acquire)
++            && !super::macdrv::window_occluded()
++    }
++
++    /// Sorted timestamps distinguish callback delivery order from display order.
++    pub fn summary(&self) -> String {
++        let mut clock = self.state.lock().unwrap();
++        clock.samples.sort_by(|a, b| a.time.total_cmp(&b.time));
++        if clock.samples.len() < 2 {
++            return "Awaiting displayed-frame timing.".into();
++        }
++        let expected = if self.preview {
++            self.period
++        } else {
++            self.period * 0.5
++        };
++        let mut intervals: Vec<_> = clock
++            .samples
++            .windows(2)
++            .map(|pair| pair[1].time - pair[0].time)
++            .collect();
++        intervals.sort_by(f64::total_cmp);
++        let p50 = intervals[intervals.len() / 2] * 1000.0;
++        let p95 = intervals[(intervals.len() - 1) * 95 / 100] * 1000.0;
++        let late = clock
++            .samples
++            .iter()
++            .filter(|sample| sample.time - sample.deadline > expected * 0.5 + 0.001)
++            .count();
++        let short = intervals
++            .iter()
++            .filter(|&&value| value < expected * 0.5)
++            .count();
++        let gaps = intervals
++            .iter()
++            .filter(|&&value| value > expected * 1.5 + 0.001)
++            .count();
++        let reversed = clock
++            .samples
++            .windows(2)
++            .filter(|pair| pair[1].order < pair[0].order)
++            .count();
++        let max_error = clock
++            .samples
++            .iter()
++            .map(|sample| (sample.time - sample.deadline).abs())
++            .fold(0.0_f64, f64::max)
++            * 1000.0;
++        log::info!(target: "mtld3d::interpolation",
++            "cadence epoch={} samples={} expected_ms={:.3} min_ms={:.3} p50_ms={p50:.3} p95_ms={p95:.3} max_ms={:.3} late={late} short={short} gaps={gaps} display_reversals={reversed} max_deadline_error_ms={max_error:.3} skipped_slots={} stale_pairs={} callback_reorders={}",
++            self.epoch, clock.samples.len(), expected * 1000.0, intervals[0] * 1000.0,
++            intervals[intervals.len() - 1] * 1000.0, clock.skipped_slots, clock.stale_pairs, clock.callback_reorders);
++        format!(
++            "Display intervals p50/p95: {p50:.1}/{p95:.1} ms; late {late}/{}; gaps {gaps}.",
++            clock.samples.len()
++        )
++    }
++}
++
++pub struct Pair<'a> {
++    pub real: &'a ProtocolObject<dyn CAMetalDrawable>,
++    pub generated: Option<&'a ProtocolObject<dyn CAMetalDrawable>>,
++    pub real_is_generated: bool,
++    pub sequence: u64,
++    pub source_time: f64,
++    pub pacer: Arc<Pacer>,
++}
++
++/// Retain the drawables until GPU completion, then request distinct display times.
++///
++/// This never waits on the completion thread. The three-drawable layer pool
++/// bounds pending work. A revision or geometry change invalidates old pairs.
++pub fn enqueue(cb: &ProtocolObject<dyn MTLCommandBuffer>, pair: Pair<'_>) {
++    let pending = Mutex::new(Some(Pending {
++        real: Drawable::retain(pair.real),
++        generated: pair.generated.map(Drawable::retain),
++        real_is_generated: pair.real_is_generated,
++        sequence: pair.sequence,
++        source_time: pair.source_time,
++        pacer: pair.pacer,
++    }));
++    let complete = RcBlock::new(move |ptr: NonNull<ProtocolObject<dyn MTLCommandBuffer>>| {
++        let Some(pair) = pending.lock().unwrap().take() else {
++            return;
++        };
++        // SAFETY: Metal lends a live completed command buffer for this callback.
++        let buffer = unsafe { ptr.as_ref() };
++        if buffer.status() != MTLCommandBufferStatus::Completed {
++            return;
++        }
++        pair.present();
++    });
++    // SAFETY: Metal copies the block. Its RAII owners also release uncommitted pairs.
++    unsafe { cb.addCompletedHandler(RcBlock::as_ptr(&complete)) };
++}
++
++struct Pending {
++    real: Drawable,
++    generated: Option<Drawable>,
++    real_is_generated: bool,
++    sequence: u64,
++    source_time: f64,
++    pacer: Arc<Pacer>,
++}
++
++impl Pending {
++    fn present(self) {
++        let _presentation = self.pacer.presentation.lock().unwrap();
++        let now = CACurrentMediaTime();
++        let mut clock = self.pacer.state.lock().unwrap();
++        if !self.pacer.current()
++            || self.sequence <= clock.last_sequence
++            || now - self.source_time > 0.100
++        {
++            clock.stale_pairs += 1;
++            log::debug!(target: "mtld3d::interpolation", "discarded completed pair seq={} age_ms={:.3}", self.sequence, (now - self.source_time) * 1000.0);
++            return;
++        }
++        clock.last_sequence = self.sequence;
++        let earliest = now + READY_MARGIN;
++        // Start with one source period of headroom so small completion jitter
++        // does not immediately miss the first slot on every following frame.
++        let mut first = if clock.next_first > 0.0 {
++            clock.next_first
++        } else {
++            earliest + self.pacer.period
++        };
++        if first < earliest {
++            // Advance by complete source periods to keep a stable phase. This
++            // cannot accumulate a backlog, or compress two frames into one slot.
++            let missed = Duration::from_secs_f64(earliest - first)
++                .as_nanos()
++                .div_ceil(Duration::from_secs_f64(self.pacer.period).as_nanos());
++            let skipped = u32::try_from(missed).unwrap_or(u32::MAX).max(1);
++            first += f64::from(skipped) * self.pacer.period;
++            clock.skipped_slots += u64::from(skipped);
++            // Duration rounds to nanoseconds; preserve the not-before boundary.
++            if first < earliest {
++                first += self.pacer.period;
++                clock.skipped_slots += 1;
++            }
++        }
++        let real_time = if self.generated.is_some() {
++            first + self.pacer.period * 0.5
++        } else {
++            first
++        };
++        // A warm-up real occupies a real-frame slot. The next midpoint belongs
++        // halfway to the following real, not a whole source interval later.
++        clock.next_first = if self.generated.is_none() && !self.pacer.preview {
++            first + self.pacer.period * 0.5
++        } else {
++            first + self.pacer.period
++        };
++        // Keep scheduling serialized, but release the timing lock before calling
++        // Metal: a presented callback must be free to acquire it immediately.
++        drop(clock);
++        if let Some(generated) = self.generated {
++            request(&generated, first, true, self.sequence * 2, &self.pacer);
++        }
++        request(
++            &self.real,
++            real_time,
++            self.real_is_generated,
++            self.sequence * 2 + 1,
++            &self.pacer,
++        );
++    }
++}
++
++fn request(drawable: &Drawable, deadline: f64, generated: bool, order: u64, pacer: &Arc<Pacer>) {
++    let retained_pacer = Arc::clone(pacer);
++    let shown = RcBlock::new(move |ptr: NonNull<ProtocolObject<dyn MTLDrawable>>| {
++        // SAFETY: Metal lends this drawable for the callback's duration.
++        let time = unsafe { ptr.as_ref() }.presentedTime();
++        if time <= 0.0 || !time.is_finite() {
++            return;
++        }
++        if generated {
++            super::DISPLAYED_GENERATED.fetch_add(1, Ordering::Relaxed);
++        } else {
++            super::DISPLAYED_REAL.fetch_add(1, Ordering::Relaxed);
++        }
++        let mut clock = retained_pacer.state.lock().unwrap();
++        if time < clock.max_display_time {
++            clock.callback_reorders += 1;
++        }
++        clock.max_display_time = clock.max_display_time.max(time);
++        clock.samples.push(Sample {
++            time,
++            deadline,
++            order,
++        });
++        if clock.samples.len() > MAX_SAMPLES {
++            clock.samples.sort_by(|a, b| a.time.total_cmp(&b.time));
++            clock.samples.remove(0);
++        }
++        log::debug!(target: "mtld3d::interpolation", "displayed order={order} generated={generated} time={time:.6} requested={deadline:.6} error_ms={:.3}", (time - deadline) * 1000.0);
++    });
++    let object = drawable.get();
++    // SAFETY: the live retained drawable copies the block, which owns its clock.
++    unsafe { object.addPresentedHandler(RcBlock::as_ptr(&shown)) };
++    if generated {
++        super::SUBMITTED_GENERATED.fetch_add(1, Ordering::Relaxed);
++    } else {
++        super::SUBMITTED_REAL.fetch_add(1, Ordering::Relaxed);
++    }
++    object.presentAtTime(deadline);
++}
++
++/// A unique retain on a Metal drawable, with no AppKit thread affinity.
++struct Drawable(usize);
++
++impl Drawable {
++    fn retain(drawable: &ProtocolObject<dyn CAMetalDrawable>) -> Self {
++        // SAFETY: the borrowed object is live and this creates our independent retain.
++        let retained = unsafe { Retained::retain(core::ptr::from_ref(drawable).cast_mut()) }
++            .expect("live drawable");
++        Self(Retained::into_raw(retained) as usize)
++    }
++
++    fn get(&self) -> &ProtocolObject<dyn CAMetalDrawable> {
++        // SAFETY: this owner holds the retain until Drop; the borrow cannot escape it.
++        unsafe { &*(self.0 as *const ProtocolObject<dyn CAMetalDrawable>) }
++    }
++}
++
++impl Drop for Drawable {
++    fn drop(&mut self) {
++        // SAFETY: retain transfers exactly one owned reference into this unique owner.
++        drop(unsafe { Retained::from_raw(self.0 as *mut ProtocolObject<dyn CAMetalDrawable>) });
++    }
++}
 diff --git a/unix/unix/src/metal/macdrv.rs b/unix/unix/src/metal/macdrv.rs
-index 13bdd0a..1793550 100644
+index 13bdd0a..6ec8fdd 100644
 --- a/unix/unix/src/metal/macdrv.rs
 +++ b/unix/unix/src/metal/macdrv.rs
 @@ -20,6 +20,7 @@ use objc2_core_graphics::{CGColor, CGColorSpace};
@@ -1574,11 +3019,20 @@ index 13bdd0a..1793550 100644
      let detached = with_bound_display(|bound| {
          let bound_view = view_addr != 0 && bound.view == view_addr;
          if bound_view {
-@@ -733,7 +743,11 @@ fn min_present_duration(panel_max_hz: f64, pacing: &PresentPacing) -> f64 {
+@@ -202,6 +212,7 @@ pub fn detach_metal_layer(view_handle: MetalHandle<NSViewKind>) {
+     if !detached {
+         return;
+     }
++    super::interpolation::detach();
+     HDR_ACTIVE.store(false, Ordering::Relaxed);
+     CURRENT_HEADROOM_BITS.store(1.0_f32.to_bits(), Ordering::Relaxed);
+     LAST_LOGGED_HEADROOM_BITS.store(0, Ordering::Relaxed);
+@@ -733,7 +744,12 @@ fn min_present_duration(panel_max_hz: f64, pacing: &PresentPacing) -> f64 {
  ///
  /// The present site consumes it from there.
  fn store_min_present_duration(panel_max_hz: f64, pacing: &PresentPacing) {
 -    let seconds = min_present_duration(panel_max_hz, pacing);
++    super::interpolation::set_display_hz(panel_max_hz);
 +    let effective = PresentPacing {
 +        vsync_requested: pacing.vsync_requested,
 +        max_fps: native_host::frame_limit(pacing.max_fps),
@@ -1587,7 +3041,7 @@ index 13bdd0a..1793550 100644
      MIN_PRESENT_DURATION_BITS.store(seconds.to_bits(), Ordering::Relaxed);
  }
  
-@@ -1045,6 +1059,10 @@ fn run_on_main_thread_sync<F: FnOnce()>(f: F) {
+@@ -1045,6 +1061,10 @@ fn run_on_main_thread_sync<F: FnOnce()>(f: F) {
              f();
          }
      }
@@ -1598,7 +3052,7 @@ index 13bdd0a..1793550 100644
      let mut ctx = CallCtx { f: Some(f) };
      // SAFETY: `_dispatch_main_q` is libSystem's main-queue singleton —
      // a valid `dispatch_queue_t` for the process lifetime. `&mut ctx`
-@@ -1113,6 +1131,17 @@ pub fn attach_metal_layer(
+@@ -1113,6 +1133,17 @@ pub fn attach_metal_layer(
          cursor_kick_sink_ptr,
          software_cursor,
      } = request;
@@ -1616,7 +3070,7 @@ index 13bdd0a..1793550 100644
      if hwnd == 0 || device_handle.is_null() {
          return None;
      }
-@@ -1271,6 +1300,40 @@ pub fn set_display_sync_enabled(
+@@ -1271,6 +1302,40 @@ pub fn set_display_sync_enabled(
      store_min_present_duration(panel_max_hz, pacing);
  }
  
@@ -1657,7 +3111,7 @@ index 13bdd0a..1793550 100644
  /// Host-time seconds (`CFTimeInterval`) to nanoseconds, saturating.
  ///
  /// `presentedTime` is a `CACurrentMediaTime`-based host time; a session's
-@@ -2136,9 +2199,11 @@ fn follow_screen_layer_mode(screen: &objc2_app_kit::NSScreen) {
+@@ -2136,9 +2201,11 @@ fn follow_screen_layer_mode(screen: &objc2_app_kit::NSScreen) {
      let hdr_enable = HDR_ENABLE_REQUESTED.load(Ordering::Relaxed);
      // The layer already matches this screen, which is every poll of a session
      // that stays on one display.
@@ -1671,12 +3125,13 @@ index 13bdd0a..1793550 100644
      // No layer bound: attach configures the first one itself, and a torn-down
      // device leaves none to reconcile.
      let Some(layer) = retain_bound_layer() else {
-@@ -2166,11 +2231,13 @@ fn follow_screen_layer_mode(screen: &objc2_app_kit::NSScreen) {
+@@ -2166,11 +2233,14 @@ fn follow_screen_layer_mode(screen: &objc2_app_kit::NSScreen) {
          },
      );
      HDR_ACTIVE.store(mode == LayerMode::Hdr, Ordering::Relaxed);
 +    COLOR_REFRESH_PENDING.store(false, Ordering::Relaxed);
 +    COLOR_REVISION.fetch_add(1, Ordering::Relaxed);
++    super::interpolation::invalidate();
      let pf = layer.pixelFormat();
      let wants = layer.wantsExtendedDynamicRangeContent();
      info!(
@@ -1686,7 +3141,7 @@ index 13bdd0a..1793550 100644
           pixelFormat={pf:?} wantsEDR={wants} colorspace={cs_label}",
      );
  }
-@@ -2203,7 +2270,8 @@ fn follow_screen_present_throttle(screen: &objc2_app_kit::NSScreen) {
+@@ -2203,8 +2273,10 @@ fn follow_screen_present_throttle(screen: &objc2_app_kit::NSScreen) {
      if !display_state_is_latched() {
          return;
      }
@@ -1694,9 +3149,11 @@ index 13bdd0a..1793550 100644
 +    let mut pacing = unpack_pacing(PRESENT_PACING_BITS.load(Ordering::Relaxed));
 +    pacing.max_fps = native_host::frame_limit(pacing.max_fps);
      let panel_max_hz = screen_max_hz(screen);
++    super::interpolation::set_display_hz(panel_max_hz);
      let applied = min_present_duration_sec();
      let Some(seconds) = min_present_duration_change(applied, panel_max_hz, &pacing) else {
-@@ -2534,3 +2602,19 @@ fn gamut_from_chromaticities(red_x: f32, green_y: f32) -> &'static str {
+         return;
+@@ -2534,3 +2606,19 @@ fn gamut_from_chromaticities(red_x: f32, green_y: f32) -> &'static str {
  
  #[cfg(test)]
  mod tests;
@@ -2193,10 +3650,10 @@ index 0000000..524cd65
 +}
 diff --git a/unix/unix/src/metal/macdrv/native_host/settings.rs b/unix/unix/src/metal/macdrv/native_host/settings.rs
 new file mode 100644
-index 0000000..0abffa9
+index 0000000..7f372cd
 --- /dev/null
 +++ b/unix/unix/src/metal/macdrv/native_host/settings.rs
-@@ -0,0 +1,285 @@
+@@ -0,0 +1,288 @@
 +//! Session presentation controls in a native, nonmodal settings window.
 +
 +use core::{ptr::NonNull, sync::atomic::Ordering};
@@ -2292,7 +3749,7 @@ index 0000000..0abffa9
 +            let settings = host.settings.borrow();
 +            let Some(settings) = settings.as_ref() else { return };
 +            let status = settings.picture.changed(sender);
-+            settings.status.setStringValue(&NSString::from_str(status));
++            settings.status.setStringValue(&NSString::from_str(&status));
 +        }
 +    }
 +
@@ -2398,6 +3855,9 @@ index 0000000..0abffa9
 +    let panel = {
 +        let mut slot = host.settings.borrow_mut();
 +        let settings = slot.get_or_insert_with(|| Settings::new(host.window.mtm()));
++        if crate::metal::interpolation::settings().0 {
++            settings.status.setStringValue(&NSString::from_str(&crate::metal::interpolation::status()));
++        }
 +        settings.panel.clone()
 +    };
 +    panel.makeKeyAndOrderFront(None);
@@ -2409,7 +3869,7 @@ index 0000000..0abffa9
 +        let panel = {
 +            NSPanel::initWithContentRect_styleMask_backing_defer(
 +                NSPanel::alloc(mtm),
-+                NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(620.0, 640.0)),
++                NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(620.0, 760.0)),
 +                NSWindowStyleMask::Titled | NSWindowStyleMask::Closable,
 +                NSBackingStoreType::Buffered,
 +                false,
@@ -2421,7 +3881,7 @@ index 0000000..0abffa9
 +        let content = panel.contentView().expect("a new panel has a content view");
 +        let label = NSTextField::labelWithString(&NSString::from_str("Frame limit"), mtm);
 +        label.setFrame(NSRect::new(
-+            NSPoint::new(24.0, 586.0),
++            NSPoint::new(24.0, 706.0),
 +            NSSize::new(150.0, 24.0),
 +        ));
 +        let pacing = unpack_pacing(PRESENT_PACING_BITS.load(Ordering::Relaxed));
@@ -2430,7 +3890,7 @@ index 0000000..0abffa9
 +            mtm,
 +        );
 +        value.setFrame(NSRect::new(
-+            NSPoint::new(208.0, 584.0),
++            NSPoint::new(208.0, 704.0),
 +            NSSize::new(100.0, 26.0),
 +        ));
 +        let note = NSTextField::labelWithString(
@@ -2440,7 +3900,7 @@ index 0000000..0abffa9
 +            mtm,
 +        );
 +        note.setFrame(NSRect::new(
-+            NSPoint::new(24.0, 534.0),
++            NSPoint::new(24.0, 654.0),
 +            NSSize::new(576.0, 48.0),
 +        ));
 +        let status = NSTextField::labelWithString(
@@ -2448,8 +3908,8 @@ index 0000000..0abffa9
 +            mtm,
 +        );
 +        status.setFrame(NSRect::new(
-+            NSPoint::new(24.0, 20.0),
-+            NSSize::new(576.0, 24.0),
++            NSPoint::new(24.0, 8.0),
++            NSSize::new(576.0, 40.0),
 +        ));
 +        for field in [&label, &value, &note, &status] {
 +            // SAFETY: all views live on this AppKit thread and the content view retains them.
@@ -2464,7 +3924,7 @@ index 0000000..0abffa9
 +            let frame = host.window.frame();
 +            panel.setFrameOrigin(NSPoint::new(
 +                frame.origin.x + (frame.size.width - 620.0) / 2.0,
-+                frame.origin.y + (frame.size.height - 668.0) / 2.0,
++                frame.origin.y + (frame.size.height - 788.0) / 2.0,
 +            ));
 +        } else {
 +            panel.center();
@@ -2484,10 +3944,10 @@ index 0000000..0abffa9
 +}
 diff --git a/unix/unix/src/metal/macdrv/native_host/settings/picture_controls.rs b/unix/unix/src/metal/macdrv/native_host/settings/picture_controls.rs
 new file mode 100644
-index 0000000..88734da
+index 0000000..f516efc
 --- /dev/null
 +++ b/unix/unix/src/metal/macdrv/native_host/settings/picture_controls.rs
-@@ -0,0 +1,154 @@
+@@ -0,0 +1,276 @@
 +//! Native controls for session picture adjustments.
 +
 +use objc2::{MainThreadOnly, rc::Retained, runtime::Sel};
@@ -2499,12 +3959,13 @@ index 0000000..88734da
 +
 +use super::SettingsDelegate;
 +use crate::metal::{
-+    macdrv,
++    interpolation, macdrv,
 +    picture::{self, Picture},
 +};
 +
 +const RESET_TAG: isize = 1;
 +const DISPLAY_TAG: isize = 2;
++const INTERPOLATION_TAG: isize = 3;
 +
 +pub struct PictureControls {
 +    rows: Vec<SliderRow>,
@@ -2512,8 +3973,9 @@ index 0000000..88734da
 +    hdr: Retained<NSButton>,
 +    accurate: Retained<NSButton>,
 +    reset: Retained<NSButton>,
++    interpolation: Retained<NSButton>,
++    preview: Retained<NSButton>,
 +}
-+
 +
 +impl Drop for PictureControls {
 +    fn drop(&mut self) {
@@ -2521,7 +3983,14 @@ index 0000000..88734da
 +            // SAFETY: clearing a target is valid, and happens before the retained delegate drops.
 +            unsafe { row.slider.setTarget(None) };
 +        }
-+        for button in [&self.fxaa, &self.hdr, &self.accurate, &self.reset] {
++        for button in [
++            &self.fxaa,
++            &self.hdr,
++            &self.accurate,
++            &self.reset,
++            &self.interpolation,
++            &self.preview,
++        ] {
 +            // SAFETY: the controls belong to this main-thread panel.
 +            unsafe { button.setTarget(None) };
 +        }
@@ -2533,7 +4002,7 @@ index 0000000..88734da
 +        let mtm = content.mtm();
 +        let value = picture::snapshot();
 +        let mut rows = Vec::new();
-+        let mut y = 508.0;
++        let mut y = 628.0;
 +        for (label, low, high, current) in [
 +            ("Adaptive sharpening", 0.0, 1.0, value.sharpen),
 +            ("Exposure (stops)", -2.0, 2.0, value.exposure),
@@ -2548,64 +4017,158 @@ index 0000000..88734da
 +            title.setFrame(rect(24.0, y, 180.0, 24.0));
 +            content.addSubview(&title);
 +            // SAFETY: action() names the typed pictureChanged: callback on the retained delegate.
-+            let slider = unsafe { NSSlider::sliderWithValue_minValue_maxValue_target_action(
-+                f64::from(current), low, high, Some(delegate), Some(action()), mtm,
-+            ) };
++            let slider = unsafe {
++                NSSlider::sliderWithValue_minValue_maxValue_target_action(
++                    f64::from(current),
++                    low,
++                    high,
++                    Some(delegate),
++                    Some(action()),
++                    mtm,
++                )
++            };
 +            slider.setFrame(rect(208.0, y, 282.0, 24.0));
 +            slider.setContinuous(true);
 +            slider.setToolTip(Some(&NSString::from_str(label)));
 +            content.addSubview(&slider);
-+            let display = NSTextField::labelWithString(&NSString::from_str(&format!("{current:.2}")), mtm);
++            let display =
++                NSTextField::labelWithString(&NSString::from_str(&format!("{current:.2}")), mtm);
 +            display.setFrame(rect(508.0, y, 80.0, 24.0));
 +            content.addSubview(&display);
-+            rows.push(SliderRow { slider, value: display });
++            rows.push(SliderRow {
++                slider,
++                value: display,
++            });
 +            y -= 32.0;
 +        }
 +        let (hdr_requested, accurate_requested) = macdrv::session_display();
-+        let fxaa = checkbox(content, delegate, "FXAA anti-aliasing (can soften text)", value.fxaa, 0, 248.0);
-+        let hdr = checkbox(content, delegate, "HDR output (requires display headroom)", hdr_requested, DISPLAY_TAG, 216.0);
-+        let accurate = checkbox(content, delegate, "Accurate sRGB colors (use the display color profile)", accurate_requested, DISPLAY_TAG, 184.0);
++        let fxaa = checkbox(
++            content,
++            delegate,
++            "FXAA anti-aliasing (can soften text)",
++            value.fxaa,
++            0,
++            368.0,
++        );
++        let hdr = checkbox(
++            content,
++            delegate,
++            "HDR output (requires display headroom)",
++            hdr_requested,
++            DISPLAY_TAG,
++            336.0,
++        );
++        let accurate = checkbox(
++            content,
++            delegate,
++            "Accurate sRGB colors (use the display color profile)",
++            accurate_requested,
++            DISPLAY_TAG,
++            304.0,
++        );
 +        // SAFETY: the target is retained by Settings and implements the paired typed callback.
-+        let reset = unsafe { NSButton::buttonWithTitle_target_action(
-+            &NSString::from_str("Reset effects"), Some(delegate), Some(action()), mtm,
-+        ) };
++        let reset = unsafe {
++            NSButton::buttonWithTitle_target_action(
++                &NSString::from_str("Reset effects"),
++                Some(delegate),
++                Some(action()),
++                mtm,
++            )
++        };
 +        reset.setTag(RESET_TAG);
-+        reset.setFrame(rect(24.0, 137.0, 150.0, 30.0));
++        reset.setFrame(rect(24.0, 257.0, 150.0, 30.0));
 +        content.addSubview(&reset);
-+        let note = NSTextField::labelWithString(&NSString::from_str(
-+            "Effects also affect game text, menus and nameplates.\nSharpening and bloom are off at 0. Neutral contrast/saturation: 1.\nAccurate colors preserves sRGB intent; off uses the existing vivid mode.\nAll changes last for this game session only."
-+        ), mtm);
-+        note.setFrame(rect(24.0, 51.0, 576.0, 78.0));
++        let note = NSTextField::labelWithString(
++            &NSString::from_str(
++                "Effects also affect game text, menus and nameplates.\nSharpening and bloom are off at 0. Neutral contrast/saturation: 1.\nAccurate colors preserves sRGB intent; off uses the existing vivid mode.\nAll changes last for this game session only.",
++            ),
++            mtm,
++        );
++        note.setFrame(rect(24.0, 171.0, 576.0, 78.0));
 +        content.addSubview(&note);
-+        Self { rows, fxaa, hdr, accurate, reset }
++        let (enabled, generated_only) = interpolation::settings();
++        let interpolation = checkbox(
++            content,
++            delegate,
++            "MetalFX interpolation experiment (SDR, up to 2x)",
++            enabled,
++            INTERPOLATION_TAG,
++            134.0,
++        );
++        let preview = checkbox(
++            content,
++            delegate,
++            "Show generated frames only (inspect artifacts)",
++            generated_only,
++            INTERPOLATION_TAG,
++            102.0,
++        );
++        let warning = NSTextField::labelWithString(
++            &NSString::from_str(
++                "Real + generated use matching 720p; estimated motion may still warp.\nReopen Settings for display timing. Off restores full-resolution output.",
++            ),
++            mtm,
++        );
++        warning.setFrame(rect(24.0, 51.0, 576.0, 46.0));
++        content.addSubview(&warning);
++        Self {
++            rows,
++            fxaa,
++            hdr,
++            accurate,
++            reset,
++            interpolation,
++            preview,
++        }
 +    }
 +
-+    pub fn changed(&self, sender: &NSControl) -> &'static str {
++    pub fn changed(&self, sender: &NSControl) -> String {
++        if sender.tag() == INTERPOLATION_TAG {
++            interpolation::configure(checked(&self.interpolation), checked(&self.preview));
++            return interpolation::status();
++        }
 +        if sender.tag() == RESET_TAG {
 +            self.set_values(Picture::neutral());
 +        }
 +        if sender.tag() == DISPLAY_TAG {
 +            macdrv::set_session_display(sender.mtm(), checked(&self.hdr), checked(&self.accurate));
-+            return macdrv::session_display_status();
++            return macdrv::session_display_status().into();
 +        }
-+        let values: Vec<_> = self.rows.iter().map(|row| {
-+            // Bounds come from the slider constructor and are clamped again by picture::update.
-+            let value = macdrv::bounded_cast::f64_to_f32(row.slider.doubleValue());
-+            row.value.setStringValue(&NSString::from_str(&format!("{value:.2}")));
-+            value
-+        }).collect();
++        let values: Vec<_> = self
++            .rows
++            .iter()
++            .map(|row| {
++                // Bounds come from the slider constructor and are clamped again by picture::update.
++                let value = macdrv::bounded_cast::f64_to_f32(row.slider.doubleValue());
++                row.value
++                    .setStringValue(&NSString::from_str(&format!("{value:.2}")));
++                value
++            })
++            .collect();
 +        picture::update(Picture {
-+            sharpen: values[0], exposure: values[1], contrast: values[2], saturation: values[3],
-+            temperature: values[4], bloom: values[5], bloom_threshold: values[6], bloom_radius: values[7],
++            sharpen: values[0],
++            exposure: values[1],
++            contrast: values[2],
++            saturation: values[3],
++            temperature: values[4],
++            bloom: values[5],
++            bloom_threshold: values[6],
++            bloom_radius: values[7],
 +            fxaa: checked(&self.fxaa),
 +        });
-+        "Picture settings applied for this session."
++        "Picture settings applied for this session.".into()
 +    }
 +
 +    fn set_values(&self, value: Picture) {
 +        for (row, number) in self.rows.iter().zip([
-+            value.sharpen, value.exposure, value.contrast, value.saturation,
-+            value.temperature, value.bloom, value.bloom_threshold, value.bloom_radius,
++            value.sharpen,
++            value.exposure,
++            value.contrast,
++            value.saturation,
++            value.temperature,
++            value.bloom,
++            value.bloom_threshold,
++            value.bloom_radius,
 +        ]) {
 +            row.slider.setDoubleValue(f64::from(number));
 +        }
@@ -2618,12 +4181,23 @@ index 0000000..88734da
 +    value: Retained<NSTextField>,
 +}
 +
-+
-+fn checkbox(content: &NSView, delegate: &SettingsDelegate, title: &str, enabled: bool, tag: isize, y: f64) -> Retained<NSButton> {
++fn checkbox(
++    content: &NSView,
++    delegate: &SettingsDelegate,
++    title: &str,
++    enabled: bool,
++    tag: isize,
++    y: f64,
++) -> Retained<NSButton> {
 +    // SAFETY: action() and the retained delegate form the typed callback pair documented below.
-+    let button = unsafe { NSButton::checkboxWithTitle_target_action(
-+        &NSString::from_str(title), Some(delegate), Some(action()), content.mtm(),
-+    ) };
++    let button = unsafe {
++        NSButton::checkboxWithTitle_target_action(
++            &NSString::from_str(title),
++            Some(delegate),
++            Some(action()),
++            content.mtm(),
++        )
++    };
 +    button.setState(state(enabled));
 +    button.setTag(tag);
 +    button.setFrame(rect(24.0, y, 576.0, 26.0));
@@ -2631,8 +4205,16 @@ index 0000000..88734da
 +    button
 +}
 +
-+fn checked(button: &NSButton) -> bool { button.state() == NSControlStateValueOn }
-+fn state(enabled: bool) -> isize { if enabled { NSControlStateValueOn } else { NSControlStateValueOff } }
++fn checked(button: &NSButton) -> bool {
++    button.state() == NSControlStateValueOn
++}
++fn state(enabled: bool) -> isize {
++    if enabled {
++        NSControlStateValueOn
++    } else {
++        NSControlStateValueOff
++    }
++}
 +fn rect(x: f64, y: f64, width: f64, height: f64) -> NSRect {
 +    NSRect::new(NSPoint::new(x, y), NSSize::new(width, height))
 +}
@@ -2751,10 +4333,10 @@ index 0000000..7498d1f
 +}
 diff --git a/unix/unix/src/metal/picture.rs b/unix/unix/src/metal/picture.rs
 new file mode 100644
-index 0000000..45688dd
+index 0000000..c3a8811
 --- /dev/null
 +++ b/unix/unix/src/metal/picture.rs
-@@ -0,0 +1,302 @@
+@@ -0,0 +1,303 @@
 +//! Session picture processing, applied only to the image sent to the display.
 +
 +use core::{ffi::c_void, ptr::NonNull};
@@ -2843,6 +4425,7 @@ index 0000000..45688dd
 +
 +/// Clamp the session inputs before publishing a complete frame snapshot.
 +pub fn update(mut value: Picture) {
++    super::interpolation::invalidate();
 +    fn bounded(value: f32, low: f32, high: f32, default: f32) -> f32 {
 +        if value.is_finite() {
 +            value.clamp(low, high)
@@ -3058,7 +4641,7 @@ index 0000000..45688dd
 +    Some(())
 +}
 diff --git a/unix/unix/src/metal/present.rs b/unix/unix/src/metal/present.rs
-index b69fd05..8a1dbb3 100644
+index b69fd05..07ac0ad 100644
 --- a/unix/unix/src/metal/present.rs
 +++ b/unix/unix/src/metal/present.rs
 @@ -113,6 +113,8 @@ use crate::LOG_TARGET;
@@ -3132,6 +4715,15 @@ index b69fd05..8a1dbb3 100644
  fn create(device: &ProtocolObject<dyn MTLDevice>) -> Option<PresentPipelines> {
      let source = NSString::from_str(PRESENT_MSL);
      let options = MTLCompileOptions::new();
+@@ -300,7 +350,7 @@ fn create(device: &ProtocolObject<dyn MTLDevice>) -> Option<PresentPipelines> {
+     })
+ }
+ 
+-fn build_pipeline(
++pub fn build_pipeline(
+     device: &ProtocolObject<dyn MTLDevice>,
+     vs: &ProtocolObject<dyn MTLFunction>,
+     ps: &ProtocolObject<dyn MTLFunction>,
 diff --git a/unix/unix/src/metal/texture.rs b/unix/unix/src/metal/texture.rs
 index ce4176f..b99ec9f 100644
 --- a/unix/unix/src/metal/texture.rs

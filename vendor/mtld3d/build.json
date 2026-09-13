@@ -4,30 +4,38 @@
   "perf": false,
   "frame_pointers": false,
   "rust": "1.97.1",
-  "created_utc": "2026-09-13T02:30:16.993011+00:00",
-  "patch_sha256": "71657aaaad937afaaf799980e220e0f641075155bb5b6060e7ee4b5021866dde",
+  "created_utc": "2026-09-13T04:04:36.067352+00:00",
+  "patch_sha256": "461ff68239ac5d2f7994b963a6dead7c0b6668c4647a3a42375d2e0639815a23",
   "files": {
     "native/i386-windows/d3d9.dll": "4a159a9b023c0c685dec4a5255c7bfb38ad84983cf66b3938270754a4e53a9e7",
     "wine/i386-windows/mtld3d.dll": "88328434b273c72525380e1f271e07bf718b47ee8e48623a82e1ce0ed6191a82",
-    "wine/x86_64-unix/mtld3d.so": "44f9f6748fb1be7f3415b82e444a9d877d0ded59cd4578e25a9f25936e82a609",
+    "wine/x86_64-unix/mtld3d.so": "e8557b5949e1e41daf923ef26bddf9b5b063a8251aed1b917f20488320b824a8",
     "prefix-markers/syswow64/mtld3d.dll": "a74c0363a54b92db5deb731533e27d1248b9e51bc770dac281f8925e518123dc",
     "prefix-markers/system32/mtld3d.dll": "602de35e20ca24d8d44eddc4e7a1d24a428e80fedc8aa012666cb35caa24a1af"
   },
-  "parent_patch_sha256": "23a5ca7f57df85006a7a3037fcc02f8112fcba0317f0f1cba3cdd52fbc498ca1",
-  "change": "Native session picture controls: sharpening, color, HDR, color accuracy, FXAA and bloom",
+  "parent_patch_sha256": "8d0901cd770edbf3bd1739bdc1c1f0ad20a26242ccd795ccab259d3baff2578b",
+  "change": "Frame interpolation v2: matching 720p real/generated images, GPU-ready pacing, actual display cadence measurements",
   "source_head": "7dd9c8c1c7c7785bd49fa8e6202692d965615cd7",
-  "source_dirty": false,
+  "source_dirty": true,
   "validation": {
     "production_x86_64_build": "passed",
     "automated_tests": "not run at user request",
-    "runtime": "user manual playtest accepted as baseline",
-    "picture_shader_compilation": "no independent compiler validation; effects evaluated by user"
+    "runtime": "v2 not run; first prototype user reported warping, sharpness flicker and uneven motion",
+    "device_capability_probe": "not run",
+    "interpolation_shader_compilation": "not run; compiled by Metal only when user enables the experiment",
+    "performance_and_image_quality": "unmeasured"
   },
-  "tested_package_source_patch_sha256": "923e72bfd821fba360f8a0efca54736cee24d878bea05bf3358ab1aa8fe92dee",
-  "baseline": {
+  "parent_baseline": {
     "name": "native-picture-controls-20260913",
     "accepted_utc": "20260913T023722Z",
     "signed_renderer_sha256": "99fd358a792617c2c1fe6a22df9eab37b32a352e45900569fcc87aeef03fef04",
     "record": "docs/baselines/native-picture-controls-20260913.json"
-  }
+  },
+  "committed_source": {
+    "repository": "https://github.com/rdbell/mtld3d.git",
+    "branch": "feature/frame-interpolation-poc",
+    "commit": "dbcf97398de6170a9e0e633bf955deae44ff838b",
+    "relationship": "Code matches build-time source.patch; only docs/FRAME-INTERPOLATION-POC.md contains subsequent checkpoint documentation. source_head and source_dirty describe the original build snapshot."
+  },
+  "disposition": "Shelved at user request; preserved for reference only, not an accepted baseline."
 }

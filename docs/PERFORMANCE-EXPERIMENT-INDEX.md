@@ -26,6 +26,21 @@ percentiles. Reconcile workload differences before using synthetic results to ch
 - Keep full addons fixed for the general-performance campaign. Individual addon tuning
   is outside the requested scope. Research leads are not completed experiments.
 
+## Frame interpolation disposition
+
+**Shelved at the user's request.** Neither experimental candidate is an accepted
+baseline. The current accepted native-window/picture-controls package is recorded
+in [PICTURE-BASELINE.md](PICTURE-BASELINE.md); the earlier baseline references above
+belong to the historical performance campaign.
+
+The first prototype's manual test reported warping/trails, alternating sharpness
+and uneven motion. V2 matched resolution and revised pacing, but its runtime
+benefit was not established before the user stopped the experiment. Preserve
+both packages and the code; do not resume runs or promote the renderer without
+a new request. Reliable depth/motion, UI/effect handling and measured cadence
+would be prerequisites for a materially different attempt. See the
+[shelved experiment record](FRAME-INTERPOLATION-POC.md).
+
 ## Renderer and runtime decisions
 
 | Experiment | Recorded outcome and disposition | What would justify revisiting it? | Evidence |
