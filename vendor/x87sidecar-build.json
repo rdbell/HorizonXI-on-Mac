@@ -1,12 +1,16 @@
 {
   "source_repository": "https://github.com/rdbell/x87sidecar",
-  "source_commit": "c00c5f7c2de0c04728e53ce08af225c608c47ec1",
+  "source_commit": "7b4db46cc1ec3878192c82981e5948955bbd7e4b",
   "upstream_commit": "010f50a93c86d57ac93c395d5f9c283b74a5a6e8",
   "pr31_commit": "48535de895bf7230cfe6e772b4ebe19d5b041424",
-  "patch_sha256": "7151ce5f180f9626c444f1def8425adb72a499bafe1d43c862358cd84bddbaef",
+  "patch_sha256": "4b1d3d3c8d6de025f62b548820b4092055157ef25bb4e20d5fc40adfe74dd8d9",
   "files": {
-    "x87sidecar-coop": "36335379c346b35f80971ae1ad48ebeb68bb9f778fec812126feff5dd3fafc0c"
+    "x87sidecar-coop": "d659410c0c576fc093086ebdd872b7bcb84442fbe1f6585ea3585f97138c0a2a",
+    "x87sidecar_entitled": "7c3c31e4876bd56f8ac6086bc8b3b2af3d0cf4642aef1e4bc81115b535869e88"
   },
   "profile_paths": "automatic .<target-pid> suffix",
-  "sticky_sampling": true
+  "sticky_sampling": true,
+  "native_boundary_optimization": true,
+  "baseline_provenance": "Exact binary match to the preserved 2026-09-12 installed app and the final optimized x87-boundary benchmark artifacts. Unsafe conversion-disabled control excluded.",
+  "entitlements_sha256": "be209b4770815b3e2f082ae514ddaf0a56ee5f436b61756c462e48f623574414"
 }

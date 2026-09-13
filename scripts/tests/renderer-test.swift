@@ -22,6 +22,13 @@ struct RendererTest {
 
     static func main() throws {
         try savedSettings()
+        let legacy = try JSONDecoder().decode(PerfSettings.self, from: Data(#"{"renderer":"mtld3d","metalHUD":true}"#.utf8))
+        expect(!legacy.nativeGameHost && legacy.metalHUD, "legacy settings changed")
+        var native = legacy
+        native.nativeGameHost = true
+        let restored = try JSONDecoder().decode(PerfSettings.self, from: JSONEncoder().encode(native))
+        expect(restored.nativeGameHost && restored.metalHUD && restored.renderer == .mtld3d,
+               "native host preference did not round trip")
         try missingShim()
         try repeatedInstall()
         registryChecks()

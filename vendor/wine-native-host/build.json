@@ -1,0 +1,7 @@
+{
+  "runtime": "wine-cx-26.3.0-1",
+  "source_commit": "16aac07e6fe9815ffb51efe0e736ba6a3dc97a9c",
+  "original": "16f50e7eded5128ba192e5e8cda2e5b625f35cb0acb3de792043331fbc7bc30a",
+  "replacement": "2369351e43051deece242b532ccb7ca1884bc80a69244b932e9dce6dd7cabe5f",
+  "patch_sha256": "2ec1fb645b1b0f68f9fae70e123dfa5c31f732c517bfacc24ec462718f13c3f7"
+}

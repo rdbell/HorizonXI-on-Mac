@@ -118,11 +118,13 @@ remain dormant unless their environment variables are set.
 
 ---
 
-# x87sidecar profiler integration
+# x87sidecar integration
 
 `x87sidecar-upstream-integration.patch` applies to upstream `010f50a` and records the complete
 shipped fork delta. It includes PR #31's automatic `.<target-pid>` suffix for `X87_PROFILE` and
-`X87_SAMPLE`, plus opt-in `X87_SAMPLE_STICKY=1`. The old `%p` and sticky patches are retained as
+`X87_SAMPLE`, opt-in `X87_SAMPLE_STICKY=1`, and the native-state boundary conversion
+optimization from fork commit `7b4db46`. Both cooperative and entitled binaries preserve
+the installed 2026-09-12 baseline. The old `%p` and sticky patches are retained as
 historical source records; do not apply them on top of the integration patch.
 
 Sticky discovery selects the thread seen running guest code most often, then follows that
@@ -138,6 +140,7 @@ git apply /path/to/x87sidecar-upstream-integration.patch
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel
 cp build/bin/x87sidecar /path/to/HorizonXI-on-Mac/vendor/x87sidecar-coop
+cp build/bin/x87sidecar_entitled /path/to/HorizonXI-on-Mac/vendor/x87sidecar_entitled
 ```
 
 The launcher supplies `x87-sample.prof`; the sidecar writes `x87-sample.prof.<target-pid>` and

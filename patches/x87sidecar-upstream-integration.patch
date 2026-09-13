@@ -71,6 +71,192 @@ index 8cc05e4..0cd3eeb 100644
  bash scripts/run_benchmarks.sh           # build + benchmark table
  ```
  
+diff --git a/docs/internals.md b/docs/internals.md
+index aa2db36..ccf806d 100644
+--- a/docs/internals.md
++++ b/docs/internals.md
+@@ -95,6 +95,20 @@ resuming, in both 64-bit and LDT compatibility mode with nested x87 work in
+ the handler. `test_x87_native_state` checks all eight FXSAVE/FXRSTOR slots and
+ binary64 bit preservation across separate replies, including subnormals.
+ 
++The boundary converter reads the tag word once and collapses it to a bitmap
++of occupied physical slots. It skips empty slots and exits after the final
++occupied slot, shrinking low to high on entry and expanding high to low on
++exit so in-place writes cannot destroy a later source. The bitmap shares
++the low 16 bits of the saved flags register to avoid increasing the seven-GPR
++scratch requirement. Clear those bits before `MSR NZCV`: Rosetta's signal
++stepper rejects bitmap bits in a flags restore. Preserve the entire upper
++half with `0xffff0000`, not just hardware NZCV (`0xf0000000`), because Rosetta
++also stores x86 parity at bit 26. The narrower mask fails FCOMI parity tests.
++All slot checks and exits remain forward branches; replacing them with a
++runtime loop violates the signal decoder rule above. The sparse-state test
++covers every occupancy mask and TOP rotation. Measurements and rejected
++approaches are recorded in [the boundary investigation](native-boundary-performance.md).
++
+ `tests/test_x87_signal_storm.c` runs the reported chain and one case per x87
+ opcode under a SIGUSR1 storm and compares every iteration bit for bit. Stock
+ Rosetta itself shifts the x87 stack when a signal lands in its `fcomp`,
+diff --git a/docs/native-boundary-performance.md b/docs/native-boundary-performance.md
+new file mode 100644
+index 0000000..3c3d76b
+--- /dev/null
++++ b/docs/native-boundary-performance.md
+@@ -0,0 +1,155 @@
++# Native-state boundary conversion investigation
++
++PR #32's native-state conversion has measurable cost in isolated x87
++benchmarks. The optimization described here reduces that cost without
++removing the conversion or changing its numerical algorithms. It does not
++yet establish that PR #32 caused the previously observed 11–12% FFXI FPS
++regression: repeated game runs of the same build varied more than that.
++
++## Implementation and correctness
++
++Based on development `c00c5f7c2de0c04728e53ce08af225c608c47ec1`:
++
++- Read and collapse the tag word once, then test occupied slots with TBZ.
++- Exit after the last occupied slot instead of scanning the remaining empties.
++- Load binary64 bits directly into a GPR on export, eliminating an FP
++  load/register-transfer pair and the boundary's FPR allocation.
++- Keep the bitmap in the low half of the saved flags register, preserving
++  the existing seven-GPR scratch budget.
++
++Both boundary conversions remain in place. Slot order, native payload
++layout, numerical conversion, and signal-visible state are unchanged.
++This preserves PR #32's native-layout correction; it does not claim full
++80-bit arithmetic internally, which still uses the existing binary64 model.
++
++The final build passed `bash scripts/run_tests.sh --no-build`: **1,021 passed,
++zero failed, two known stock-Rosetta divergences, zero skipped / 1,023** in
++216.091 seconds, under a 600-second outer cap. The matrix includes native,
++signal/context, direct translator, fusion, bridging, and register-pressure
++coverage. The added native-state regression exercises all 256 occupancy
++masks at all eight TOP rotations using normal numbers, signed zero,
++subnormal, infinities, and quiet NaN, checking occupied FXSAVE payloads and
++tags/TOP after FXRSTOR and separate translation replies.
++
++## Native benchmark results
++
++Apple M2 Max, macOS 26.5 (25F71), 2026-09-12. Identical benchmark executables,
++three loaders, six repetitions with rotating variant order: 54 successful
++invocations. Each invocation has a 45-second cap plus bounded cleanup.
++The table compares medians of the benchmark's reported elapsed nanoseconds;
++negative means less time. These are benchmark timings, not FPS predictions.
++
++| Benchmark case | Optimized vs current | Conversion disabled vs current |
++| --- | ---: | ---: |
++| fld/fstp m32 singles | -17.99% | -31.66% |
++| fld/fstp m64 singles | -19.04% | -26.06% |
++| fld/fst/fstp singles | +1.05% | -23.02% |
++| fld32/fstp64 singles | -17.69% | -29.62% |
++| fld64/fstp32 singles | -22.67% | -35.16% |
++| padded m32 | -9.39% | -32.36% |
++| dot product n3 | -5.93% | -18.96% |
++| dot product n4 | -1.88% | -14.55% |
++| dot product n8 | -2.57% | -6.64% |
++| F2XM1 | +2.39% | -11.33% |
++
++The conversion-disabled control only adds an immediate return to
++`emit_native_state_boundary`. It is **unsafe, diagnostic only**, and excluded
++from this change. Removing conversion also changes generated code layout;
++the comparison is not a cycle-by-cycle decomposition. Small changes in the
++triple-op and F2XM1 cases overlap the observed variation. There is no claim
++of a universal speedup.
++
++Run a comparison from this checkout with separately built loaders:
++
++```sh
++python3 scripts/compare_benchmarks.py \
++  --variant current=/absolute/current/build/bin/x87sidecar_entitled \
++  --variant optimized=/absolute/optimized/build/bin/x87sidecar_entitled \
++  --bin-dir build/bin/bench --output /tmp/new-boundary-comparison --repeats 6
++python3 -m unittest discover -s scripts -p test_compare_benchmarks.py
++```
++
++The runner removes inherited X87_/ROSETTA_ settings, hashes loaders and
++executables, records every invocation, checks BENCH rows, and waits for pipe
++EOF as well as loader exit. Two lifecycle tests cover a target outliving its
++loader and cleanup after a target timeout. Keep game runs and other
++benchmarks stopped while measuring.
++
++## FFXI integration evidence
++
++Only Hxitest on local Docker LSB was used. The installed app was preserved;
++candidate apps and a cloned Wine prefix were used for tests. All variants
++used the same cx-26.3.0-1 Wine runtime with the existing locale patch, mtld3d,
++shader seed, addon fixture, camera, draw distance 20, noon clock command,
++4096 x 4096 background, and 1882 x 1058 menu/output resolution. FPS was
++uncapped. Captures used standard-nosample without profiling or packet capture,
++with a 300-second game cap and 40-second city holds. Reported scene FPS uses
++approximately 37 seconds of complete measured windows after settling.
++
++All six runs passed the report's scene/coverage checks and matched fixture,
++graphics, renderer, and shader-seed hashes. Results in execution order:
++
++| Run | Markets FPS | Mines FPS |
++| --- | ---: | ---: |
++| current 1 | 68.190 | 144.472 |
++| conversion disabled 1 (unsafe control) | 47.414 | 96.324 |
++| current 2 | 46.439 | 102.795 |
++| optimized 1 | 47.926 | 120.255 |
++| current 3 | 55.351 | 121.767 |
++| optimized 2 | 57.696 | 127.132 |
++
++The final adjacent pair improved 4.2% / 4.4%, but earlier repeats do not
++support treating those percentages as a reliable gain. Screenshots of both
++optimized runs show the expected character, geometry, and UI with no obvious
++rendering defect. They also show different sky conditions: the noon command
++does not hold the calendar date or weather fixed. That is an additional
++comparison gap not detected by the current report's scene checks. No effects
++or crowded-player stress fixture was run in this investigation.
++
++The host had unrelated airportd, virtualization, WindowServer and T3 work.
++Those processes were left alone. AC power was present and no thermal warning
++was recorded. Matching fixture and renderer hashes do not establish matching
++host scheduling. The unchanged build's first two repeats alone differed by
++about 32% in Markets, exceeding the suspected regression. A paired comparison
++on a quiet host with fixed weather/calendar state is needed before assigning
++a reliable gameplay percentage. These runs neither confirm nor exonerate
++PR #32 as the cause of the earlier FFXI regression.
++
++## Rejected approaches and evidence locations
++
++- A backward-branch runtime loop was rejected before implementation because
++  Rosetta signal recovery cannot step it.
++- Packing slot bits into saved NZCV without clearing them caused signal
++  decode failures. Clear the low 16 bits before restoring flags.
++- Masking saved flags to `0xf0000000` passed a focused subset but failed nine
++  FCOMI checks in the full matrix. It discards Rosetta parity at bit 26;
++  `0xffff0000` passed the final full matrix.
++- The first comparison runner waited only for loader exit, allowing targets
++  to overlap. Its data was invalidated. Final results wait for descendant
++  stdout EOF and use bounded process-group cleanup.
++
++Local evidence lives in `ximac/benchmarks/20260912-x87-boundary/`:
++`full-tests.log`, `full-tests-driver.log`, `final-native-bench/{summary,runs,identities}.json`,
++`city-*-report.json`, each run's `restoration.json`, and `sidecar-identities.json`.
++The earlier `native-bench-summary.json` is an intermediate prototype result;
++`invalid-overlapped-native-bench/` is invalid. Neither supports the final table.
++Raw game logs and client snapshots remain local.
++
++## Baseline and rollback
++
++`known-good/` under that evidence directory contains APFS copies of the
++installed app, runtime, prefix, and exported launcher preferences, plus
++`manifest.json` with source/backup locations and hashes. The installed
++cooperative sidecar is
++`ce7280c00265e53a6989be0dd545ddc2c76245ecab99d1373f7eb93aa4731ed3`.
++The final optimized cooperative sidecar used for tests is
++`d659410c0c576fc093086ebdd872b7bcb84442fbe1f6585ea3585f97138c0a2a`.
++
++This source change does not update `/Applications/FFXI-on-Mac.app` or its
++runtime. No installed rollback is necessary. If a later installation needs
++rollback, stop the game first, retain that installation separately, and
++restore the app from `known-good/FFXI-on-Mac.app`; restore runtime/prefix only
++if those were changed too. Import the saved preferences into
++`org.batesai.horizonxi-on-mac` only if restoring those settings is intended.
++Verify against the manifest before relaunching. Never restore over a running
++game or discard newer character settings without review.
 diff --git a/rosetta_core/include/rosetta_core/Config.h b/rosetta_core/include/rosetta_core/Config.h
 index f050610..b8e114a 100644
 --- a/rosetta_core/include/rosetta_core/Config.h
@@ -138,6 +324,118 @@ index 1f7f534..8a46f3b 100644
          "  X87_NO_UNWIND=1               record leaf pcs only, skip the guest stack\n"
          "                                walk (roughly halves the per-sample cost)\n"
          "  X87_DISABLE_ALL_FUSIONS=1     disable every peephole fusion\n"
+diff --git a/rosetta_core/src/TranslatorX87F80.cpp b/rosetta_core/src/TranslatorX87F80.cpp
+index bf49d90..7e66d48 100644
+--- a/rosetta_core/src/TranslatorX87F80.cpp
++++ b/rosetta_core/src/TranslatorX87F80.cpp
+@@ -1,5 +1,6 @@
+ #include "rosetta_core/TranslatorX87F80.hpp"
+ 
++#include <array>
+ #include <cstdint>
+ 
+ #include "rosetta_core/AssemblerBuffer.h"
+@@ -177,11 +178,8 @@ void emit_f80_to_f64_convert(AssemblerBuffer& buf, int Xmant_inout, int Wexp, in
+ // All branch displacements are PC-relative (instruction units), so this
+ // helper is safe to invoke any number of times back-to-back in one block.
+ // =============================================================================
+-void emit_f64_to_f80(AssemblerBuffer& buf, int Xaddr_slot, int Dd_src, int Xbits, int Wexp,
+-                     int Wd_tmp) {
+-    // FMOV Xbits, Dd_src ; raw double bits to GPR
+-    emit_fmov_d_to_x(buf, Xbits, Dd_src);
+-
++static void emit_f64_bits_to_f80(AssemblerBuffer& buf, int Xaddr_slot, int Xbits, int Wexp,
++                                 int Wd_tmp) {
+     // UBFX Xexp, Xbits, #52, #11 ; extract 11-bit exponent
+     emit_bitfield(buf, /*is_64bit=*/1, /*opc=*/2, /*N=*/1, /*immr=*/52, /*imms=*/62, Xbits, Wexp);
+ 
+@@ -262,6 +260,12 @@ void emit_f64_to_f80(AssemblerBuffer& buf, int Xaddr_slot, int Dd_src, int Xbits
+     emit_str_imm(buf, 1, Wexp, Xaddr_slot, 4);
+ }
+ 
++void emit_f64_to_f80(AssemblerBuffer& buf, int Xaddr_slot, int Dd_src, int Xbits, int Wexp,
++                     int Wd_tmp) {
++    emit_fmov_d_to_x(buf, Xbits, Dd_src);
++    emit_f64_bits_to_f80(buf, Xaddr_slot, Xbits, Wexp, Wd_tmp);
++}
++
+ // Rosetta imports/exports physical x87 slots as packed f80 at +6, stride 10.
+ // Our emitters use compact doubles at +8, stride 8, only within one reply.
+ // Convert in place from low to high when shrinking, high to low when expanding,
+@@ -278,22 +282,30 @@ void emit_native_state_boundary(TranslationResult& tr, bool entering) {
+     const int sign = alloc_free_gpr(tr);
+     const int aux = alloc_free_gpr(tr);
+     const int tmp = alloc_free_gpr(tr);
+-    const int fp = alloc_free_fpr(tr);
+     emit_x87_base(buf, tr, base);
+     emit_ldr_str_imm(buf, 1, 0, 1, 2, base, exp);
+-    // The empty-stack path leaves NZCV untouched. Adding one to a loaded
+-    // halfword sets bit 16 exactly when every tag is empty (0xffff).
+-    emit_add_imm(buf, 0, 0, 0, 0, 1, exp, exp);
++    // Invert the tags without touching NZCV: 00 now means empty. Collapse
++    // each pair to its even bit, keeping one live-slot bitmap for the whole
++    // boundary. The payload stores never overlap the tag word at +4.
++    LogicalImmEncoding tags16;
++    is_bitmask_immediate(false, 0xffff, tags16);
++    emit_logical_imm(buf, 0, 2, tags16.N, tags16.immr, tags16.imms, exp, exp);
+     const auto empty = buf.end;
+-    buf.emit(0x37000000U | (16U << 19) | exp);  // TBNZ Wexp, #16, .done
++    emit_cbz(buf, 0, 0, exp, 0);
+     emit_mrs_nzcv(buf, flags);
++    emit_logical_shifted_reg(buf, 0, 1, 0, 1, exp, 1, exp, exp);
++    LogicalImmEncoding even_bits;
++    is_bitmask_immediate(false, 0x55555555, even_bits);
++    emit_and_imm(buf, 0, exp, even_bits.N, even_bits.immr, even_bits.imms, exp);
++    // Keep the bitmap in the unused low 16 bits of the saved flags, then
++    // clear just those bits before MSR. Rosetta also carries parity at bit
++    // 26, so restricting the restore to ARM's hardware NZCV bits loses PF.
++    emit_logical_shifted_reg(buf, 0, 1, 0, 0, exp, 0, flags, flags);
++    std::array<uint64_t, 7> finished;
+     for (int j = 0; j < 8; ++j) {
+         const int i = entering ? j : 7 - j;
+-        emit_ldr_str_imm(buf, 1, 0, 1, 2, base, exp);
+-        emit_bitfield(buf, 0, 2, 0, 2 * i, 2 * i + 1, exp, exp);
+-        emit_add_imm(buf, 0, 1, 1, 0, 3, exp, 31);
+         const auto skip = buf.end;
+-        emit_b_cond(buf, 0, 0);
++        buf.emit(0x36000000U | (static_cast<uint32_t>(2 * i) << 19) | flags);
+         if (entering) {
+             emit_ldur_stur(buf, 3, 1, 6 + 10 * i, base, mant);
+             emit_ldr_str_imm(buf, 1, 0, 1, (14 + 10 * i) / 2, base, exp);
+@@ -301,14 +313,29 @@ void emit_native_state_boundary(TranslationResult& tr, bool entering) {
+             emit_str_imm(buf, 3, mant, base, 1 + i);
+         } else {
+             emit_add_imm(buf, 1, 0, 0, 0, 6 + 10 * i, base, sign);
+-            emit_ldr_str_imm(buf, 3, 1, 1, 1 + i, base, fp);
+-            TranslatorX87::emit_f64_to_f80(buf, sign, fp, mant, exp, tmp);
++            emit_ldr_imm(buf, 3, mant, base, 1 + i);
++            emit_f64_bits_to_f80(buf, sign, mant, exp, tmp);
++        }
++        if (j != 7) {
++            // A shallow stack usually has no more live slots. Leave through
++            // the common NZCV restore instead of testing the remaining tags.
++            const uint32_t remaining =
++                entering ? (0xffffU << (2 * (i + 1))) & 0xffffU : (1U << (2 * i)) - 1;
++            LogicalImmEncoding mask;
++            is_bitmask_immediate(false, remaining, mask);
++            emit_and_imm(buf, 0, exp, mask.N, mask.immr, mask.imms, flags);
++            finished[j] = buf.end;
++            emit_cbz(buf, 0, 0, exp, 0);
+         }
+-        buf.data[skip / 4] = 0x54000000U | (static_cast<uint32_t>((buf.end - skip) / 4) << 5);
++        buf.data[skip / 4] |= static_cast<uint32_t>((buf.end - skip) / 4) << 5;
+     }
++    for (const auto branch : finished)
++        buf.data[branch / 4] |= static_cast<uint32_t>((buf.end - branch) / 4) << 5;
++    LogicalImmEncoding nzcv;
++    is_bitmask_immediate(false, 0xffff0000, nzcv);
++    emit_and_imm(buf, 0, flags, nzcv.N, nzcv.immr, nzcv.imms, flags);
+     emit_msr_nzcv(buf, flags);
+     buf.data[empty / 4] |= static_cast<uint32_t>((buf.end - empty) / 4) << 5;
+-    free_fpr(tr, fp);
+     tr.free_gpr_mask = saved_mask;
+ }
+ 
 diff --git a/rosetta_loader/src/main.cpp b/rosetta_loader/src/main.cpp
 index fa03422..6411d2f 100644
 --- a/rosetta_loader/src/main.cpp
@@ -401,6 +699,153 @@ index f68547b..3d0f8ab 100644
  void samplerConfigFromEnv(SamplerConfig& cfg);
  
  void startSampler(mach_port_t parentTaskPort, uint64_t runtimeBase, const SamplerConfig& in);
+diff --git a/scripts/compare_benchmarks.py b/scripts/compare_benchmarks.py
+new file mode 100644
+index 0000000..6638fff
+--- /dev/null
++++ b/scripts/compare_benchmarks.py
+@@ -0,0 +1,99 @@
++#!/usr/bin/env python3
++"""Compare sidecar builds using identical benchmark executables and bounded runs.
++
++Example: --variant current=/path/x87sidecar_entitled --variant candidate=/path/other
++         --bin-dir build/bin/bench --output /tmp/comparison
++The output directory must be new. Keep game runs and other benchmarks stopped.
++"""
++import argparse
++import hashlib
++import json
++import os
++from pathlib import Path
++import re
++import signal
++import statistics
++import subprocess
++import time
++
++
++def run(command, log, timeout):
++    env = {k: v for k, v in os.environ.items() if not k.startswith(('X87_', 'ROSETTA_'))}
++    started = time.monotonic()
++    # The loader can exit before its target. EOF includes descendants holding
++    # stdout; waiting for just the loader would overlap the next benchmark.
++    proc = subprocess.Popen([str(x) for x in command], env=env, stdout=subprocess.PIPE,
++                            stderr=subprocess.STDOUT, start_new_session=True)
++    try:
++        output, _ = proc.communicate(timeout=timeout)
++        code = proc.returncode
++    except subprocess.TimeoutExpired:
++        try:
++            os.killpg(proc.pid, signal.SIGTERM)
++        except ProcessLookupError:
++            pass
++        try:
++            output, _ = proc.communicate(timeout=5)
++        except subprocess.TimeoutExpired:
++            os.killpg(proc.pid, signal.SIGKILL)
++            output, _ = proc.communicate(timeout=5)
++        code = 124
++    log.write_bytes(output)
++    return {'exit': code, 'seconds': round(time.monotonic() - started, 3), 'log': log.name}
++
++
++def main():
++    parser = argparse.ArgumentParser(description=__doc__)
++    parser.add_argument('--variant', action='append', required=True, metavar='NAME=LOADER')
++    parser.add_argument('--bin-dir', type=Path, required=True)
++    parser.add_argument('--output', type=Path, required=True)
++    parser.add_argument('--repeats', type=int, default=3, choices=range(1, 11))
++    parser.add_argument('--timeout', type=int, default=45, choices=range(1, 121))
++    parser.add_argument('benchmarks', nargs='*', default=['bench_single_op', 'bench_dot_product', 'bench_f2xm1'])
++    args = parser.parse_args()
++    variants = {}
++    for value in args.variant:
++        name, sep, path = value.partition('=')
++        if not sep or not re.fullmatch(r'[A-Za-z0-9_-]+', name) or name in variants:
++            parser.error('Variants must have unique simple names and NAME=LOADER paths')
++        variants[name] = Path(path).resolve(strict=True)
++    if len(variants) < 2:
++        parser.error('At least two variants are required')
++    binaries = {name: (args.bin_dir / name).resolve(strict=True) for name in args.benchmarks}
++    if any(Path(name).name != name for name in binaries):
++        parser.error('Benchmark names must be filenames within --bin-dir')
++    args.output.mkdir(parents=True, exist_ok=False)
++    identities = {label: {name: hashlib.sha256(path.read_bytes()).hexdigest() for name, path in paths.items()}
++                  for label, paths in [('loaders', variants), ('benchmarks', binaries)]}
++    (args.output / 'identities.json').write_text(json.dumps(identities, indent=2) + '\n')
++    results, samples = [], {}
++    names = list(variants)
++    for repeat in range(args.repeats):
++        offset = repeat % len(names)
++        order = names[offset:] + names[:offset]
++        for bench, binary in binaries.items():
++            for name in order:
++                log = args.output / f'{repeat + 1}-{bench}-{name}.log'
++                result = run([variants[name], binary], log, args.timeout)
++                result.update(repeat=repeat + 1, benchmark=bench, variant=name)
++                results.append(result)
++                (args.output / 'runs.json').write_text(json.dumps(results, indent=2) + '\n')
++                print(json.dumps(result), flush=True)
++                rows = re.findall(r'^BENCH\s+(\S+)\s+(\d+)\s*$', log.read_text(errors='replace'), re.M)
++                if result['exit'] != 0 or not rows or len({r[0] for r in rows}) != len(rows):
++                    raise SystemExit(f'Failed or malformed benchmark: {log}')
++                for case, ns in rows:
++                    samples.setdefault(case, {}).setdefault(name, []).append(int(ns))
++    summary = {}
++    for case, values in samples.items():
++        if set(values) != set(names) or any(len(v) != args.repeats for v in values.values()):
++            raise SystemExit(f'Missing benchmark samples: {case}')
++        medians = {name: statistics.median(v) for name, v in values.items()}
++        summary[case] = {'nanoseconds': values, 'median_nanoseconds': medians,
++                         'time_change_percent': {name: round(100 * (v / medians[names[0]] - 1), 2)
++                                                 for name, v in medians.items()}}
++    (args.output / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
++
++
++if __name__ == '__main__':
++    main()
+diff --git a/scripts/test_compare_benchmarks.py b/scripts/test_compare_benchmarks.py
+new file mode 100644
+index 0000000..f3a5d8c
+--- /dev/null
++++ b/scripts/test_compare_benchmarks.py
+@@ -0,0 +1,36 @@
++"""The comparison runner must wait for target EOF and bound orphaned targets."""
++import importlib.util
++from pathlib import Path
++import sys
++import tempfile
++import unittest
++
++spec = importlib.util.spec_from_file_location('compare', Path(__file__).with_name('compare_benchmarks.py'))
++compare = importlib.util.module_from_spec(spec)
++spec.loader.exec_module(compare)
++
++
++class TargetLifetime(unittest.TestCase):
++    def test_waits_for_child_after_launcher_exits(self):
++        with tempfile.TemporaryDirectory() as directory:
++            log = Path(directory) / 'target.log'
++            result = compare.run([sys.executable, '-c',
++                'import os,time; child=os.fork(); os._exit(0) if child else None; '
++                'time.sleep(.3); print("target finished", flush=True)'], log, 5)
++            self.assertEqual(result['exit'], 0)
++            self.assertGreaterEqual(result['seconds'], .3)
++            self.assertEqual(log.read_text().strip(), 'target finished')
++
++    def test_bounds_child_after_launcher_exits(self):
++        with tempfile.TemporaryDirectory() as directory:
++            log = Path(directory) / 'target.log'
++            result = compare.run([sys.executable, '-c',
++                'import os,time; child=os.fork(); os._exit(0) if child else None; '
++                'time.sleep(30); print("should not finish", flush=True)'], log, .3)
++            self.assertEqual(result['exit'], 124)
++            self.assertLess(result['seconds'], 3)
++            self.assertNotIn('should not finish', log.read_text())
++
++
++if __name__ == '__main__':
++    unittest.main()
 diff --git a/scripts/test_profile_paths.py b/scripts/test_profile_paths.py
 new file mode 100644
 index 0000000..4c37aab
@@ -496,6 +941,69 @@ index 0000000..4c37aab
 +
 +if __name__ == "__main__":
 +    main()
+diff --git a/tests/test_x87_native_state.c b/tests/test_x87_native_state.c
+index efce183..75c981c 100644
+--- a/tests/test_x87_native_state.c
++++ b/tests/test_x87_native_state.c
+@@ -114,9 +114,58 @@ static void test_fxsave_payload(void) {
+     failures += bad != 0;
+ }
+ 
++/* Sparse stacks and all TOP rotations must preserve every occupied slot.
++ * Exercise valid, zero and special tags. Empty payload bytes are undefined. */
++static void test_sparse_payloads(void) {
++    unsigned char seed[512] __attribute__((aligned(16)));
++    unsigned char before[512] __attribute__((aligned(16)));
++    unsigned char after[512] __attribute__((aligned(16)));
++    const uint64_t values[8] = {
++        0, 0x8000000000000000ULL, 0x3ff4000000000000ULL, 0xc002000000000000ULL,
++        1, 0x7ff0000000000000ULL, 0xfff0000000000000ULL, 0x7ff8000000000001ULL,
++    };
++    __asm__ volatile(
++        "fninit; fldl 0(%1); fldl 8(%1); fldl 16(%1); fldl 24(%1)\n"
++        "fldl 32(%1); fldl 40(%1); fldl 48(%1); fldl 56(%1); fxsave %0; fninit"
++        : "=m"(seed)
++        : "r"(values)
++        : "memory", "st", "st(1)", "st(2)", "st(3)", "st(4)", "st(5)", "st(6)", "st(7)");
++    int bad = 0;
++    for (unsigned top = 0; top < 8; ++top) {
++        for (unsigned mask = 0; mask < 256; ++mask) {
++            memcpy(before, seed, sizeof(before));
++            uint16_t status;
++            memcpy(&status, before + 2, 2);
++            status = (status & ~0x3800U) | (top << 11);
++            memcpy(before + 2, &status, 2);
++            before[4] = mask;
++            __asm__ volatile("fxrstor %1; fnop; jmp 1f; 1: fnop; fxsave %0; fninit"
++                             : "=m"(after)
++                             : "m"(before)
++                             : "memory", "st", "st(1)", "st(2)", "st(3)", "st(4)", "st(5)", "st(6)",
++                               "st(7)");
++            if (after[4] != mask || ((after[3] >> 3) & 7) != top) {
++                if (bad++ < 5)
++                    printf("FAIL  sparse tags/TOP mask=%02x top=%u\n", mask, top);
++            }
++            for (unsigned slot = 0; slot < 8; ++slot) {
++                if (!(mask & (1U << ((top + slot) & 7))))
++                    continue;
++                if (memcmp(before + 32 + 16 * slot, after + 32 + 16 * slot, 10)) {
++                    if (bad++ < 5)
++                        printf("FAIL  sparse payload mask=%02x top=%u slot=%u\n", mask, top, slot);
++                }
++            }
++        }
++    }
++    printf("%s  native sparse stacks: 256 masks and eight TOP rotations\n", bad ? "FAIL" : "PASS");
++    failures += bad != 0;
++}
++
+ int main(void) {
+     test_boundary_bits();
+     test_extended_rounding();
+     test_fxsave_payload();
++    test_sparse_payloads();
+     return failures ? 1 : 0;
+ }
 diff --git a/tests/test_x87_signal_context.c b/tests/test_x87_signal_context.c
 index 192376f..4e454fc 100644
 --- a/tests/test_x87_signal_context.c

@@ -66,6 +66,8 @@ struct PerfSettings: Codable {
     /// Which renderer pathway to run. Metal/DXVK reaches FFXI's 30 fps cap with the world
     /// drawing correctly, so it is the default; Vulkan and Classic are fallbacks.
     var renderer: Renderer = .metal
+    /// Native presentation is opt-in and applies only to the Metal renderer.
+    var nativeGameHost = false
 
     static let key = "perf.settings"
 
@@ -87,6 +89,7 @@ struct PerfSettings: Codable {
         esync = b(.esync, false)
         silenceWineDebug = b(.silenceWineDebug, true)
         metalHUD = b(.metalHUD, false)
+        nativeGameHost = b(.nativeGameHost, false)
         disableAppNap = b(.disableAppNap, true)
         fpsDivisorOne = b(.fpsDivisorOne, true)
         // Missing from this list until 2026-08-22, which made the toggle a lie: the value was
@@ -195,6 +198,9 @@ struct PerfSettings: Codable {
         if disableAppNap { env["LSAppNapIsDisabled"] = "1" }
         if largeAddressAware { env["WINE_LARGE_ADDRESS_AWARE"] = "1" }
         for (k, v) in renderer.environment { env[k] = v }
+        if renderer == .mtld3d && nativeGameHost {
+            env["MTLD3D_CONFIG", default: ""] += ";present.nativeHost=true"
+        }
         // The launcher used to rely on DXVK finding dxvk.conf relative to the process working
         // directory, but Ashita and the game executable run from different directories. The
         // missing config made DXVK ignore the intended compiler-thread cap and choose seven

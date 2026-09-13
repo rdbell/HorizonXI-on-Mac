@@ -74,6 +74,11 @@ for name, digest in manifest["files"].items():
 PY
 cp -R "$REPO/vendor/wine-locale-fix" "$APP/Contents/Resources/wine-locale-fix"
 
+# Native-host Wine driver and its exact original. Fail packaging if either
+# identity or the reviewed source patch is missing or damaged.
+python3 "$REPO/scripts/build-wine-native-host.py" --verify "$REPO/vendor/wine-native-host"
+cp -R "$REPO/vendor/wine-native-host" "$APP/Contents/Resources/wine-native-host"
+
 # x87sidecar: the fix for FFXI's x87 floating-point math running ~100x slow under Rosetta (see
 # docs/X87-WALL.md). Signed individually below with its own entitlements -- the app's deep-sign
 # strips them otherwise, and without get-task-allow/cs.debugger it cannot attach to the game.
@@ -82,6 +87,11 @@ if [[ -f "$REPO/vendor/x87sidecar-coop" ]]; then
 import hashlib, json, pathlib, sys
 repo = pathlib.Path(sys.argv[1])
 manifest = json.loads((repo / "vendor/x87sidecar-build.json").read_text())
+if set(manifest["files"]) != {"x87sidecar-coop", "x87sidecar_entitled"}:
+    raise SystemExit("Incomplete tested x87sidecar pair")
+entitlements = repo / "vendor/x87sidecar-entitlements.plist"
+if hashlib.sha256(entitlements.read_bytes()).hexdigest() != manifest["entitlements_sha256"]:
+    raise SystemExit("x87sidecar entitlements checksum mismatch")
 for name, digest in manifest["files"].items():
     if hashlib.sha256((repo / "vendor" / name).read_bytes()).hexdigest() != digest:
         raise SystemExit(f"x87sidecar checksum mismatch: {name}")
@@ -167,6 +177,7 @@ X87SC="$APP/Contents/Resources/x87sidecar_entitled"
 X87COOP="$APP/Contents/Resources/x87sidecar-coop"
 AUDIOFOLLOW="$APP/Contents/Resources/audiofollow.dylib"
 MTLD3D="$APP/Contents/Resources/mtld3d/wine/x86_64-unix/mtld3d.so"
+NATIVEHOST="$APP/Contents/Resources/wine-native-host/winemac.so"
 if [[ -n "${HXI_SIGN_ID:-}" ]]; then
   # The cooperative sidecar has no entitlements, so it can carry the hardened runtime and the
   # secure timestamp the notary demands of nested executables. --timestamp is required here:
@@ -178,12 +189,30 @@ if [[ -n "${HXI_SIGN_ID:-}" ]]; then
   # the whole bundle on this one file.
   [[ -f "$AUDIOFOLLOW" ]] && codesign --force --options runtime --timestamp -s "$HXI_SIGN_ID" "$AUDIOFOLLOW"
   codesign --force --options runtime --timestamp -s "$HXI_SIGN_ID" "$MTLD3D"
+  codesign --force --options runtime --timestamp -s "$HXI_SIGN_ID" "$NATIVEHOST"
 else
-  [[ -f "$X87SC" ]] && codesign --force -s - \
-    --entitlements "$REPO/vendor/x87sidecar-entitlements.plist" "$X87SC" >/dev/null 2>&1 || true
+  # Retain the exact tested code signatures and entitlement set for local builds.
+  [[ -f "$X87SC" ]] && codesign --verify --strict "$X87SC"
+  [[ -f "$X87COOP" ]] && codesign --verify --strict "$X87COOP"
   [[ -f "$AUDIOFOLLOW" ]] && codesign --force -s - "$AUDIOFOLLOW" >/dev/null 2>&1 || true
   codesign --force -s - "$MTLD3D"
+  codesign --force -s - "$NATIVEHOST"
 fi
+
+# Developer ID signing changes sidecar bytes. Keep the original tested identities
+# alongside the packaged ones; ad-hoc builds retain both exact baseline binaries.
+python3 - "$APP/Contents/Resources" <<'PYX87'
+import hashlib, json, pathlib, sys
+root = pathlib.Path(sys.argv[1])
+path = root / "x87sidecar-build.json"
+manifest = json.loads(path.read_text())
+manifest["vendor_files"] = dict(manifest["files"])
+for name in manifest["files"]:
+    manifest["files"][name] = hashlib.sha256((root / name).read_bytes()).hexdigest()
+path.write_text(json.dumps(manifest, indent=2) + "\n")
+PYX87
+[[ -f "$X87SC" ]] && codesign --verify --strict "$X87SC"
+[[ -f "$X87COOP" ]] && codesign --verify --strict "$X87COOP"
 
 # Signing changes the Mach-O bytes. Retain the tested unsigned hash and record the installed
 # hash before sealing the app, so the packaged manifest can verify the loaded library too.
@@ -197,6 +226,19 @@ manifest["unsigned_unix_sha256"] = manifest["files"][name]
 manifest["files"][name] = hashlib.sha256((root / name).read_bytes()).hexdigest()
 path.write_text(json.dumps(manifest, indent=2) + "\n")
 PY
+# Keep rollback bytes untouched. Re-signing the original would stop matching
+# the pinned installed Wine driver. Refresh only the signed candidate identity.
+python3 - "$APP/Contents/Resources/wine-native-host" <<'PYHOST'
+import hashlib, json, pathlib, sys
+root = pathlib.Path(sys.argv[1])
+path = root / "build.json"
+manifest = json.loads(path.read_text())
+manifest["unsigned_replacement"] = manifest["replacement"]
+manifest["replacement"] = hashlib.sha256((root / "winemac.so").read_bytes()).hexdigest()
+path.write_text(json.dumps(manifest, indent=2) + "\n")
+PYHOST
+python3 "$REPO/scripts/build-wine-native-host.py" --verify "$APP/Contents/Resources/wine-native-host"
+codesign --verify --strict "$NATIVEHOST"
 if [[ -n "${HXI_SIGN_ID:-}" ]]; then
   codesign --force --options runtime -s "$HXI_SIGN_ID" "$APP"
 else

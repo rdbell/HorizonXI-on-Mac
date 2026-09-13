@@ -1325,6 +1325,13 @@ struct ContentView: View {
             .onChange(of: perf.renderer) { _ in perf.save() }
             Text(perf.renderer.blurb)
                 .font(.caption2).foregroundStyle(Vana.muted).fixedSize(horizontal: false, vertical: true)
+            if perf.renderer == .mtld3d {
+                Toggle("Native game window", isOn: $perf.nativeGameHost)
+                    .onChange(of: perf.nativeGameHost) { _ in perf.save() }
+                Text("Use macOS window controls. Press Command-comma while playing for graphics settings. Applies on the next launch.")
+                    .font(.caption2).foregroundStyle(Vana.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 

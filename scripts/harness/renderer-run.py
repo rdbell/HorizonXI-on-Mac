@@ -172,6 +172,10 @@ class Snapshot:
         paths += [menu.PREFIX / "drive_c/windows" / bits / name
                   for bits in ("syswow64", "system32")
                   for name in ("d3d11.dll", "d3d10core.dll", "dxgi.dll", "winemetal.dll")]
+        # Native hosting changes the selected runtime driver before Wine starts.
+        # Save both bytes and ownership intent so enable/disable tests restore them too.
+        for driver in sorted(menu.RUNTIMES.glob("*/wine/lib/wine/x86_64-unix/winemac.so")):
+            paths += [driver, driver.with_name("winemac-native-host-v1.json")]
         entries = []
         for index, path in enumerate(paths):
             entry = {"path": str(path)}
@@ -296,6 +300,7 @@ def stage_app(options: argparse.Namespace) -> Path:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--native-host", choices=("on", "off"), help="validate the packaged native window preference; requires --installed-mtld3d")
     parser.add_argument("--restore", type=Path)
     parser.add_argument("--renderer-bundle", type=Path)
     parser.add_argument("--launcher-binary", type=Path,
@@ -325,6 +330,11 @@ def main() -> int:
     parser.add_argument("--dump", action="store_true", help="F12 dump at character selection")
     parser.add_argument("--dump-scene", help="F12 dump at a named scene screenshot, such as city-settled")
     options, forwarded = parser.parse_known_args()
+    if options.native_host and (any("FFXI_ON_MAC_TEST_" in arg for arg in forwarded)
+            or any(key.startswith("FFXI_ON_MAC_TEST_") for key in os.environ)):
+        parser.error("Packaged native-host validation uses release runtime/prefix paths; private test-launcher overrides are not supported")
+    if options.native_host and not options.installed_mtld3d:
+        parser.error("--native-host requires --installed-mtld3d")
     if options.installed_mtld3d and (options.renderer_bundle or options.converter or options.dxmt_bundle):
         parser.error("--installed-mtld3d cannot replace renderer resources")
     if options.installed_mtld3d and any(any(key in arg for key in
@@ -370,6 +380,12 @@ def main() -> int:
                 self.record["shader_cache_seed_sha256"] = digest(options.shader_cache)
             prefs = plistlib.loads(checked(["defaults", "export", menu.APP_BUNDLE_ID, "-"]).encode())
             perf = json.loads(prefs.get("perf.settings", b"{}"))
+            if options.native_host:
+                perf["renderer"] = "mtld3d"
+                perf["nativeGameHost"] = options.native_host == "on"
+                checked(["defaults", "write", menu.APP_BUNDLE_ID, "perf.settings", "-data",
+                         json.dumps(perf).encode().hex()])
+                self.record["native_host_requested"] = perf["nativeGameHost"]
             if options.installed_mtld3d:
                 if perf.get("renderer") != "mtld3d":
                     raise RuntimeError("Select mtld3d in the installed launcher before validation")
@@ -479,6 +495,11 @@ def main() -> int:
                     "color.hdr.enable": "false", "render.scale": "1", "present.maxFps": "0",
                     "render.mergePasses": "true", "render.submitDraws": "0"}.items()):
                     raise RuntimeError("Normal launcher did not select the tested mtld3d configuration")
+                if options.native_host:
+                    requested = "true" if options.native_host == "on" else "false"
+                    if config.get("present.nativeHost", "false") != requested:
+                        raise RuntimeError("Native game window preference did not reach the renderer")
+                    self.record["native_host_config_verified"] = requested == "true"
                 self.record["installed_renderer_environment"] = environment
             self.record["graphics_at_launch"] = graphics_values(
                 (self.game_dir / "config/boot/lsb-docker.ini").read_text())
@@ -564,7 +585,7 @@ def main() -> int:
                 paths = sorted({line[1:] for line in loaded.splitlines() if line.startswith("n")
                                 and Path(line[1:]).name.lower() in
                                 ("d3d8.dll", "d3d9.dll", "mtld3d.dll", "mtld3d.so", "libmoltenvk.dylib",
-                                 "d3d11.dll", "dxgi.dll", "winemetal.dll", "winemetal.so")})
+                                 "d3d11.dll", "dxgi.dll", "winemetal.dll", "winemetal.so", "winemac.so")})
                 identities = [{"path": path, "sha256": digest(Path(path)) if Path(path).is_file() else None}
                               for path in paths]
                 (self.session_dir / "renderer-loaded-files.json").write_text(json.dumps(identities, indent=2) + "\n")
@@ -579,6 +600,22 @@ def main() -> int:
                             raise RuntimeError(f"Installed mtld3d checksum mismatch: {name}")
                     expected.update({Path(name).name: checksum for name, checksum in manifest["files"].items()
                                      if name.startswith(("native/", "wine/"))})
+                if options.native_host:
+                    host_bundle = resources / "wine-native-host"
+                    manifest = json.loads((host_bundle / "build.json").read_text())
+                    field, name = (("replacement", "winemac.so") if options.native_host == "on"
+                                   else ("original", "original/winemac.so"))
+                    expected_hash = manifest[field]
+                    if digest(host_bundle / name) != expected_hash:
+                        raise RuntimeError("Packaged native window driver checksum mismatch")
+                    expected_path = menu.RUNTIMES / manifest["runtime"] / "wine/lib/wine/x86_64-unix/winemac.so"
+                    if not any(Path(row["path"]).resolve() == expected_path.resolve()
+                               and row["sha256"] == expected_hash for row in identities):
+                        raise RuntimeError("Loaded Wine display driver does not match the native window preference")
+                    expected["winemac.so"] = expected_hash
+                    self.record["native_host_driver_verified"] = {
+                        "enabled": options.native_host == "on", "path": str(expected_path), "sha256": expected_hash,
+                    }
                 if options.renderer_bundle:
                     expected.update({"mtld3d.dll": digest(options.renderer_bundle / "wine/i386-windows/mtld3d.dll"),
                                      "mtld3d.so": digest(options.renderer_bundle / "wine/x86_64-unix/mtld3d.so")})

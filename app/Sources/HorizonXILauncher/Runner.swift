@@ -570,6 +570,8 @@ final class Runner: ObservableObject {
             RendererSetup.relinkStrayDylibs(install) { log($0) }
             do {
                 try WineLocaleFix.apply(to: WineRuntime.root(in: WineRuntime.applicationSupport), log: log)
+                try WineNativeHost.configure(enabled: perf.nativeGameHost && perf.renderer == .mtld3d,
+                                             wine: gameWine, log: log)
                 try RendererSetup.apply(perf.renderer, to: launchInstall) { log($0) }
             } catch {
                 await MainActor.run { [weak self] in
