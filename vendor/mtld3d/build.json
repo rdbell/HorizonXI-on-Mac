@@ -4,16 +4,30 @@
   "perf": false,
   "frame_pointers": false,
   "rust": "1.97.1",
-  "created_utc": "2026-09-12T21:44:05.351633+00:00",
-  "patch_sha256": "23a5ca7f57df85006a7a3037fcc02f8112fcba0317f0f1cba3cdd52fbc498ca1",
+  "created_utc": "2026-09-13T02:30:16.993011+00:00",
+  "patch_sha256": "71657aaaad937afaaf799980e220e0f641075155bb5b6060e7ee4b5021866dde",
   "files": {
     "native/i386-windows/d3d9.dll": "4a159a9b023c0c685dec4a5255c7bfb38ad84983cf66b3938270754a4e53a9e7",
     "wine/i386-windows/mtld3d.dll": "88328434b273c72525380e1f271e07bf718b47ee8e48623a82e1ce0ed6191a82",
-    "wine/x86_64-unix/mtld3d.so": "c1dffa951d87e02a94aecc69c9b2090c20d16df7845c1e2c7b13c6e8559c683d",
+    "wine/x86_64-unix/mtld3d.so": "44f9f6748fb1be7f3415b82e444a9d877d0ded59cd4578e25a9f25936e82a609",
     "prefix-markers/syswow64/mtld3d.dll": "a74c0363a54b92db5deb731533e27d1248b9e51bc770dac281f8925e518123dc",
     "prefix-markers/system32/mtld3d.dll": "602de35e20ca24d8d44eddc4e7a1d24a428e80fedc8aa012666cb35caa24a1af"
   },
-  "parent_patch_sha256": "cb9a658d41631c59ca9c12ee6c58da4e926ddac5fe3965c554f8e653b487b493",
-  "change": "Opt-in native game host with live session settings and versioned Wine lifecycle integration",
-  "source_head": "b2e419787617b8b3658320aac5c7b1719afc8a59"
+  "parent_patch_sha256": "23a5ca7f57df85006a7a3037fcc02f8112fcba0317f0f1cba3cdd52fbc498ca1",
+  "change": "Native session picture controls: sharpening, color, HDR, color accuracy, FXAA and bloom",
+  "source_head": "7dd9c8c1c7c7785bd49fa8e6202692d965615cd7",
+  "source_dirty": false,
+  "validation": {
+    "production_x86_64_build": "passed",
+    "automated_tests": "not run at user request",
+    "runtime": "user manual playtest accepted as baseline",
+    "picture_shader_compilation": "no independent compiler validation; effects evaluated by user"
+  },
+  "tested_package_source_patch_sha256": "923e72bfd821fba360f8a0efca54736cee24d878bea05bf3358ab1aa8fe92dee",
+  "baseline": {
+    "name": "native-picture-controls-20260913",
+    "accepted_utc": "20260913T023722Z",
+    "signed_renderer_sha256": "99fd358a792617c2c1fe6a22df9eab37b32a352e45900569fcc87aeef03fef04",
+    "record": "docs/baselines/native-picture-controls-20260913.json"
+  }
 }
