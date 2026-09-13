@@ -164,18 +164,85 @@ index 0000000..70770df
 +and ten harness tests passing. Ad-hoc package signature verification passed.
 +Developer ID notarization and long-session gameplay are not established by
 +these bounded local tests.
+diff --git a/docs/PERSISTENT-GRAPHICS.md b/docs/PERSISTENT-GRAPHICS.md
+new file mode 100644
+index 0000000..2b91e5e
+--- /dev/null
++++ b/docs/PERSISTENT-GRAPHICS.md
+@@ -0,0 +1,59 @@
++# Persistent native graphics settings
++
++## Implementation
++
++Save frame limit, picture effects, HDR request and color accuracy when edited in
++the native Graphics Settings panel. Restore them once before the native game
++window appears, without requiring the panel to be opened. Device resets keep
++the current settings. Reset effects saves neutral picture values; it does not
++reset frame limit or display choices.
++
++Use the macOS preferences suite `org.batesai.ffxi.graphics`. This gives the Wine
++game process a stable domain independent of its executable name or bundle path.
++Preferences belong to the macOS user and apply across game installs. Unsaved
++frame/display values inherit the existing configuration. Unsaved picture fields
++use neutral defaults. Persist the requested HDR value, not available headroom.
++
++Picture and display groups are each stored as a property-list dictionary, with
++versioned keys. Editing one group does not overwrite the others. Numeric values
++are validated before use; picture bounds still use the existing clamping path.
++Saving uses NSUserDefaults, which updates its cache immediately and persists
++asynchronously through macOS. It does not rely on a graceful game shutdown.
++
++## Rules check
++
++- Work starts from the accepted picture-controls commits, excluding the shelved
++  interpolation experiment.
++- Use existing objc2 Foundation bindings and one initialization guard. No new
++  dependency, environment variable, wire field or Clone/Copy derive.
++- UI callbacks save; rendering never reads or writes preferences per frame.
++- Native Foundation wiring stays in the native-host module. There are no new
++  selectors, lint suppressions or shader changes.
++- Keep the installed app and prior packages intact; build a separate candidate.
++  No game launch, desktop control, commit or push is part of this change.
++
++## Verification
++
++Four focused native Foundation tests passed using Rust 1.97.1. They covered
++restoring all picture values through a fresh defaults instance, unset versus
++explicit zero/false, malformed values, group isolation, and saving neutral
++values after reset. Each test used and cleaned up a separate temporary domain;
++the user's graphics preferences were never read or written by the tests.
++
++The production x86_64 renderer build passed. No shaders changed. No Wine or game
++process was launched or stopped. A full game quit/relaunch check remains for
++manual testing; the tests establish preference round trips, not gameplay.
++
++## Candidate and rollback
++
++The candidate is `packaged-persistent-graphics/FFXI-on-Mac.app` beside the accepted
++`packaged-picture-controls` package. It excludes the shelved interpolation code.
++The installed app remains unchanged. For manual testing, use local Docker LSB
++with Hxitest, adjust values in Command-comma, quit, and launch the candidate again.
++The values should already apply before reopening the panel.
++
++Preferences are saved when edited in this new build. Values from an older
++process that only held them in memory cannot be recovered after that process
++exits. The first launch keeps existing defaults until the user saves choices.
++To return to the old renderer, quit the candidate and run the installed app.
++It ignores the new preferences; returning to this build reads them again.
 diff --git a/docs/PICTURE-CONTROLS.md b/docs/PICTURE-CONTROLS.md
 new file mode 100644
-index 0000000..a5e7b1a
+index 0000000..5da11c6
 --- /dev/null
 +++ b/docs/PICTURE-CONTROLS.md
-@@ -0,0 +1,129 @@
+@@ -0,0 +1,131 @@
 +# Native picture controls
 +
 +Command-comma opens Graphics Settings when the native game window is enabled.
-+The controls apply to the current process session. Closing the panel or
-+resetting the D3D device preserves them; restarting the game restores the
-+startup configuration and neutral effects. No launcher settings are rewritten.
++The controls save automatically across launches using macOS preferences.
++Closing the panel or resetting the D3D device preserves the live values; the
++next native game window restores saved choices without reopening Settings.
++Unsaved values inherit startup configuration and neutral effects. No launcher
++settings are rewritten. See [persistence details](PERSISTENT-GRAPHICS.md).
 +
 +| Control | Range and initial value | Behavior |
 +| --- | --- | --- |
@@ -1212,7 +1279,7 @@ index 0000000..be32448
 ++    return 1;
 ++}
 diff --git a/unix/Cargo.toml b/unix/Cargo.toml
-index c07f342..f2e5221 100644
+index c07f342..506df87 100644
 --- a/unix/Cargo.toml
 +++ b/unix/Cargo.toml
 @@ -35,6 +35,12 @@ objc2 = { version = "0.6", features = ["disable-encoding-assertions"] }
@@ -1228,6 +1295,16 @@ index c07f342..f2e5221 100644
      "NSColorSpace",
      "NSEvent",
      "NSGraphics",
+@@ -53,6 +59,9 @@ objc2-foundation = { version = "0.3", features = [
+     "NSString",
+     "NSURL",
+     "NSProcessInfo",
++    "NSUserDefaults",
++    "NSValue",
++    "NSDictionary",
+     "NSNotification",
+     "NSOperation",
+     "block2",
 diff --git a/unix/shared/src/ffi_boundary.rs b/unix/shared/src/ffi_boundary.rs
 index ee5bd6b..4e6b6f6 100644
 --- a/unix/shared/src/ffi_boundary.rs
@@ -1792,10 +1869,10 @@ index 8e87d49..e04ee67 100644
              self.ensure_content(Content::Sprite { hash, mode, peak });
 diff --git a/unix/unix/src/metal/macdrv/native_host.rs b/unix/unix/src/metal/macdrv/native_host.rs
 new file mode 100644
-index 0000000..524cd65
+index 0000000..3a540d2
 --- /dev/null
 +++ b/unix/unix/src/metal/macdrv/native_host.rs
-@@ -0,0 +1,395 @@
+@@ -0,0 +1,397 @@
 +//! Native window ownership with Wine retaining game input and Metal presentation.
 +//!
 +//! All state and callbacks live on the `AppKit` main thread. The child remains a
@@ -1828,6 +1905,7 @@ index 0000000..524cd65
 +use crate::LOG_TARGET;
 +
 +mod settings;
++mod preferences;
 +
 +static HOST_VIEW: AtomicUsize = AtomicUsize::new(0);
 +
@@ -2018,6 +2096,7 @@ index 0000000..524cd65
 +        warn!(target: LOG_TARGET, "native host: child or fullscreen window is unsupported; keeping Wine window");
 +        return;
 +    }
++    preferences::restore(mtm);
 +    let content = child.contentRectForFrameRect(child.frame());
 +    let style = NSWindowStyleMask::Titled
 +        | NSWindowStyleMask::Closable
@@ -2191,12 +2270,329 @@ index 0000000..524cd65
 +pub fn owns(view: usize) -> bool {
 +    view != 0 && HOST_VIEW.load(Ordering::Acquire) == view
 +}
+diff --git a/unix/unix/src/metal/macdrv/native_host/preferences.rs b/unix/unix/src/metal/macdrv/native_host/preferences.rs
+new file mode 100644
+index 0000000..74433bb
+--- /dev/null
++++ b/unix/unix/src/metal/macdrv/native_host/preferences.rs
+@@ -0,0 +1,175 @@
++//! macOS persistence for the native graphics panel, outside the rendering loop.
++
++use std::sync::{Once, atomic::Ordering};
++
++use objc2::{AllocAnyThread, rc::Retained, runtime::AnyObject};
++use objc2_foundation::{MainThreadMarker, NSDictionary, NSNumber, NSString, NSUserDefaults};
++
++use super::{super as macdrv, FRAME_LIMIT};
++use crate::metal::picture::{self, Picture};
++
++const SUITE: &str = "org.batesai.ffxi.graphics";
++const PICTURE: &str = "picture.v1";
++const DISPLAY: &str = "display.v1";
++const FRAME: &str = "frameLimit.v1";
++static RESTORED: Once = Once::new();
++
++fn open() -> Option<Retained<NSUserDefaults>> {
++    let result = NSUserDefaults::initWithSuiteName(
++        NSUserDefaults::alloc(),
++        Some(&NSString::from_str(SUITE)),
++    );
++    if result.is_none() {
++        log::warn!(target: "mtld3d::preferences", "Cannot open graphics preferences; changes apply to this run only.");
++    }
++    result
++}
++
++/// Restore before hosting the window; later device resets keep live overrides.
++pub fn restore(mtm: MainThreadMarker) {
++    RESTORED.call_once(|| {
++        let Some(defaults) = open() else { return };
++        picture::update(read_picture(&defaults));
++        if let Some(limit) = read_frame(&defaults) {
++            FRAME_LIMIT.store(limit, Ordering::Relaxed);
++            let pacing = macdrv::unpack_pacing(macdrv::PRESENT_PACING_BITS.load(Ordering::Relaxed));
++            macdrv::set_display_sync_enabled(mtld3d_shared::MetalHandle::NULL, &pacing);
++        }
++        let (hdr, accurate) = read_display(&defaults);
++        if hdr.is_some() || accurate.is_some() {
++            let current = macdrv::session_display();
++            macdrv::set_session_display(mtm, hdr.unwrap_or(current.0), accurate.unwrap_or(current.1));
++        }
++        log::info!(target: "mtld3d::preferences", "Restored native graphics preferences from {SUITE}.");
++    });
++}
++
++pub fn save_picture() -> bool {
++    let Some(defaults) = open() else { return false };
++    write_picture(&defaults, picture::snapshot());
++    true
++}
++
++pub fn save_display(hdr: bool, accurate: bool) -> bool {
++    let Some(defaults) = open() else { return false };
++    write_group(
++        &defaults,
++        DISPLAY,
++        &[
++            ("hdr", f64::from(u8::from(hdr))),
++            ("accurate", f64::from(u8::from(accurate))),
++        ],
++    );
++    true
++}
++
++pub fn save_frame(limit: u32) -> bool {
++    let Some(defaults) = open() else { return false };
++    defaults.setDouble_forKey(f64::from(limit), &NSString::from_str(FRAME));
++    true
++}
++
++fn write_picture(defaults: &NSUserDefaults, value: Picture) {
++    write_group(
++        defaults,
++        PICTURE,
++        &[
++            ("sharpen", f64::from(value.sharpen)),
++            ("exposure", f64::from(value.exposure)),
++            ("contrast", f64::from(value.contrast)),
++            ("saturation", f64::from(value.saturation)),
++            ("temperature", f64::from(value.temperature)),
++            ("bloom", f64::from(value.bloom)),
++            ("bloomThreshold", f64::from(value.bloom_threshold)),
++            ("bloomRadius", f64::from(value.bloom_radius)),
++            ("fxaa", f64::from(u8::from(value.fxaa))),
++        ],
++    );
++}
++
++fn write_group(defaults: &NSUserDefaults, group: &str, values: &[(&str, f64)]) {
++    let keys: Vec<_> = values
++        .iter()
++        .map(|(key, _)| NSString::from_str(key))
++        .collect();
++    let numbers: Vec<_> = values
++        .iter()
++        .map(|(_, value)| NSNumber::new_f64(*value))
++        .collect();
++    let keys: Vec<_> = keys.iter().map(|key| &**key).collect();
++    let numbers: Vec<_> = numbers.iter().map(|value| &**value).collect();
++    let dictionary = NSDictionary::from_slices(&keys, &numbers);
++    // SAFETY: immutable NSString keys and finite NSNumber values form a valid property list.
++    // One dictionary replacement prevents a partially updated group from being read.
++    unsafe { defaults.setObject_forKey(Some(&dictionary), &NSString::from_str(group)) };
++}
++
++fn number(value: Option<Retained<AnyObject>>) -> Option<f64> {
++    let value = value?;
++    let Some(number) = value.downcast_ref::<NSNumber>() else {
++        log::warn!(target: "mtld3d::preferences", "Ignoring a nonnumeric graphics preference.");
++        return None;
++    };
++    let number = number.doubleValue();
++    if !number.is_finite() {
++        log::warn!(target: "mtld3d::preferences", "Ignoring a nonfinite graphics preference.");
++        return None;
++    }
++    Some(number)
++}
++
++fn group_number(dictionary: Option<&NSDictionary<NSString, AnyObject>>, key: &str) -> Option<f64> {
++    number(dictionary?.objectForKey(&NSString::from_str(key)))
++}
++
++fn flag(value: Option<f64>) -> Option<bool> {
++    match value? {
++        0.0 => Some(false),
++        1.0 => Some(true),
++        _ => {
++            log::warn!(target: "mtld3d::preferences", "Ignoring an invalid graphics toggle.");
++            None
++        }
++    }
++}
++
++fn read_picture(defaults: &NSUserDefaults) -> Picture {
++    let dictionary = defaults.dictionaryForKey(&NSString::from_str(PICTURE));
++    let neutral = Picture::neutral();
++    let scalar = |key, fallback| {
++        group_number(dictionary.as_deref(), key)
++            .filter(|value| value.abs() <= f64::from(f32::MAX))
++            .map_or(fallback, macdrv::bounded_cast::f64_to_f32)
++    };
++    Picture {
++        sharpen: scalar("sharpen", neutral.sharpen),
++        exposure: scalar("exposure", neutral.exposure),
++        contrast: scalar("contrast", neutral.contrast),
++        saturation: scalar("saturation", neutral.saturation),
++        temperature: scalar("temperature", neutral.temperature),
++        bloom: scalar("bloom", neutral.bloom),
++        bloom_threshold: scalar("bloomThreshold", neutral.bloom_threshold),
++        bloom_radius: scalar("bloomRadius", neutral.bloom_radius),
++        fxaa: flag(group_number(dictionary.as_deref(), "fxaa")).unwrap_or(neutral.fxaa),
++    }
++}
++
++fn read_display(defaults: &NSUserDefaults) -> (Option<bool>, Option<bool>) {
++    let dictionary = defaults.dictionaryForKey(&NSString::from_str(DISPLAY));
++    (
++        flag(group_number(dictionary.as_deref(), "hdr")),
++        flag(group_number(dictionary.as_deref(), "accurate")),
++    )
++}
++
++fn read_frame(defaults: &NSUserDefaults) -> Option<u32> {
++    let value = number(defaults.objectForKey(&NSString::from_str(FRAME)))?;
++    if !(0.0..=1000.0).contains(&value) || value.fract() != 0.0 {
++        log::warn!(target: "mtld3d::preferences", "Ignoring an invalid saved frame limit.");
++        return None;
++    }
++    u32::try_from(macdrv::bounded_cast::f64_to_u64_saturating(value)).ok()
++}
++
++#[cfg(test)]
++mod tests;
+diff --git a/unix/unix/src/metal/macdrv/native_host/preferences/tests.rs b/unix/unix/src/metal/macdrv/native_host/preferences/tests.rs
+new file mode 100644
+index 0000000..9fb242a
+--- /dev/null
++++ b/unix/unix/src/metal/macdrv/native_host/preferences/tests.rs
+@@ -0,0 +1,130 @@
++//! Foundation preference round trips use isolated domains, never game preferences.
++
++use std::sync::atomic::{AtomicU64, Ordering};
++
++use super::*;
++
++static NEXT_DOMAIN: AtomicU64 = AtomicU64::new(0);
++
++struct Domain {
++    name: Retained<NSString>,
++    defaults: Retained<NSUserDefaults>,
++}
++
++impl Domain {
++    fn new() -> Self {
++        let name = NSString::from_str(&format!(
++            "org.batesai.ffxi.graphics.tests.{}.{}",
++            std::process::id(),
++            NEXT_DOMAIN.fetch_add(1, Ordering::Relaxed)
++        ));
++        let defaults =
++            NSUserDefaults::initWithSuiteName(NSUserDefaults::alloc(), Some(&name)).unwrap();
++        defaults.removePersistentDomainForName(&name);
++        Self { name, defaults }
++    }
++
++    fn reopen(&self) -> Retained<NSUserDefaults> {
++        NSUserDefaults::initWithSuiteName(NSUserDefaults::alloc(), Some(&self.name)).unwrap()
++    }
++}
++
++impl Drop for Domain {
++    fn drop(&mut self) {
++        self.defaults.removePersistentDomainForName(&self.name);
++    }
++}
++
++#[test]
++fn fresh_domain_preserves_unset_overrides_and_neutral_picture() {
++    let domain = Domain::new();
++    assert_eq!(read_frame(&domain.defaults), None);
++    assert_eq!(read_display(&domain.defaults), (None, None));
++    let picture = read_picture(&domain.defaults);
++    assert_eq!(picture.contrast, 1.0);
++    assert_eq!(picture.saturation, 1.0);
++    assert_eq!(picture.bloom_radius, 3.0);
++    assert_eq!(picture.sharpen, 0.0);
++    assert!(!picture.fxaa);
++}
++
++#[test]
++fn all_picture_values_round_trip_through_fresh_defaults_instance() {
++    let domain = Domain::new();
++    let value = Picture {
++        sharpen: 0.25,
++        exposure: -0.5,
++        contrast: 1.25,
++        saturation: 0.75,
++        temperature: -0.25,
++        bloom: 0.5,
++        bloom_threshold: 0.25,
++        bloom_radius: 6.0,
++        fxaa: true,
++    };
++    write_picture(&domain.defaults, value);
++    let restored = read_picture(&domain.reopen());
++    assert_eq!(restored.sharpen, value.sharpen);
++    assert_eq!(restored.exposure, value.exposure);
++    assert_eq!(restored.contrast, value.contrast);
++    assert_eq!(restored.saturation, value.saturation);
++    assert_eq!(restored.temperature, value.temperature);
++    assert_eq!(restored.bloom, value.bloom);
++    assert_eq!(restored.bloom_threshold, value.bloom_threshold);
++    assert_eq!(restored.bloom_radius, value.bloom_radius);
++    assert_eq!(restored.fxaa, value.fxaa);
++}
++
++#[test]
++fn explicit_zero_false_and_reset_survive_without_erasing_other_groups() {
++    let domain = Domain::new();
++    domain
++        .defaults
++        .setDouble_forKey(0.0, &NSString::from_str(FRAME));
++    write_group(
++        &domain.defaults,
++        DISPLAY,
++        &[("hdr", 0.0), ("accurate", 1.0)],
++    );
++    let mut adjusted = Picture::neutral();
++    adjusted.sharpen = 0.8;
++    adjusted.fxaa = true;
++    write_picture(&domain.defaults, adjusted);
++    write_picture(&domain.defaults, Picture::neutral());
++    let reopened = domain.reopen();
++    assert_eq!(read_frame(&reopened), Some(0));
++    assert_eq!(read_display(&reopened), (Some(false), Some(true)));
++    assert_eq!(read_picture(&reopened).sharpen, 0.0);
++    assert!(!read_picture(&reopened).fxaa);
++    write_group(
++        &domain.defaults,
++        DISPLAY,
++        &[("hdr", 1.0), ("accurate", 0.0)],
++    );
++    assert_eq!(read_display(&domain.reopen()), (Some(true), Some(false)));
++    assert_eq!(read_frame(&domain.reopen()), Some(0));
++}
++
++#[test]
++fn malformed_preferences_do_not_become_accidental_overrides() {
++    let domain = Domain::new();
++    let key = NSString::from_str(FRAME);
++    for invalid in [-1.0, 1001.0, 59.5] {
++        domain.defaults.setDouble_forKey(invalid, &key);
++        assert_eq!(read_frame(&domain.defaults), None);
++    }
++    for valid in [0_u32, 60, 120, 1000] {
++        domain.defaults.setDouble_forKey(f64::from(valid), &key);
++        assert_eq!(read_frame(&domain.defaults), Some(valid));
++    }
++    // SAFETY: strings are valid property-list objects, although invalid for this preference.
++    unsafe {
++        domain
++            .defaults
++            .setObject_forKey(Some(&NSString::from_str("not a frame limit")), &key)
++    };
++    assert_eq!(read_frame(&domain.defaults), None);
++    write_group(&domain.defaults, DISPLAY, &[("hdr", 7.0)]);
++    assert_eq!(read_display(&domain.defaults), (None, None));
++    assert_eq!(number(Some(NSNumber::new_f64(f64::NAN).into())), None);
++}
 diff --git a/unix/unix/src/metal/macdrv/native_host/settings.rs b/unix/unix/src/metal/macdrv/native_host/settings.rs
 new file mode 100644
-index 0000000..0abffa9
+index 0000000..849d708
 --- /dev/null
 +++ b/unix/unix/src/metal/macdrv/native_host/settings.rs
-@@ -0,0 +1,285 @@
+@@ -0,0 +1,284 @@
 +//! Session presentation controls in a native, nonmodal settings window.
 +
 +use core::{ptr::NonNull, sync::atomic::Ordering};
@@ -2218,7 +2614,7 @@ index 0000000..0abffa9
 +
 +use super::{
 +    super::{PRESENT_PACING_BITS, set_display_sync_enabled, unpack_pacing},
-+    FRAME_LIMIT, current, frame_limit,
++    FRAME_LIMIT, current, frame_limit, preferences,
 +};
 +
 +mod picture_controls;
@@ -2274,14 +2670,13 @@ index 0000000..0abffa9
 +            FRAME_LIMIT.store(value, Ordering::Relaxed);
 +            let pacing = unpack_pacing(PRESENT_PACING_BITS.load(Ordering::Relaxed));
 +            set_display_sync_enabled(mtld3d_shared::MetalHandle::NULL, &pacing);
-+            settings
-+                .status
-+                .setStringValue(&NSString::from_str(if value == 0 {
-+                    "Frame limit removed for this session."
-+                } else {
-+                    "Frame limit applied for this session."
-+                }));
-+            log::info!(target: crate::LOG_TARGET, "native host: session frame limit set to {value}");
++            let message = if preferences::save_frame(value) {
++                "Frame limit saved for future launches."
++            } else {
++                "Frame limit applied, but preferences could not be saved."
++            };
++            settings.status.setStringValue(&NSString::from_str(message));
++            log::info!(target: crate::LOG_TARGET, "native host: frame limit set to {value}");
 +        }
 +    }
 +
@@ -2292,7 +2687,7 @@ index 0000000..0abffa9
 +            let settings = host.settings.borrow();
 +            let Some(settings) = settings.as_ref() else { return };
 +            let status = settings.picture.changed(sender);
-+            settings.status.setStringValue(&NSString::from_str(status));
++            settings.status.setStringValue(&NSString::from_str(&status));
 +        }
 +    }
 +
@@ -2444,7 +2839,7 @@ index 0000000..0abffa9
 +            NSSize::new(576.0, 48.0),
 +        ));
 +        let status = NSTextField::labelWithString(
-+            &NSString::from_str("Changes apply to the current session."),
++            &NSString::from_str("Changes save automatically for future launches."),
 +            mtm,
 +        );
 +        status.setFrame(NSRect::new(
@@ -2484,10 +2879,10 @@ index 0000000..0abffa9
 +}
 diff --git a/unix/unix/src/metal/macdrv/native_host/settings/picture_controls.rs b/unix/unix/src/metal/macdrv/native_host/settings/picture_controls.rs
 new file mode 100644
-index 0000000..88734da
+index 0000000..a91374d
 --- /dev/null
 +++ b/unix/unix/src/metal/macdrv/native_host/settings/picture_controls.rs
-@@ -0,0 +1,154 @@
+@@ -0,0 +1,162 @@
 +//! Native controls for session picture adjustments.
 +
 +use objc2::{MainThreadOnly, rc::Retained, runtime::Sel};
@@ -2497,7 +2892,7 @@ index 0000000..88734da
 +};
 +use objc2_foundation::{NSPoint, NSRect, NSSize, NSString};
 +
-+use super::SettingsDelegate;
++use super::{SettingsDelegate, preferences};
 +use crate::metal::{
 +    macdrv,
 +    picture::{self, Picture},
@@ -2573,20 +2968,24 @@ index 0000000..88734da
 +        reset.setFrame(rect(24.0, 137.0, 150.0, 30.0));
 +        content.addSubview(&reset);
 +        let note = NSTextField::labelWithString(&NSString::from_str(
-+            "Effects also affect game text, menus and nameplates.\nSharpening and bloom are off at 0. Neutral contrast/saturation: 1.\nAccurate colors preserves sRGB intent; off uses the existing vivid mode.\nAll changes last for this game session only."
++            "Effects also affect game text, menus and nameplates.\nSharpening and bloom are off at 0. Neutral contrast/saturation: 1.\nAccurate colors preserves sRGB intent; off uses the existing vivid mode.\nChanges save automatically for future launches."
 +        ), mtm);
 +        note.setFrame(rect(24.0, 51.0, 576.0, 78.0));
 +        content.addSubview(&note);
 +        Self { rows, fxaa, hdr, accurate, reset }
 +    }
 +
-+    pub fn changed(&self, sender: &NSControl) -> &'static str {
++    pub fn changed(&self, sender: &NSControl) -> String {
 +        if sender.tag() == RESET_TAG {
 +            self.set_values(Picture::neutral());
 +        }
 +        if sender.tag() == DISPLAY_TAG {
 +            macdrv::set_session_display(sender.mtm(), checked(&self.hdr), checked(&self.accurate));
-+            return macdrv::session_display_status();
++            return if preferences::save_display(checked(&self.hdr), checked(&self.accurate)) {
++                format!("Saved. {}", macdrv::session_display_status())
++            } else {
++                "Display settings applied, but preferences could not be saved.".into()
++            };
 +        }
 +        let values: Vec<_> = self.rows.iter().map(|row| {
 +            // Bounds come from the slider constructor and are clamped again by picture::update.
@@ -2599,7 +2998,11 @@ index 0000000..88734da
 +            temperature: values[4], bloom: values[5], bloom_threshold: values[6], bloom_radius: values[7],
 +            fxaa: checked(&self.fxaa),
 +        });
-+        "Picture settings applied for this session."
++        if preferences::save_picture() {
++            "Picture settings saved for future launches.".into()
++        } else {
++            "Picture settings applied, but preferences could not be saved.".into()
++        }
 +    }
 +
 +    fn set_values(&self, value: Picture) {
