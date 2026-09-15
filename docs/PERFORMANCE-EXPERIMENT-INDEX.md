@@ -1,11 +1,14 @@
 # Performance experiment decisions
 
-Read this before proposing or rerunning a performance experiment. Updated September 6,
+Current installed baseline: [early submission and Space recovery](SPACE-RESUME-BASELINE.md), promoted 2026-09-15.
+
+Read this before proposing or rerunning a performance experiment. Updated September 14,
 2026. This is an index of recorded decisions, not a claim that every historical private
 capture has been audited. Linked reports retain methods, measurements, patches and limits.
-Game runs are currently paused at the user's request.
+The September 13 campaign is recorded in [Frame-time investigation](FRAME-TIME-SPIKES-2026-09-13.md).
+The quieter September 14 sprint is recorded in [Frame-time sprint](FRAME-TIME-SPRINT-2026-09-14.md).
 
-Current user-approved baseline: [version 3.8 build 24 at 4096-square background](KNOWN-GOOD-2026-09-06.md).
+Historical user-approved baseline report: [version 3.8 build 24 at 4096-square background](KNOWN-GOOD-2026-09-06.md).
 User reports common 100+ FPS, 120+ in light scenes, and rarely below 50 in crowded
 play. Preserve this app/configuration; these are play-test observations, not stress-suite
 percentiles. Reconcile workload differences before using synthetic results to change it.
@@ -30,8 +33,17 @@ percentiles. Reconcile workload differences before using synthetic results to ch
 
 | Experiment | Recorded outcome and disposition | What would justify revisiting it? | Evidence |
 | --- | --- | --- | --- |
+| Earlier render submission, controlled retry | **Default in the play-test candidate; not installed.** Two within-run crowd tests improved FPS 31-45%; quiet control improved 14%. Normal launcher, 20-cast battle, and full arrivals validations passed; one 198 ms arrival outlier remains. Full 2161 renderer tests passed; conformance remains incomplete because the same window-test timeout occurs with submission 0 and 512. Not installed. | The new ABBA method, normalized character state, and quieter host justify revisiting earlier inconclusive results. | [Scheduling](FRAME-TIME-SPRINT-2026-09-14.md#early-submission-positive-initial-controls) |
+| Submission threshold 128 or 1024 versus 512 | **Not promoted.** Single ABBA comparisons lost 3.60% FPS at 128 and 3.72% at 1024. The 128 run had a slightly better p99; retain 512 pending stronger tradeoff evidence. | New repeated controls or an adaptive mechanism; do not sweep blindly. | [Threshold comparisons](FRAME-TIME-SPRINT-2026-09-14.md#early-submission-positive-initial-controls) |
+| Bounded CPU frame-storage recycling | **No demonstrated benefit; removed.** Working reuse counters, 213 targeted i686 tests passed, but first controlled early-submit crowd comparison lost 3.46% FPS. | Measure reuse counters and matched FPS, then complete lifetime/readback and broader checks. | [Storage reuse](FRAME-TIME-SPRINT-2026-09-14.md#cpu-frame-storage-recycling-no-demonstrated-benefit) |
+| Shared byte-pattern scanner | **Experimental, opt-in.** Prototype gains were 6-7%; final-production comparisons on submission512 gained 3.1% and 6.0%. Combined arrivals had worse warm tails than an earlier rendering-only run; causality unresolved. Fresh searches and original-API fallback; full addons fixed. Not installed. | Resolve the tail-latency tradeoff with paired arrival controls. FFXI_ON_MAC_ENABLE_SCAN=1 enables it; DISABLE_SCAN=1 wins. | [Scanner](FRAME-TIME-SPRINT-2026-09-14.md#shared-pattern-search) |
+| Full-target reused-attachment fast clear | **Rejected and removed.** Pixel tests passed, but two ABBA runs lost 6-11% FPS and worsened p99. | A new measured mechanism or a different workload, not the assumption that load-action Clear is always faster. | [Clear results](FRAME-TIME-SPRINT-2026-09-14.md#full-viewport-reused-target-clears-rejected) |
+| Compact API-to-encoder command storage | **Inconclusive.** Operation size 120 to 48 bytes; normalized pairs were +9.9% and -4.9%. Targeted pixel tests passed; no accepted FPS gain. | New within-run controls or a demonstrated allocation cost; the normalized repeat did not confirm a gain. | [Compact stream](FRAME-TIME-SPRINT-2026-09-14.md#compact-command-stream-repeat-is-inconclusive) |
+| Shared SDK getters through Lua FFI | **Rejected.** 439,416 matching results, but measured call path 3.1-3.3 times slower. | A materially cheaper binding design; do not repeat the same guarded FFI wrapper. | [Other paths](FRAME-TIME-SPRINT-2026-09-14.md#other-measured-paths) |
+| Pthread/Win32 priority promotion | **Pthread treatment invalid:** EPERM. **Win32 highest rejected:** -5.89% within-run. | Evidence of scheduler starvation plus a working, controlled treatment. | [Other paths](FRAME-TIME-SPRINT-2026-09-14.md#other-measured-paths) |
+| Exact redundant SetTransform gate | **No demonstrated benefit; removed.** Correctness checks passed, but matched arrivals runs did not establish a useful FPS or p99 gain. Patch and binaries preserved locally. | A new trace showing a materially larger repeated-transform cost, or more stable controls supporting a gain. | [September 13 results](FRAME-TIME-SPIKES-2026-09-13.md#rejected-exact-redundant-settransform-gate) |
 | Fused render/readback submission | **No demonstrated benefit.** Within-run changes about -1.4% to +1.2%; wait moved into the combined submission. Default off; source patch only, not installed. | A materially different mechanism that reduces necessary work or synchronization, rather than merging the same two submissions again. | [Fused readback](FUSED-READBACK-2026-09-06.md), [measurements](benchmarks/2026-09-06-fused-readback.json) |
-| `submitDraws=512` early submission | **Inconclusive / scene tradeoff.** Earlier Markets gain accompanied a tunnel regression; later full-addon crowd A/B/A drifted. Remains disabled. | Within-run controls or a concrete adaptive scheduling design, including both light and crowded scenes. Do not label 512 universally faster or slower. | [Early tests](MTLD3D-EXPERIMENTS.md#early-submission-experiment), [crowd repeat](STRESS-VALIDATION-2026-09-05.md#resumed-campaign-crowded-frame-synchronization) |
+| `submitDraws=512` early submission | **Historical inconclusive result, superseded by September 14 controls above.** Earlier Markets gain accompanied a tunnel regression; later full-addon crowd A/B/A drifted. | Within-run controls or a concrete adaptive scheduling design, including both light and crowded scenes. Do not label 512 universally faster or slower. | [Early tests](MTLD3D-EXPERIMENTS.md#early-submission-experiment), [crowd repeat](STRESS-VALIDATION-2026-09-05.md#resumed-campaign-crowded-frame-synchronization) |
 | Conservative render-pass merging | **Adopted for mtld3d play testing.** Early pair favored average FPS, with tunnel tail-latency caveats. Launcher enables it; upstream config defaults off. | New correctness failure or a matched experiment targeting a specific remaining pass cost. Historical 'keep disabled pending repeats' text predates launcher integration. | [Merging](MTLD3D-EXPERIMENTS.md#independent-render-pass-merging), [launcher integration](MTLD3D-EXPERIMENTS.md#launcher-play-testing-build-22) |
 | Identical shader-source reuse | **Adopted, build 23.** Recorded compiler replay reduced live compilation work about 82-84%; game validation did not reproduce the original cold compilation burst. | A new shader workload or an attributable remaining compile/pipeline stall. Do not claim an 84% FPS gain. | [Shader investigation](MTLD3D-EXPERIMENTS.md#stutters-when-characters-appear-repeated-compilation-of-identical-shaders), [measurements](benchmarks/2026-09-05-shader-dedup.json) |
 | Enforce NX at `Direct3DCreate9` | **Adopted, build 24.** Corrected data-page execution policy and removed reproduced long Chainspell freezes. | Recurrence with policy flags and fault evidence showing this protection is absent or insufficient. | [Battle-effect investigation](BATTLE-EFFECTS-2026-09-05.md), [measurements](benchmarks/2026-09-05-battle-effects.json) |
@@ -61,12 +73,14 @@ percentiles. Reconcile workload differences before using synthetic results to ch
 
 ## Open questions, not completed optimizations
 
-- The consumer of the freshly written 16x16 masks is not identified. Visibility is an
-  inference; stale-pixel caching or delayed reads are not validated solutions.
+- A September 14 capture identified an immediate consumer of 16x16 readback alpha
+  bits that affects rendering. GPU dependencies still prevent assuming the work can
+  move earlier; stale-pixel caching and delayed reads remain unvalidated.
 - Matched Linux/Proton live testing and cross-backend graphics-trace replay are proposals,
   not results. Current source research does not establish a matching 120-FPS Linux baseline.
-- The shared LuaJIT crash guard is a source-level lead. Its underlying compiler/runtime
-  fault has not been fixed here; the guard was not disabled in these runs.
+- The shared LuaJIT crash guard remains in production. A September 14 MoonJIT-enabled
+  diagnostic run compiled traces without reproducing the old mcode fault, but did
+  not show a performance benefit. The underlying old fault is not confirmed fixed.
 - Camera-heading stress phases remain experimental. Server orientation alone is not proof
   of camera orientation.
 

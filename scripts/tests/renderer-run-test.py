@@ -16,6 +16,38 @@ SPEC.loader.exec_module(renderer)
 
 
 class RendererRunTests(unittest.TestCase):
+    def test_submission_control_is_bounded_and_retains_native_host(self):
+        for native in (True, False):
+            config = dict(part.split("=", 1) for part in renderer.installed_config(512, native).split(";"))
+            self.assertEqual(config["render.submitDraws"], "512")
+            self.assertEqual(config["present.nativeHost"], str(native).lower())
+            self.assertEqual(config["render.mergePasses"], "true")
+            self.assertEqual(config["present.maxFps"], "0")
+        for value in (-1, 513, 4096):
+            with self.assertRaises(ValueError):
+                renderer.installed_config(value, True)
+        for args in (["--submit-draws", "512"], ["--installed-mtld3d", "--submit-draws", "-1"],
+                     ["--expected-submit-draws", "512"],
+                     ["--installed-mtld3d", "--submit-draws", "0", "--expected-submit-draws", "512"]):
+            with patch("sys.argv", ["renderer-run", *args]), patch.object(renderer.menu, "matching") as processes, patch.object(renderer, "checked") as commands, patch("sys.stderr"):
+                with self.assertRaises(SystemExit) as error:
+                    renderer.main()
+                self.assertEqual(error.exception.code, 2)
+                processes.assert_not_called()
+                commands.assert_not_called()
+
+    def test_multiline_log_filter_is_rejected_before_touching_the_machine(self):
+        for value in ("mtld3d=trace\nMTLD3D_CONFIG=unexpected", "mtld3d=trace\rOTHER=value"):
+            with patch("sys.argv", ["renderer-run", "--renderer-log", value]), \
+                 patch.object(renderer.menu, "matching") as processes, \
+                 patch.object(renderer, "checked") as commands, \
+                 patch("sys.stderr"):
+                with self.assertRaises(SystemExit) as error:
+                    renderer.main()
+                self.assertEqual(error.exception.code, 2)
+                processes.assert_not_called()
+                commands.assert_not_called()
+
     def test_launcher_candidate_replaces_named_executable_only_in_staged_app(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

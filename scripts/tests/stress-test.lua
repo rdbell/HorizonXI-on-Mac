@@ -2,15 +2,40 @@ package.path='scripts/harness/addons/perfscene/?.lua;'..package.path
 local stress=require('stress')
 local plans=stress.scenarios('/drawdistance setworld 20','/drawdistance setmob 20')
 for name,steps in pairs(plans) do
-    local duration,casts=0,0
+    local duration,casts,normalized=0,0,false
     for _,s in ipairs(steps) do
         duration=duration+s[1]
         assert(#s[2]<=118,'chat payload too long')
         if s[2]=='aga_cast' then casts=casts+1 end
+        if s[3]=='camera anchor requested' or s[3]=='mob pack requested' then
+            assert(s[1]>=2,'fixture spawn can hit the client chat cooldown')
+        end
+        if s[2]=='!exec for i=1,1023 do player:delStatusEffectSilent(i) end' then normalized=true end
+        if s[2]:match('^phase_start ') then assert(normalized,'phase retained earlier spell effects') end
     end
     assert(duration<300, 'scenario leaves insufficient launch headroom')
     if name:match('aga') then assert(casts==20) end
 end
+assert(stress.is_scenario('crowdsteady'))
+assert(stress.is_scenario('lightsteady'))
+local empty_holds=0
+for _, step in ipairs(plans.lightsteady) do
+    assert(not step[2]:match('^fixture mixed '), 'quiet scene spawned a crowd')
+    if step[2]=='phase_end empty' then assert(step[1]==96);empty_holds=empty_holds+1 end
+end
+assert(empty_holds==1, 'quiet scene needs one fixed hold')
+local holds, populations = 0, 0
+for _, step in ipairs(plans.crowdsteady) do
+    if step[2] == 'phase_end mixed-32' then
+        assert(step[1] == 96, 'steady crowd hold must cover several comparison windows')
+        holds = holds + 1
+    end
+    if step[2] == 'fixture mixed 32' then
+        assert(step[1] >= 2, 'fixture replacement needs chat-command cooldown')
+        populations = populations + 1
+    end
+end
+assert(holds == 1 and populations == 1, 'steady crowd must keep one fixed population')
 local clock,commands,marks,state,entities=0,{},{},{running={},index=1,zone=106},{}
 local own,selected=42,nil
 local entity={

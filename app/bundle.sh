@@ -79,6 +79,10 @@ cp -R "$REPO/vendor/wine-locale-fix" "$APP/Contents/Resources/wine-locale-fix"
 python3 "$REPO/scripts/build-wine-native-host.py" --verify "$REPO/vendor/wine-native-host"
 cp -R "$REPO/vendor/wine-native-host" "$APP/Contents/Resources/wine-native-host"
 
+# Shared memory search helper. Runtime self-checks and original-API fallbacks remain active.
+python3 "$REPO/scripts/build-memory-scan.py" --verify "$REPO/vendor/memory-scan"
+cp -R "$REPO/vendor/memory-scan" "$APP/Contents/Resources/memory-scan"
+
 # x87sidecar: the fix for FFXI's x87 floating-point math running ~100x slow under Rosetta (see
 # docs/X87-WALL.md). Signed individually below with its own entitlements -- the app's deep-sign
 # strips them otherwise, and without get-task-allow/cs.debugger it cannot attach to the game.

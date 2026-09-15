@@ -11,6 +11,8 @@ SPEC = importlib.util.spec_from_file_location('effects', Path(__file__).with_nam
 effects = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(effects)
 EXPECTED = {
+    'lightsteady': ['empty'],
+    'crowdsteady': ['mixed-32'],
     'crowd': ['empty', 'identical-16', 'identical-32', 'mixed-32'],
     'arrivals': [x for n in range(1, 4) for x in (f'arrival-{n}', f'arrival-warm-{n}')],
     'camera': ['facing-crowd'] + [x for n, h in enumerate((0,64,128,192), 1)
@@ -40,6 +42,8 @@ def phases(frames, markers, scenario, distance=20):
         name = start.get('phase')
         if end.get('phase')!=name or last<=first:
             problems.append('invalid phase boundaries'); continue
+        if scenario in ('crowdsteady', 'lightsteady') and last - first < 95:
+            errors.append('steady phase too short')
         if any(m.get('zone')!=expected_zone for m in (start,end)):
             errors.append('wrong zone')
         if any(abs(m.get(k,-1)-distance)>0.001 for m in (start,end)

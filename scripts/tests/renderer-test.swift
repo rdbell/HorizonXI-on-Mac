@@ -94,7 +94,7 @@ struct RendererTest {
                "launch runtime leaked into wrapper repair or installers")
         let env = restored.environment(for: install, x87: false)
         expect(env["MTLD3D_CONFIG"]?.contains("render.mergePasses=true") == true, "pass merging is off")
-        expect(env["MTLD3D_CONFIG"]?.contains("render.submitDraws=0") == true, "early submission is on")
+        expect(env["MTLD3D_CONFIG"]?.contains("render.submitDraws=512") == true, "early submission default is missing")
         expect(env["DXVK_CONFIG_FILE"] == nil && env["USER_SETTING"] == "kept", "wrong renderer environment")
         expect(Renderer.mtld3d.iniOverrides["behaviorflags.fpu_preserve"] == "1", "missing FPU preservation")
         restored.renderer = .metal

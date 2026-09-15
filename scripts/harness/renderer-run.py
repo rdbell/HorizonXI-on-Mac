@@ -297,6 +297,15 @@ def stage_app(options: argparse.Namespace) -> Path:
     return app
 
 
+def installed_config(submit_draws, native_host):
+    """The fixed baseline plus one explicit scheduling control."""
+    if submit_draws not in (0, 128, 256, 512, 1024):
+        raise ValueError("Unsupported draw submission threshold")
+    return ("color.hdr.enable=false;render.scale=1;present.maxFps=0;"
+            f"render.mergePasses=true;render.submitDraws={submit_draws};"
+            "present.nativeHost=" + ("true" if native_host else "false"))
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path)
@@ -329,7 +338,22 @@ def main() -> int:
     parser.add_argument("--wine-debug", help="temporary WINEDEBUG channels; diagnostic runs only")
     parser.add_argument("--dump", action="store_true", help="F12 dump at character selection")
     parser.add_argument("--dump-scene", help="F12 dump at a named scene screenshot, such as city-settled")
+    parser.add_argument("--submit-draws", type=int, choices=(0, 128, 256, 512, 1024),
+                        help="Explicit installed-renderer scheduling experiment; preferences are restored")
+    parser.add_argument("--expected-submit-draws", type=int, choices=(0, 128, 256, 512, 1024),
+                        help="Verify a packaged default without overriding it (current launcher: 512; older packages: pass 0)")
     options, forwarded = parser.parse_known_args()
+    if options.expected_submit_draws is not None:
+        if not options.installed_mtld3d:
+            parser.error("--expected-submit-draws requires --installed-mtld3d")
+        if options.submit_draws is not None and options.submit_draws != options.expected_submit_draws:
+            parser.error("Requested and expected submission thresholds disagree")
+    expected_submit_draws = (options.expected_submit_draws if options.expected_submit_draws is not None
+                             else options.submit_draws if options.submit_draws is not None else 512)
+    if options.submit_draws is not None and not options.installed_mtld3d:
+        parser.error("--submit-draws requires --installed-mtld3d")
+    if "\n" in options.renderer_log or "\r" in options.renderer_log:
+        parser.error("Renderer log filter must be a single line")
     if options.native_host and (any("FFXI_ON_MAC_TEST_" in arg for arg in forwarded)
             or any(key.startswith("FFXI_ON_MAC_TEST_") for key in os.environ)):
         parser.error("Packaged native-host validation uses release runtime/prefix paths; private test-launcher overrides are not supported")
@@ -393,6 +417,17 @@ def main() -> int:
                     if menu.launchctl_get(key) or any(line.partition("=")[0].strip() == key
                             for line in perf.get("extraEnv", "").splitlines()):
                         raise RuntimeError(f"Clear the experimental {key} override before installed validation")
+                if options.renderer_log != "mtld3d=info":
+                    perf["extraEnv"] = perf.get("extraEnv", "").rstrip() + "\nRUST_LOG=" + options.renderer_log
+                    checked(["defaults", "write", menu.APP_BUNDLE_ID, "perf.settings", "-data",
+                             json.dumps(perf).encode().hex()])
+                    self.record["renderer_log_requested"] = options.renderer_log
+                if options.submit_draws is not None:
+                    config_override = installed_config(options.submit_draws, perf.get("nativeGameHost", False))
+                    perf["extraEnv"] = perf.get("extraEnv", "").rstrip() + "\nMTLD3D_CONFIG=" + config_override
+                    checked(["defaults", "write", menu.APP_BUNDLE_ID, "perf.settings", "-data",
+                             json.dumps(perf).encode().hex()])
+                    self.record["submit_draws_requested"] = options.submit_draws
             else:
                 # Staged experiments replace the DXVK resource. A saved mtld3d choice would
                 # otherwise bypass that candidate and invalidate the comparison.
@@ -485,6 +520,8 @@ def main() -> int:
                 keys = ("WINEDLLPATH", "MTLD3D_CONFIG", "RUST_LOG", "WINEDEBUG")
                 environment = {key: value for line in spawn.read_text().splitlines()
                                for key, sep, value in [line.partition("=")] if sep and key in keys}
+                if options.renderer_log != "mtld3d=info" and environment.get("RUST_LOG") != options.renderer_log:
+                    raise RuntimeError("Requested renderer logging did not reach the game")
                 if options.wine_debug and environment.get("WINEDEBUG") != options.wine_debug:
                     raise RuntimeError("Requested Wine startup trace did not reach the game")
                 installed_wine = menu.APP / "Contents/Resources/mtld3d/wine"
@@ -493,7 +530,7 @@ def main() -> int:
                 config = dict(part.split("=", 1) for part in environment.get("MTLD3D_CONFIG", "").split(";") if "=" in part)
                 if any(config.get(key) != value for key, value in {
                     "color.hdr.enable": "false", "render.scale": "1", "present.maxFps": "0",
-                    "render.mergePasses": "true", "render.submitDraws": "0"}.items()):
+                    "render.mergePasses": "true", "render.submitDraws": str(expected_submit_draws)}.items()):
                     raise RuntimeError("Normal launcher did not select the tested mtld3d configuration")
                 if options.native_host:
                     requested = "true" if options.native_host == "on" else "false"

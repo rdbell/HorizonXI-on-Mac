@@ -623,6 +623,22 @@ final class Runner: ObservableObject {
                 ProcessInfo.processInfo.environment["FFXI_ON_MAC_DISABLE_X87"] == "1"
             let x87Enabled = useX87 && !x87DisabledForDiagnostics
             var env = perf.environment(for: install, x87: x87Enabled)
+            env[MemoryScan.scriptVariable] = ""
+            env[MemoryScan.libraryVariable] = ""
+            let disableScanner = env["FFXI_ON_MAC_DISABLE_SCAN"]
+                ?? ProcessInfo.processInfo.environment["FFXI_ON_MAC_DISABLE_SCAN"]
+            // Throughput gains repeated, but arrival tail latency remains mixed.
+            // Keep shared scanning opt-in until that tradeoff is better understood.
+            let enableScanner = env["FFXI_ON_MAC_ENABLE_SCAN"]
+                ?? ProcessInfo.processInfo.environment["FFXI_ON_MAC_ENABLE_SCAN"]
+            if install.ashitaGeneration == .v4, enableScanner == "1", disableScanner != "1",
+               let resources = Bundle.main.resourceURL {
+                let scanner = MemoryScan.prepare(
+                    common: install.gameDir.appendingPathComponent("addons/libs/common.lua"),
+                    resources: resources.appendingPathComponent("memory-scan"),
+                    driveC: install.driveC, log: log)
+                env.merge(scanner) { _, fresh in fresh }
+            }
             if let capture = PerformanceDiagnostics.consume(
                 for: install.gameDir, gameDirectoryWine: install.gameDirWine,
                 guestRange: env["X87_GUEST_RANGE"]

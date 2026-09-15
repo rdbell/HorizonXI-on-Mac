@@ -9,6 +9,7 @@ import argparse
 import csv
 from datetime import datetime
 import json
+import math
 from pathlib import Path
 import re
 import statistics
@@ -45,7 +46,7 @@ def compare(frames, phases, switches):
                 'windows': windows, 'frames': len(collected), 'seconds': seconds,
                 'fps': len(collected) / seconds if seconds else None,
                 'p50_ms': statistics.median(collected) if collected else None,
-                'p99_ms': collected[min(len(collected)-1, int(len(collected)*.99))] if collected else None,
+                'p99_ms': collected[math.ceil(len(collected)*.99)-1] if collected else None,
             }
         off, on = modes['false']['fps'], modes['true']['fps']
         result.append({'phase': phase['name'], 'modes': modes,

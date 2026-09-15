@@ -45,6 +45,40 @@ class ReportTests(unittest.TestCase):
         phases,_=r.phases(frames,markers,'crowd')
         self.assertFalse(phases[-1]['valid'])
 
+    def test_steady_crowd_requires_full_hold_and_population(self):
+        markers = [dict(label=label, epoch=epoch, phase='mixed-32', zone=234,
+                        expected_entities=32, fixture_mode='mixed', world_distance=20,
+                        entity_distance=20, x=0, y=0, z=0)
+                   for label, epoch in [('stress phase start', 10), ('stress phase end', 106)]]
+        markers += [dict(label='fixture confirmed', epoch=110, expected_entities=0),
+                    dict(label='done', epoch=111)]
+        frames = [dict(epoch=i/20, frame_ms=50, zone=234) for i in range(1, 2241)]
+        phases, errors = r.phases(frames, markers, 'crowdsteady')
+        self.assertFalse(errors)
+        self.assertTrue(phases[0]['valid'])
+        markers[1]['epoch'] = 40
+        phases, _ = r.phases(frames, markers, 'crowdsteady')
+        self.assertFalse(phases[0]['valid'])
+        markers[1]['epoch'] = 106
+        markers[1]['expected_entities'] = 31
+        phases, _ = r.phases(frames, markers, 'crowdsteady')
+        self.assertFalse(phases[0]['valid'])
+
+    def test_light_scene_requires_no_spawned_entities(self):
+        markers = [dict(label=label, epoch=epoch, phase='empty', zone=234,
+                        expected_entities=0, fixture_mode='none', world_distance=20,
+                        entity_distance=20, x=0, y=0, z=0)
+                   for label, epoch in [('stress phase start', 10), ('stress phase end', 106)]]
+        markers += [dict(label='fixture confirmed', epoch=110, expected_entities=0),
+                    dict(label='done', epoch=111)]
+        frames = [dict(epoch=i/20, frame_ms=50, zone=234) for i in range(1, 2241)]
+        phases, errors = r.phases(frames, markers, 'lightsteady')
+        self.assertFalse(errors)
+        self.assertTrue(phases[0]['valid'])
+        markers[1]['expected_entities'] = 1
+        phases, _ = r.phases(frames, markers, 'lightsteady')
+        self.assertFalse(phases[0]['valid'])
+
     def test_missing_targets(self):
         f,m=self.fixture()
         next(x for x in m if x['label']=='stress cast completed')['hit_count']=7

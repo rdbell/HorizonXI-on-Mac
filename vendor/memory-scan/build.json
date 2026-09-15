@@ -1,0 +1,14 @@
+{
+  "abi": 1,
+  "target": "i686-pc-windows-msvc",
+  "compiler": "Homebrew clang version 23.1.1",
+  "source_files": {
+    "scan.c": "930d6b819b97c8ce998ab5792cc4ebe8a1f69811c29e5e86bd6b81ba0d01c652",
+    "scan.lua": "44459559dad85a461fcfdf1b85d1eace2ee8c5e12abed28ce82a6f33c107ca1a",
+    "msvcrt.def": "12a8ac9e04eb6394252540570d4e1cc8a5c4ace72e9f99df710cab68e55f04b2"
+  },
+  "files": {
+    "ximac-scan.dll": "4337a6eed907b81412ee68c6c5c148c1e1ae15610bdb88d3428a68721d0fc6aa",
+    "scan.lua": "44459559dad85a461fcfdf1b85d1eace2ee8c5e12abed28ce82a6f33c107ca1a"
+  }
+}

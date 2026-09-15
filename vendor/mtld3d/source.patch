@@ -166,10 +166,10 @@ index 0000000..70770df
 +these bounded local tests.
 diff --git a/docs/PERSISTENT-GRAPHICS.md b/docs/PERSISTENT-GRAPHICS.md
 new file mode 100644
-index 0000000..2b91e5e
+index 0000000..4bf5174
 --- /dev/null
 +++ b/docs/PERSISTENT-GRAPHICS.md
-@@ -0,0 +1,59 @@
+@@ -0,0 +1,70 @@
 +# Persistent native graphics settings
 +
 +## Implementation
@@ -202,7 +202,8 @@ index 0000000..2b91e5e
 +- Native Foundation wiring stays in the native-host module. There are no new
 +  selectors, lint suppressions or shader changes.
 +- Keep the installed app and prior packages intact; build a separate candidate.
-+  No game launch, desktop control, commit or push is part of this change.
++  No game launch or desktop control is part of this change. The user
++  subsequently requested committing and pushing the work on its feature branch.
 +
 +## Verification
 +
@@ -229,6 +230,16 @@ index 0000000..2b91e5e
 +exits. The first launch keeps existing defaults until the user saves choices.
 +To return to the old renderer, quit the candidate and run the installed app.
 +It ignores the new preferences; returning to this build reads them again.
++
++## Save checkpoint
++
++The user requested committing and pushing this candidate separately from the
++shelved interpolation experiment. The pre-commit `make check` stopped at
++`fmt-check` with formatting differences in the native picture-controls code,
++including unchanged baseline files. Later check legs did not run. The full
++`make test` suite was not run; the four preference tests and production build
++above remain the available validation. This checkpoint does not claim the full
++repository gates passed or promote the candidate to the installed baseline.
 diff --git a/docs/PICTURE-CONTROLS.md b/docs/PICTURE-CONTROLS.md
 new file mode 100644
 index 0000000..5da11c6
@@ -366,6 +377,90 @@ index 0000000..5da11c6
 +   after disabling effects. Compare frame times at 1:1 and 4K background resolution.
 +7. Exercise a device Reset and reopen the panel. Session choices must survive;
 +   a new process must return to startup defaults.
+diff --git a/docs/SPACE-RESUME.md b/docs/SPACE-RESUME.md
+new file mode 100644
+index 0000000..1ab3698
+--- /dev/null
++++ b/docs/SPACE-RESUME.md
+@@ -0,0 +1,78 @@
++# Presentation recovery after hiding a window
++
++Presentation must recover when a window returns from another macOS Space, even
++if an occlusion notification is delayed or missed. A hidden window still submits
++render work but skips drawable acquisition, since the compositor need not recycle
++drawables for an off-screen surface.
++
++The periodic display refresh now runs before the drawable gate, including while
++presentation is suppressed. Its AppKit callback reconciles the live window's
++occlusion state. Space membership and parent visibility are diagnostic only:
++they must not suppress an exposed surface while a desktop transition settles.
++The native host's occlusion events and workspace Space-change notifications also
++refresh the current binding. Observers retain no window and resolve the binding
++when called, so teardown and device reattachment remain safe.
++
++Previously the periodic refresh was inside the successful-drawable branch, and
++only the Wine child window's occlusion notification updated the hidden flag. A
++stale hidden flag therefore disabled the refresh that could recover it. This
++class of defect is confirmed by the controlled regression below. It does not
++establish the cause of every reported freeze.
++
++Existing GPU retirement and resource-lifetime synchronization is unchanged.
++Drawable acquisition and GPU-retirement waits lasting at least 250 milliseconds
++now emit warnings under `mtld3d::unix::present`, including sequence, duration and
++hidden state. Visibility transitions log at info level. These diagnostics work
++in production builds without frame tracing or per-frame log output.
++
++## Controlled lost-notification regression
++
++`scripts/native-host/visibility-recovery.py` launches its own standalone D3D9
++probe in a disposable Wine SDK/prefix. It verifies the owned executable and
++renderer mappings, resolves the hidden atomic from matching module symbols, and
++injects one stale `true` value while the window remains visible. The helper
++refuses a target whose parent is not the calling test runner. It never attaches
++to an existing game. The run has a 90-second work deadline and bounded cleanup.
++
++Compile `visibility-recovery.swift` with `swiftc`. The disposable Wine loader
++copies need `com.apple.security.get-task-allow`, and the helper needs
++`com.apple.security.cs.debugger`, applied through ad-hoc signing for this test.
++These entitlements are not part of the game package. Build `probe.c` as the
++standalone i686 D3D9 probe. Keep the SDK and prefix inside the output's parent.
++
++```sh
++python3 scripts/native-host/visibility-recovery.py \
++  --wine /test/sdk/bin/wine --prefix /test/prefix \
++  --probe /test/native-probe.exe --injector /test/visibility-recovery \
++  --bundle /test/candidate/FFXI-on-Mac.app \
++  --output /test/recovery-candidate --expect recover
++```
++
++Use `--expect stuck` with the preserved baseline. The baseline must remain hidden
++for the four-second observation until the runner clears the injected state. The
++candidate must clear it automatically and continue presenting. Output includes
++the observed bit, presentation count, matching-module sample and renderer log.
++
++Before packaging, use `make install-unix-x64 PROD=1` with a disposable `WINE_SDK`.
++Cargo emits `libmtld3d_unix.dylib`; the Makefile stages `mtld3d.so` and its symbols.
++Assert the staged `.so` matches the fresh dylib, then verify the packaged and
++loaded hashes. A successful Cargo build alone does not update the staged `.so`.
++
++## Acceptance record
++
++The controlled baseline stayed hidden until manually cleared. The final
++candidate recovered automatically and presented 240 frames during the same
++four-second observation. Four windowed, four native-fullscreen and four focus
++round trips passed image checks. Six local test-character desktop round trips
++also resumed presentation, with all settings and test-owned processes restored.
++
++All 2,161 repository tests passed (1,046 core/type, 207 native/shared, and 454
++rendering tests per PE architecture). Both PE clippy legs, rustdoc, targeted
++mechanical audits and whitespace checks passed. The combined check gate remains
++blocked by existing formatting, native-clippy and audit findings outside this
++change. The installed application and both preserved baseline copies are unchanged.
++
++Ordinary baseline desktop switching did not reproduce the original long freeze,
++so natural reproduction remains a validation limitation. The controlled test
++confirms recovery from a stale flag; it does not prove every freeze shares that
++cause. Physical monitor dragging is not newly validated by these Space tests.
 diff --git a/docs/WINDOW-RESIZING.md b/docs/WINDOW-RESIZING.md
 new file mode 100644
 index 0000000..dd5362c
@@ -1115,6 +1210,100 @@ index 0000000..8e19cac
 +                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 +        (args.output / 'results.json').write_text(json.dumps(results, indent=2) + '\n')
 +print(json.dumps({'passed': True, 'stages': len(results)}))
+diff --git a/scripts/native-host/visibility-recovery.py b/scripts/native-host/visibility-recovery.py
+new file mode 100644
+index 0000000..5be144c
+--- /dev/null
++++ b/scripts/native-host/visibility-recovery.py
+@@ -0,0 +1,59 @@
++"""Inject one stale hidden bit into our own standalone probe; compare automatic recovery."""
++import os,time,json,re,subprocess,shutil
++from pathlib import Path
++import argparse
++parser=argparse.ArgumentParser(description=__doc__)
++for option in ('wine','prefix','probe','bundle','injector','output'):
++ parser.add_argument('--'+option,type=Path,required=True)
++parser.add_argument('--expect',choices=('stuck','recover'),required=True)
++args=parser.parse_args()
++for name,value in vars(args).items():
++ if isinstance(value,Path):setattr(args,name,value.resolve())
++out=args.output;package=args.bundle;expect_recovery=args.expect=='recover'
++sdk=args.wine.parent.parent;prefix=args.prefix
++if not sdk.is_relative_to(out.parent) or not prefix.is_relative_to(out.parent):
++ parser.error('Wine SDK and prefix must be disposable copies inside the output parent')
++out.mkdir(exist_ok=False)
++v=package/'Contents/Resources';module=sdk/'lib/wine/x86_64-unix/mtld3d.so'
++for rel in ['i386-windows/mtld3d.dll','x86_64-unix/mtld3d.so']:shutil.copy2(v/'mtld3d/wine'/rel,sdk/'lib/wine'/rel)
++shutil.copy2(v/'wine-native-host/winemac.so',sdk/'lib/wine/x86_64-unix/winemac.so')
++shutil.copy2(args.probe,out/'native-probe.exe');shutil.copy2(v/'mtld3d/native/i386-windows/d3d9.dll',out/'d3d9.dll')
++env={k:v for k,v in os.environ.items() if not k.startswith(('X87_','DYLD_','MTLD3D_','WINEDLLPATH'))}
++env.update(WINEPREFIX=str(prefix),WINEDLLOVERRIDES='d3d9=n,b',MTLD3D_CONFIG='color.hdr.enable=false;present.maxFps=60;present.nativeHost=true',WINEDEBUG='-all',RUST_LOG='mtld3d=info,mtld3d::unix::present=trace')
++deadline=time.monotonic()+90
++def run(argv,timeout=8):
++ remaining=min(timeout,deadline-time.monotonic())
++ if remaining<=0:raise TimeoutError('90-second probe bound exceeded')
++ return subprocess.check_output(list(map(str,argv)),text=True,timeout=remaining)
++p=None;result={'passed':False}
++try:
++ with (out/'probe.log').open('w') as f:p=subprocess.Popen([str(args.wine),str(out/'native-probe.exe')],cwd=out,env=env,stdout=f,stderr=subprocess.STDOUT)
++ end=time.monotonic()+35
++ while time.monotonic()<end and 'frame ' not in (out/'probe.log').read_text(errors='replace'):time.sleep(.2)
++ assert 'frame ' in (out/'probe.log').read_text(errors='replace'),'no frames'
++ time.sleep(1)
++ assert 'foreground 1' in (out/'probe.log').read_text(errors='replace').splitlines()[-1], 'probe must be frontmost'
++ # PID is our direct child; refuse if either executable or renderer mapping differs.
++ mapped=run(['lsof','-p',p.pid,'-Fn']);assert '\nn'+str(out/'native-probe.exe')+'\n' in mapped and '\nn'+str(module)+'\n' in mapped
++ run(['sample',p.pid,1,20,'-file',out/'identity-sample.txt'],15)
++ sample=(out/'identity-sample.txt').read_text();matches=re.findall(r'^\s*(0x[0-9a-f]+) -\s*0x[0-9a-f]+ \+mtld3d.so',sample,re.M);assert len(matches)==1,matches
++ nm=run(['nm','-an',module]);symbols=re.findall(r'^([0-9a-f]+) b .*WINDOW_OCCLUDED.*$',nm,re.M);assert len(symbols)==1,symbols
++ address=int(matches[0],16)+int(symbols[0],16)
++ log=next((out/'mtld3d-logs').glob('*.log'))
++ injection=run([args.injector,p.pid,f'{address:x}',1]);assert 'original=0' in injection,injection
++ before=log.read_text().count('presented:')
++ time.sleep(4)
++ during=log.read_text().count('presented:')-before
++ restored=run([args.injector,p.pid,f'{address:x}',0]);time.sleep(.5)
++ result={'pid':p.pid,'injection':injection.strip(),'read_and_restore':restored.strip(),'presented_frames_in_4s':during,'expected_recovery':expect_recovery}
++ assert ('original=0' in restored)==expect_recovery,result
++ assert (during>30) if expect_recovery else (during<5),result
++ result['passed']=True
++finally:
++ if p:
++  p.terminate()
++  try:p.wait(timeout=5)
++  except subprocess.TimeoutExpired:p.kill();p.wait(timeout=5)
++ subprocess.run([str(sdk/'bin/wineserver'),'-k'],env=env,timeout=10,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
++ (out/'result.json').write_text(json.dumps(result,indent=2)+'\n')
++print(json.dumps(result))
+diff --git a/scripts/native-host/visibility-recovery.swift b/scripts/native-host/visibility-recovery.swift
+new file mode 100644
+index 0000000..878af3b
+--- /dev/null
++++ b/scripts/native-host/visibility-recovery.swift
+@@ -0,0 +1,23 @@
++// Fault injection for an owned standalone renderer probe, never a game process.
++import Foundation
++import Darwin
++let args = CommandLine.arguments
++guard args.count == 4, let pid = Int32(args[1]), let address = UInt64(args[2], radix:16), let value = UInt8(args[3]), value <= 1 else { exit(64) }
++var process = proc_bsdinfo()
++let size = Int32(MemoryLayout<proc_bsdinfo>.size)
++guard proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &process, size) == size,
++      process.pbi_ppid == UInt32(getppid()) else {
++ fputs("refusing a process not owned by the calling test runner\n", stderr); exit(77)
++}
++var task: mach_port_t = 0
++let result = task_for_pid(mach_task_self_,pid,&task)
++guard result == KERN_SUCCESS else { fputs("task_for_pid denied; use an entitled disposable test SDK and injector\n", stderr); exit(77) }
++defer { mach_port_deallocate(mach_task_self_,task) }
++var original: UInt8 = 0
++var actual: mach_vm_size_t = 0
++let read = withUnsafeMutablePointer(to:&original) { mach_vm_read_overwrite(task,address,1,mach_vm_address_t(UInt(bitPattern:$0)),&actual) }
++guard read == KERN_SUCCESS && actual == 1 && original <= 1 else { fatalError("not a readable bool") }
++var byte = value
++let write = withUnsafeMutablePointer(to:&byte) { mach_vm_write(task,address,vm_offset_t(UInt(bitPattern:$0)),1) }
++guard write == KERN_SUCCESS else { fatalError("write failed: \(write)") }
++print("original=\(original) injected=\(value)")
 diff --git a/scripts/native-host/wine-native-host.patch b/scripts/native-host/wine-native-host.patch
 new file mode 100644
 index 0000000..be32448
@@ -1279,7 +1468,7 @@ index 0000000..be32448
 ++    return 1;
 ++}
 diff --git a/unix/Cargo.toml b/unix/Cargo.toml
-index c07f342..506df87 100644
+index c07f342..128ebf7 100644
 --- a/unix/Cargo.toml
 +++ b/unix/Cargo.toml
 @@ -35,6 +35,12 @@ objc2 = { version = "0.6", features = ["disable-encoding-assertions"] }
@@ -1295,7 +1484,15 @@ index c07f342..506df87 100644
      "NSColorSpace",
      "NSEvent",
      "NSGraphics",
-@@ -53,6 +59,9 @@ objc2-foundation = { version = "0.3", features = [
+@@ -42,6 +48,7 @@ objc2-app-kit = { version = "0.3", default-features = false, features = [
+     "NSScreen",
+     "NSView",
+     "NSWindow",
++    "NSWorkspace",
+     "block2",
+     "objc2-core-foundation",
+     "objc2-core-graphics",
+@@ -53,6 +60,9 @@ objc2-foundation = { version = "0.3", features = [
      "NSString",
      "NSURL",
      "NSProcessInfo",
@@ -1425,7 +1622,7 @@ index 65150e6..6f58fe6 100644
 +    const CODE: u32 = Thunks::SetNativeHostV1 as u32;
 +}
 diff --git a/unix/unix/src/handlers.rs b/unix/unix/src/handlers.rs
-index 020bda4..98ab13e 100644
+index 020bda4..36a0fed 100644
 --- a/unix/unix/src/handlers.rs
 +++ b/unix/unix/src/handlers.rs
 @@ -129,6 +129,7 @@ pub extern "C" fn get_device_info_handler(args: *mut c_void) -> i32 {
@@ -1436,7 +1633,31 @@ index 020bda4..98ab13e 100644
      if let Some((name, registry_id, caps)) = metal::default_device_info() {
          params.registry_id = registry_id;
          params.caps = caps;
-@@ -855,3 +856,16 @@ pub extern "C" fn destroy_resources_bulk_handler(args: *mut c_void) -> i32 {
+@@ -154,6 +155,7 @@ pub extern "C" fn get_device_info_handler(args: *mut c_void) -> i32 {
+ }
+ 
+ pub extern "C" fn create_command_queue_handler(args: *mut c_void) -> i32 {
++    crate::qos::observe(&crate::qos::Role::DeviceApi);
+     // SAFETY: unix-call handler params; PE side passes *mut CreateCommandQueueParams.
+     let Some(mut params) = (unsafe { InPtrMut::<CreateCommandQueueParams>::opt(args) }) else {
+         return -1;
+@@ -545,6 +547,7 @@ pub extern "C" fn compile_shader_library_handler(args: *mut c_void) -> i32 {
+ }
+ 
+ pub extern "C" fn submit_frame_handler(args: *mut c_void) -> i32 {
++    crate::qos::observe(&crate::qos::Role::Submit);
+     // SAFETY: unix-call handler params; PE side passes *mut SubmitFrameParams.
+     let Some(mut params) = (unsafe { InPtrMut::<SubmitFrameParams>::opt(args) }) else {
+         return -1;
+@@ -558,6 +561,7 @@ pub extern "C" fn submit_frame_handler(args: *mut c_void) -> i32 {
+ }
+ 
+ pub extern "C" fn blit_texture_to_buffer_handler(args: *mut c_void) -> i32 {
++    crate::qos::observe(&crate::qos::Role::ReadbackApi);
+     // SAFETY: unix-call handler params; PE side passes *const BlitTextureToBufferParams.
+     let Some(params) = (unsafe { InPtr::<BlitTextureToBufferParams>::opt(args.cast()) }) else {
+         return -1;
+@@ -855,3 +859,16 @@ pub extern "C" fn destroy_resources_bulk_handler(args: *mut c_void) -> i32 {
      }
      STATUS_SUCCESS
  }
@@ -1454,10 +1675,18 @@ index 020bda4..98ab13e 100644
 +    STATUS_SUCCESS
 +}
 diff --git a/unix/unix/src/lib.rs b/unix/unix/src/lib.rs
-index 1e64203..6ecfc66 100644
+index 1e64203..9ad5608 100644
 --- a/unix/unix/src/lib.rs
 +++ b/unix/unix/src/lib.rs
-@@ -51,6 +51,7 @@ const fn dispatch(code: Thunks) -> UnixCallFn {
+@@ -7,6 +7,7 @@ mod crash;
+ mod handlers;
+ mod log_file;
+ mod metal;
++mod qos;
+ 
+ /// `log` target used by every call inside this crate.
+ ///
+@@ -51,6 +52,7 @@ const fn dispatch(code: Thunks) -> UnixCallFn {
          Thunks::InitLogger => arp!(handlers::init_logger_handler),
          Thunks::GetDeviceInfo => arp!(handlers::get_device_info_handler),
          Thunks::CreateCommandQueue => arp!(handlers::create_command_queue_handler),
@@ -1487,10 +1716,25 @@ index 187cbb5..a6c1ee6 100644
  pub use mtld3d_shared::perf::init_tracking_enabled;
  pub use pipeline::{create_render_pipeline, destroy_render_pipeline};
 diff --git a/unix/unix/src/metal/command.rs b/unix/unix/src/metal/command.rs
-index 18e1be0..ebaa1d4 100644
+index 18e1be0..e9e6009 100644
 --- a/unix/unix/src/metal/command.rs
 +++ b/unix/unix/src/metal/command.rs
-@@ -294,6 +294,11 @@ impl core::fmt::Display for BlitSite {
+@@ -209,7 +209,14 @@ pub fn wait_for_gpu_retire(target_seq: u64, coherent_seq_ptr: u64, failed_submit
+         return;
+     };
+     mtld3d_shared::crumb!("gpuretirebeg", target_seq, atomic.load(Ordering::Acquire));
++    let wait_started = std::time::Instant::now();
+     cmdbuf.waitUntilCompleted();
++    let waited = wait_started.elapsed();
++    if waited >= std::time::Duration::from_millis(250) {
++        log::warn!(target: PRESENT_LOG_TARGET,
++            "GPU retirement stalled: seq={target_seq} wait_ms={} hidden={}",
++            waited.as_millis(), super::macdrv::window_occluded());
++    }
+     mtld3d_shared::crumb!("gpuretireend", target_seq);
+     // Record the abort before the retirement bump: both stores are
+     // `Release`, so a PE-side `Acquire` load of `coherent_seq` that sees
+@@ -294,6 +301,11 @@ impl core::fmt::Display for BlitSite {
  /// with its own attachments and load actions, optionally blits the
  /// backbuffer to the drawable, and commits.
  pub fn submit_frame(params: &mut SubmitFrameParams) -> bool {
@@ -1502,7 +1746,36 @@ index 18e1be0..ebaa1d4 100644
      params.drawable_wait_ns = 0;
      mtld3d_shared::crumb!("submit:enter", params.queue_handle.raw(), params.pass_count);
      mtld3d_shared::crumb!("submit:queueret", params.queue_handle.raw());
-@@ -456,6 +461,9 @@ pub fn submit_frame(params: &mut SubmitFrameParams) -> bool {
+@@ -386,6 +398,9 @@ pub fn submit_frame(params: &mut SubmitFrameParams) -> bool {
+             return true;
+         };
+ 
++        // Schedule display and visibility reconciliation even when this present
++        // is suppressed. Recovery must not depend on acquiring a drawable first.
++        let current = super::macdrv::current_headroom();
+         let drawable_opt = if super::macdrv::window_occluded() {
+             // Window fully occluded: the compositor isn't recycling drawables,
+             // so `nextDrawable` would block its full timeout for nothing that
+@@ -403,10 +418,18 @@ pub fn submit_frame(params: &mut SubmitFrameParams) -> bool {
+             // be composited at the old size, which means rescaled.
+             super::macdrv::sync_drawable_size(&layer);
+             mtld3d_shared::crumb!("submit:nextdraw", params.present_layer.raw());
++            let wait_started = std::time::Instant::now();
+             let drawable = {
+                 let _wait = NanosSetTimer::start(&raw mut params.drawable_wait_ns);
+                 layer.nextDrawable()
+             };
++            let waited = wait_started.elapsed();
++            if waited >= std::time::Duration::from_millis(250) {
++                log::warn!(target: PRESENT_LOG_TARGET,
++                    "drawable acquisition stalled: seq={} wait_ms={} acquired={} hidden={}",
++                    params.submit_seq, waited.as_millis(), drawable.is_some(),
++                    super::macdrv::window_occluded());
++            }
+             if drawable.is_none() {
+                 // Visible, yet no drawable within the timeout — a rare
+                 // compositor stall, or an occlusion signal that hasn't
+@@ -456,6 +479,9 @@ pub fn submit_frame(params: &mut SubmitFrameParams) -> bool {
              // the layer's own surface. Whatever the two sizes are, present
              // resolves them here — nothing downstream can, since the
              // compositor sees only a finished drawable.
@@ -1512,7 +1785,23 @@ index 18e1be0..ebaa1d4 100644
              let device = cmd_buf.device();
              let geometry = PresentGeometry {
                  src: (present_texture.width(), present_texture.height()),
-@@ -498,7 +506,7 @@ pub fn submit_frame(params: &mut SubmitFrameParams) -> bool {
+@@ -474,15 +500,6 @@ pub fn submit_frame(params: &mut SubmitFrameParams) -> bool {
+                 }
+                 route => route,
+             };
+-            // Reads what the main thread last published and queues the next
+-            // refresh when due. Deriving it here would mean walking
+-            // NSView.window on this thread, which is what crashes inside
+-            // AppKit while the main thread rebuilds window and screen state.
+-            // Polled every present, not only under HDR: the refresh it queues
+-            // is also what reconciles the layer with the display the window is
+-            // on, and a session that started SDR has to notice a panel with
+-            // headroom appearing under it.
+-            let current = super::macdrv::current_headroom();
+             // The pointer check rides the present cadence so a system tool
+             // taking the pointer is noticed without a wakeup of its own.
+             super::macdrv::poll_capture_from_present();
+@@ -498,7 +515,7 @@ pub fn submit_frame(params: &mut SubmitFrameParams) -> bool {
                  match route {
                      PresentRoute::Upscale => encode_hdr_present_upscaled(
                          &cmd_buf,
@@ -1521,7 +1810,7 @@ index 18e1be0..ebaa1d4 100644
                          &drawable_texture,
                          current,
                      ),
-@@ -506,7 +514,7 @@ pub fn submit_frame(params: &mut SubmitFrameParams) -> bool {
+@@ -506,7 +523,7 @@ pub fn submit_frame(params: &mut SubmitFrameParams) -> bool {
                      // one encode covers both an exact present and a
                      // minification.
                      PresentRoute::Copy | PresentRoute::Stretch => {
@@ -1530,7 +1819,7 @@ index 18e1be0..ebaa1d4 100644
                      }
                  }
              } else {
-@@ -521,13 +529,13 @@ pub fn submit_frame(params: &mut SubmitFrameParams) -> bool {
+@@ -521,13 +538,13 @@ pub fn submit_frame(params: &mut SubmitFrameParams) -> bool {
                          super::upscale::encode(
                              &cmd_buf,
                              &device,
@@ -1547,7 +1836,7 @@ index 18e1be0..ebaa1d4 100644
                      }
                  }
              };
-@@ -549,7 +557,7 @@ pub fn submit_frame(params: &mut SubmitFrameParams) -> bool {
+@@ -549,7 +566,7 @@ pub fn submit_frame(params: &mut SubmitFrameParams) -> bool {
                  } else {
                      encode_present_blit(
                          &cmd_buf,
@@ -1556,7 +1845,7 @@ index 18e1be0..ebaa1d4 100644
                          &drawable_texture,
                          route,
                          params.present_texture.raw(),
-@@ -592,6 +600,7 @@ pub fn submit_frame(params: &mut SubmitFrameParams) -> bool {
+@@ -592,6 +609,7 @@ pub fn submit_frame(params: &mut SubmitFrameParams) -> bool {
              .expect("PE wire pointer fits host address space (unix is 64-bit)");
          let seq = params.submit_seq;
          let failed_seq_ptr = params.failed_submit_seq_ptr;
@@ -1564,7 +1853,7 @@ index 18e1be0..ebaa1d4 100644
          let handler = RcBlock::new(
              move |cb_ptr: core::ptr::NonNull<ProtocolObject<dyn MTLCommandBuffer>>| {
                  // Tripwire: a command buffer the GPU rejected discards every
-@@ -606,6 +615,12 @@ pub fn submit_frame(params: &mut SubmitFrameParams) -> bool {
+@@ -606,6 +624,12 @@ pub fn submit_frame(params: &mut SubmitFrameParams) -> bool {
                  // SAFETY: Metal invokes the block with the completed command
                  // buffer; the pointer is valid for the handler's duration.
                  let cb = unsafe { cb_ptr.as_ref() };
@@ -1577,7 +1866,7 @@ index 18e1be0..ebaa1d4 100644
                  // The failure is recorded before the retirement bump below:
                  // both stores are `Release`, so a PE-side `Acquire` load of
                  // `coherent_seq` that observes this seq observes the failure
-@@ -644,6 +659,12 @@ pub fn submit_frame(params: &mut SubmitFrameParams) -> bool {
+@@ -644,6 +668,12 @@ pub fn submit_frame(params: &mut SubmitFrameParams) -> bool {
  
      mtld3d_shared::crumb!("submit:commit");
      cmd_buf.commit();
@@ -1590,7 +1879,7 @@ index 18e1be0..ebaa1d4 100644
      mtld3d_shared::crumb!("submit:done");
      true
  }
-@@ -2862,6 +2883,9 @@ fn encode_readback_resolve(
+@@ -2862,6 +2892,9 @@ fn encode_readback_resolve(
  pub fn blit_texture_to_buffer(args: &BlitArgs) -> bool {
      use core::{ffi::c_void, ptr::NonNull};
  
@@ -1600,7 +1889,7 @@ index 18e1be0..ebaa1d4 100644
      let to_usize =
          |v: u64| usize::try_from(v).expect("PE wire u64 fits unix host usize (unix is 64-bit)");
      let BlitArgs {
-@@ -3024,8 +3048,15 @@ pub fn blit_texture_to_buffer(args: &BlitArgs) -> bool {
+@@ -3024,8 +3057,15 @@ pub fn blit_texture_to_buffer(args: &BlitArgs) -> bool {
      }
  
      blit.endEncoding();
@@ -1617,7 +1906,7 @@ index 18e1be0..ebaa1d4 100644
      // untouched (deallocator was None).
      true
 diff --git a/unix/unix/src/metal/macdrv.rs b/unix/unix/src/metal/macdrv.rs
-index 13bdd0a..1793550 100644
+index 13bdd0a..15f0cd3 100644
 --- a/unix/unix/src/metal/macdrv.rs
 +++ b/unix/unix/src/metal/macdrv.rs
 @@ -20,6 +20,7 @@ use objc2_core_graphics::{CGColor, CGColorSpace};
@@ -1628,7 +1917,7 @@ index 13bdd0a..1793550 100644
  
  pub use cursor_overlay::{poll_capture_from_present, set_cursor_overlay};
  
-@@ -49,6 +50,12 @@ static HDR_ENABLE_REQUESTED: AtomicBool = AtomicBool::new(false);
+@@ -49,11 +50,17 @@ static HDR_ENABLE_REQUESTED: AtomicBool = AtomicBool::new(false);
  /// picked for it.
  static COLOR_SPACE_POLICY: AtomicU32 = AtomicU32::new(ColorSpacePolicy::Passthrough as u32);
  
@@ -1641,6 +1930,13 @@ index 13bdd0a..1793550 100644
  /// Whether the bound window is currently fully occluded (covered or minimised).
  ///
  /// I.e. its `NSWindow` occlusion state lacks the `Visible` bit. Seeded at
+-/// `AttachMetalLayer` and updated by an `NSWindowDidChangeOcclusionState`
+-/// observer (both on the main thread); read by `submit_frame` per present
++/// `AttachMetalLayer` and refreshed on window and Space notifications and
++/// during the periodic main-thread display refresh; read by `submit_frame` per present
+ /// to skip the `nextDrawable` acquire while nothing reaches the screen.
+ /// Relaxed is enough — a one-frame lag at the transition is harmless and
+ /// bounded by the retained `allowsNextDrawableTimeout` safety valve.
 @@ -192,6 +199,9 @@ fn is_bound_window(window: usize) -> bool {
  pub fn detach_metal_layer(view_handle: MetalHandle<NSViewKind>) {
      let view_addr =
@@ -1651,7 +1947,113 @@ index 13bdd0a..1793550 100644
      let detached = with_bound_display(|bound| {
          let bound_view = view_addr != 0 && bound.view == view_addr;
          if bound_view {
-@@ -733,7 +743,11 @@ fn min_present_duration(panel_max_hz: f64, pacing: &PresentPacing) -> f64 {
+@@ -295,7 +305,7 @@ pub fn window_occluded() -> bool {
+ /// thread — `NSView`/`NSWindow` access and the notification center are
+ /// main-thread affairs, mirroring [`configure_metal_layer`]'s posture.
+ fn install_occlusion_tracking(view: *mut c_void) {
+-    use objc2_app_kit::{NSView, NSWindowOcclusionState};
++    use objc2_app_kit::NSView;
+ 
+     let view_addr = view as usize;
+     // The headroom refresh walks this same view, and stores it here rather
+@@ -317,10 +327,7 @@ fn install_occlusion_tracking(view: *mut c_void) {
+         };
+         let window_addr = Retained::as_ptr(&window) as usize;
+         with_bound_display(|bound| bound.window = window_addr);
+-        let occluded = !window
+-            .occlusionState()
+-            .contains(NSWindowOcclusionState::Visible);
+-        WINDOW_OCCLUDED.store(occluded, Ordering::Relaxed);
++        refresh_window_visibility(view);
+         install_occlusion_observer_once();
+         // SAFETY: inside the main-thread dispatch above.
+         let mtm = unsafe { objc2::MainThreadMarker::new_unchecked() };
+@@ -584,7 +591,8 @@ fn install_occlusion_observer_once() {
+ 
+     use block2::RcBlock;
+     use objc2_app_kit::{
+-        NSWindow, NSWindowDidChangeOcclusionStateNotification, NSWindowOcclusionState,
++        NSWindowDidChangeOcclusionStateNotification, NSWorkspace,
++        NSWorkspaceActiveSpaceDidChangeNotification,
+     };
+     use objc2_foundation::{NSNotification, NSNotificationCenter};
+ 
+@@ -601,17 +609,12 @@ fn install_occlusion_observer_once() {
+                 return;
+             };
+             let object_ptr = Retained::as_ptr(&object) as usize;
+-            if !is_bound_window(object_ptr) {
++            if !is_bound_window(object_ptr) && !native_host::is_host_window(object_ptr) {
+                 return;
+             }
+-            // SAFETY: `object` is the live window that posted the notification;
+-            // its pointer matches the window bound at attach, so it is our
+-            // `NSWindow`, and it stays retained for this call. Occlusion
+-            // notifications are delivered on the main thread, where the
+-            // `occlusionState` read is valid.
+-            let window = unsafe { &*(object_ptr as *const NSWindow) };
+-            let occluded = !window.occlusionState().contains(NSWindowOcclusionState::Visible);
+-            WINDOW_OCCLUDED.store(occluded, Ordering::Relaxed);
++            if let Some(view) = retain_bound_view() {
++                refresh_window_visibility(&view);
++            }
+         });
+ 
+         let center = NSNotificationCenter::defaultCenter();
+@@ -625,6 +628,21 @@ fn install_occlusion_observer_once() {
+             center.addObserverForName_object_queue_usingBlock(Some(name), None, None, &block)
+         };
+         core::mem::forget(token);
++        // Space changes use the workspace center, not the default center.
++        // Resolve the current binding when delivered so teardown and reattach
++        // cannot leave an observer holding a released window.
++        let space_block = RcBlock::new(|_: NonNull<NSNotification>| {
++            run_on_main_thread_async(refresh_headroom_on_main);
++        });
++        let workspace = NSWorkspace::sharedWorkspace();
++        // SAFETY: the framework owns the notification name; the process-lifetime
++        // block captures no objects and dispatches AppKit access to the main thread.
++        let space_token = unsafe {
++            workspace.notificationCenter().addObserverForName_object_queue_usingBlock(
++                Some(NSWorkspaceActiveSpaceDidChangeNotification), None, None, &space_block,
++            )
++        };
++        core::mem::forget(space_token);
+         info!(
+             target: LOG_TARGET,
+             "present: installed NSWindowDidChangeOcclusionState observer (occluded presents skip nextDrawable)",
+@@ -632,6 +650,30 @@ fn install_occlusion_observer_once() {
+     });
+ }
+ 
++/// Reconcile presentation eligibility against the live window. Main thread only.
++fn refresh_window_visibility(view: &objc2_app_kit::NSView) {
++    use objc2_app_kit::NSWindowOcclusionState;
++
++    let Some(window) = view.window() else { return };
++    let visible = window.isVisible();
++    let on_space = window.isOnActiveSpace();
++    let exposed = window
++        .occlusionState()
++        .contains(NSWindowOcclusionState::Visible);
++    let parent_hidden = window.parentWindow().is_some_and(|parent| {
++        !parent.isVisible() || !parent.isOnActiveSpace() || parent.isMiniaturized()
++    });
++    // Occlusion is the compositor's presentation signal. Space membership and
++    // parent state can lag exposure during transitions; keep them diagnostic
++    // rather than suppressing an already-exposed surface until they settle.
++    let hidden = !exposed;
++    if WINDOW_OCCLUDED.swap(hidden, Ordering::Relaxed) != hidden {
++        info!(target: LOG_TARGET,
++            "present: visibility hidden={hidden} window={} visible={visible} active_space={on_space} exposed={exposed} parent_hidden={parent_hidden}",
++            window.windowNumber());
++    }
++}
++
+ /// Minimum seconds between presents passed to `presentDrawable:afterMinimumDuration:`.
+ ///
+ /// Encoded as `f64::to_bits`. `0.0` means "no throttle" — `submit_frame`
+@@ -733,7 +775,11 @@ fn min_present_duration(panel_max_hz: f64, pacing: &PresentPacing) -> f64 {
  ///
  /// The present site consumes it from there.
  fn store_min_present_duration(panel_max_hz: f64, pacing: &PresentPacing) {
@@ -1664,7 +2066,7 @@ index 13bdd0a..1793550 100644
      MIN_PRESENT_DURATION_BITS.store(seconds.to_bits(), Ordering::Relaxed);
  }
  
-@@ -1045,6 +1059,10 @@ fn run_on_main_thread_sync<F: FnOnce()>(f: F) {
+@@ -1045,6 +1091,10 @@ fn run_on_main_thread_sync<F: FnOnce()>(f: F) {
              f();
          }
      }
@@ -1675,7 +2077,7 @@ index 13bdd0a..1793550 100644
      let mut ctx = CallCtx { f: Some(f) };
      // SAFETY: `_dispatch_main_q` is libSystem's main-queue singleton —
      // a valid `dispatch_queue_t` for the process lifetime. `&mut ctx`
-@@ -1113,6 +1131,17 @@ pub fn attach_metal_layer(
+@@ -1113,6 +1163,17 @@ pub fn attach_metal_layer(
          cursor_kick_sink_ptr,
          software_cursor,
      } = request;
@@ -1693,7 +2095,7 @@ index 13bdd0a..1793550 100644
      if hwnd == 0 || device_handle.is_null() {
          return None;
      }
-@@ -1271,6 +1300,40 @@ pub fn set_display_sync_enabled(
+@@ -1271,6 +1332,43 @@ pub fn set_display_sync_enabled(
      store_min_present_duration(panel_max_hz, pacing);
  }
  
@@ -1707,7 +2109,10 @@ index 13bdd0a..1793550 100644
 +
 +/// Apply the native panel's display choices on the AppKit thread.
 +pub fn set_session_display(_mtm: objc2::MainThreadMarker, hdr: bool, accurate: bool) {
-+    SESSION_DISPLAY.store(u32::from(hdr) | (u32::from(accurate) << 1), Ordering::Relaxed);
++    SESSION_DISPLAY.store(
++        u32::from(hdr) | (u32::from(accurate) << 1),
++        Ordering::Relaxed,
++    );
 +    HDR_ENABLE_REQUESTED.store(hdr, Ordering::Relaxed);
 +    let policy = if accurate {
 +        ColorSpacePolicy::Accurate
@@ -1734,7 +2139,15 @@ index 13bdd0a..1793550 100644
  /// Host-time seconds (`CFTimeInterval`) to nanoseconds, saturating.
  ///
  /// `presentedTime` is a `CACurrentMediaTime`-based host time; a session's
-@@ -2136,9 +2199,11 @@ fn follow_screen_layer_mode(screen: &objc2_app_kit::NSScreen) {
+@@ -1700,6 +1798,7 @@ fn refresh_headroom_on_main() {
+     let Some(view_obj) = retain_bound_view() else {
+         return;
+     };
++    refresh_window_visibility(&view_obj);
+     // SAFETY: we are on the main thread (dispatched to the main queue), where
+     // NSScreen's main-thread-only class annotation is satisfied for real.
+     let mtm = unsafe { MainThreadMarker::new_unchecked() };
+@@ -2136,9 +2235,11 @@ fn follow_screen_layer_mode(screen: &objc2_app_kit::NSScreen) {
      let hdr_enable = HDR_ENABLE_REQUESTED.load(Ordering::Relaxed);
      // The layer already matches this screen, which is every poll of a session
      // that stays on one display.
@@ -1748,7 +2161,7 @@ index 13bdd0a..1793550 100644
      // No layer bound: attach configures the first one itself, and a torn-down
      // device leaves none to reconcile.
      let Some(layer) = retain_bound_layer() else {
-@@ -2166,11 +2231,13 @@ fn follow_screen_layer_mode(screen: &objc2_app_kit::NSScreen) {
+@@ -2166,11 +2267,13 @@ fn follow_screen_layer_mode(screen: &objc2_app_kit::NSScreen) {
          },
      );
      HDR_ACTIVE.store(mode == LayerMode::Hdr, Ordering::Relaxed);
@@ -1763,7 +2176,7 @@ index 13bdd0a..1793550 100644
           pixelFormat={pf:?} wantsEDR={wants} colorspace={cs_label}",
      );
  }
-@@ -2203,7 +2270,8 @@ fn follow_screen_present_throttle(screen: &objc2_app_kit::NSScreen) {
+@@ -2203,7 +2306,8 @@ fn follow_screen_present_throttle(screen: &objc2_app_kit::NSScreen) {
      if !display_state_is_latched() {
          return;
      }
@@ -1773,7 +2186,7 @@ index 13bdd0a..1793550 100644
      let panel_max_hz = screen_max_hz(screen);
      let applied = min_present_duration_sec();
      let Some(seconds) = min_present_duration_change(applied, panel_max_hz, &pacing) else {
-@@ -2534,3 +2602,19 @@ fn gamut_from_chromaticities(red_x: f32, green_y: f32) -> &'static str {
+@@ -2534,3 +2638,19 @@ fn gamut_from_chromaticities(red_x: f32, green_y: f32) -> &'static str {
  
  #[cfg(test)]
  mod tests;
@@ -1869,10 +2282,10 @@ index 8e87d49..e04ee67 100644
              self.ensure_content(Content::Sprite { hash, mode, peak });
 diff --git a/unix/unix/src/metal/macdrv/native_host.rs b/unix/unix/src/metal/macdrv/native_host.rs
 new file mode 100644
-index 0000000..3a540d2
+index 0000000..e7fa55a
 --- /dev/null
 +++ b/unix/unix/src/metal/macdrv/native_host.rs
-@@ -0,0 +1,397 @@
+@@ -0,0 +1,402 @@
 +//! Native window ownership with Wine retaining game input and Metal presentation.
 +//!
 +//! All state and callbacks live on the `AppKit` main thread. The child remains a
@@ -1904,8 +2317,8 @@ index 0000000..3a540d2
 +use super::MACDRV_LIB;
 +use crate::LOG_TARGET;
 +
-+mod settings;
 +mod preferences;
++mod settings;
 +
 +static HOST_VIEW: AtomicUsize = AtomicUsize::new(0);
 +
@@ -2269,6 +2682,11 @@ index 0000000..3a540d2
 +/// Cheap ownership check for teardown, without involving the main thread when disabled.
 +pub fn owns(view: usize) -> bool {
 +    view != 0 && HOST_VIEW.load(Ordering::Acquire) == view
++}
++
++/// Match a host notification to the active binding. Main thread only.
++pub fn is_host_window(window: usize) -> bool {
++    current().is_some_and(|host| Retained::as_ptr(&host.window) as usize == window)
 +}
 diff --git a/unix/unix/src/metal/macdrv/native_host/preferences.rs b/unix/unix/src/metal/macdrv/native_host/preferences.rs
 new file mode 100644
@@ -3550,6 +3968,63 @@ index ce4176f..b99ec9f 100644
  /// texture with undefined contents, which is what creation produced
  /// anyway, so it is logged and tolerated rather than failing creation.
  fn clear_texture_black(
+diff --git a/unix/unix/src/qos.rs b/unix/unix/src/qos.rs
+new file mode 100644
+index 0000000..bf5480b
+--- /dev/null
++++ b/unix/unix/src/qos.rs
+@@ -0,0 +1,51 @@
++//! Opt-in observation of scheduling classes on threads crossing the native boundary.
++
++use std::cell::Cell;
++
++thread_local! {
++    static LAST: Cell<[(u32, i32, i32); 3]> = const {
++        Cell::new([(u32::MAX, i32::MIN, i32::MIN); 3])
++    };
++}
++
++/// Rendering work whose calling thread is observed.
++pub enum Role {
++    DeviceApi,
++    Submit,
++    ReadbackApi,
++}
++
++/// Record the initial class and subsequent changes for each role on this thread.
++///
++/// Queries the current pthread only; this never changes scheduling policy.
++pub fn observe(role: &Role) {
++    if !log::log_enabled!(target: "mtld3d::qos", log::Level::Debug) {
++        return;
++    }
++    let (index, name) = match role {
++        Role::DeviceApi => (0, "device-api"),
++        Role::Submit => (1, "submit"),
++        Role::ReadbackApi => (2, "readback-api"),
++    };
++    let mut class = libc::qos_class_t::QOS_CLASS_UNSPECIFIED;
++    let mut relative_priority = 0;
++    // SAFETY: querying the current pthread has no preconditions.
++    let current = unsafe { libc::pthread_self() };
++    // SAFETY: current is a live pthread; both outputs are writable scalars.
++    let status = unsafe {
++        libc::pthread_get_qos_class_np(current, &raw mut class, &raw mut relative_priority)
++    };
++    // SAFETY: current is the live calling thread.
++    let thread = unsafe { libc::pthread_mach_thread_np(current) };
++    let class = class as u32;
++    LAST.with(|last| {
++        let mut previous = last.get();
++        if previous[index] == (class, relative_priority, status) {
++            return;
++        }
++        previous[index] = (class, relative_priority, status);
++        last.set(previous);
++        log::debug!(target: "mtld3d::qos",
++            "role={name} mach_thread={thread} class={class} relative_priority={relative_priority} status={status}");
++    });
++}
 diff --git a/windows/core/examples/shader_cache_audit.rs b/windows/core/examples/shader_cache_audit.rs
 new file mode 100644
 index 0000000..f7a926a
@@ -5875,7 +6350,7 @@ index a7b22d9..c3d6ca8 100644
  }
  
 diff --git a/windows/tests/COVERAGE.md b/windows/tests/COVERAGE.md
-index 54ec575..1ecd27f 100644
+index 54ec575..6cd0a68 100644
 --- a/windows/tests/COVERAGE.md
 +++ b/windows/tests/COVERAGE.md
 @@ -38,8 +38,8 @@ test file lands with its row in the same change.
@@ -5899,8 +6374,9 @@ index 54ec575..1ecd27f 100644
  | `shaders.rs` | hand-assembled VS/PS; PS-constant colour; VS-constant translation; float-constant setters (in-range accept + out-of-range/`-1` → `INVALIDCALL`); integer/bool constant round trips; a `vs_2_0` static `if b0` branch driven by `SetVertexShaderConstantB` (TRUE and FALSE arms, no shader rebind); the same `if b0` in a `ps_3_0` driven by `SetPixelShaderConstantB`; a `ps_3_0` `rep i0` loop count driven by `SetPixelShaderConstantI` (4 iterations vs 0); a `ps_2_0` writing `oDepth` still drawing with no depth buffer bound (the depth export is dropped for that pass); `GetFunction` returning the creating bytecode (size query, round trip, undersized buffer, null size pointer) for both shader kinds and for a shader-model 1 program; a `ps_3_0` sampler reading the texture kind the application bound rather than the one its `dcl` names, over all four combinations of a 2D and a volume texture with a `dcl_2d` and a `dcl_volume` slot; a `ps_2_0` whose only `c0` read is `def`-declared keeping its literal colour across a `SetPixelShaderConstantF` upload; three draws in one pass alternating that program with one that does read `c0`, pinning that the reader still sees a row set between the draws; a `vs_3_0` whose only relative constant read (`c[a0.x + 0]`, the row index itself uploaded in `c0`) sits in a subroutine reached through `call`, drawing the colour uploaded twenty rows past anything the instruction stream names; a `vs_3_0` vertex texture fetch reading the texture bound at `D3DVERTEXTEXTURESAMPLER0` with `texldl`, and the same fetch declared `dcl_volume` over a 2D binding, pinning that the sampler argument and its coordinate follow the bound texture kind rather than the declaration. |
  | `vertex_decl.rs` | `CreateVertexDeclaration` drives an FF draw; `GetVertexDeclaration` round-trip; a two-stream declaration through the FF pipeline; a declared stream with nothing bound reads zeros (bound and UP draws). |
 -| `transforms_ff.rs` | Set/Get/MultiplyTransform; FF diffuse passthrough; alpha test; Set/Get material + light + LightEnable. |
+-| `render_target.rs` | Render-to-texture + sample; A16B16G16R16F render target create and draw/readback round trip; depth occlusion; auto depth-stencil Get/Set; `GetDepthStencilSurface` answering with the surface `SetDepthStencilSurface` bound (pointer identity against an app-created surface, a save/bind-other/restore leaving that surface bound, `D3DERR_NOTFOUND` and a null out-pointer once depth is unbound); CreateDepthStencilSurface; backbuffer desc; StretchRect 1:1 accept; a full-surface depth→depth StretchRect, its copy read back by depth-testing two quads against the destination and the filtered form accepted as well; StretchRect between two rects of one surface (a disjoint copy, and an overlapping shift whose result is the source as it stood before the copy); StretchRect format conversion (R5G6B5 into X8R8G8B8 through the scaling render quad, YUY2/UYVY decode into the backbuffer and, on the CPU path, into an offscreen-plain surface, including a source sub-rectangle converted into a destination level smaller than the source level); INTZ sampleable-depth dual-use (render-as-depth → sample) via both the FF and a programmable PS; a depth texture's content surviving a `CreateDepthStencilSurface` bind and a `Present` before it is sampled (the store action a texture-backed depth bind's `is_sampleable` keeps); the INTZ texture sampled while it is still the bound depth attachment (the encoder copies it first); `GetRenderTargetData` read-back into a SYSTEMMEM offscreen surface (`Surface::GetDevice` + `CreateOffscreenPlainSurface` + `LockRect`, pixels matched against the private export); `GetRenderTargetData` and `GetFrontBufferData` into level 0 of a `D3DPOOL_SYSTEMMEM` / `D3DPOOL_SCRATCH` texture, read back through `LockRect`, plus the destinations both reject (a GPU-resident level, another extent, another byte layout); a 33x4 R5G6B5 read-back pinning that the blit writes its rows at the pitch the destination's `LockRect` reports, not the tight one (an odd width in a 16-bit format is where the two differ); `StretchRect` into a lockable DEFAULT offscreen plain read back through `LockRect` (whole surface and a sub-rect that leaves the rest alone), with a `D3DLOCK_DISCARD` lock after such a blit keeping the pixels it wrote instead of the blitted ones, `StretchRect` from a render target into a render-target texture level read back through `GetDC`/`GetPixel` over staging a lock seeded with another colour, the same round trip through `LockRect` for the two copies that take the render quad instead of the 1:1 blit (a 64x64 render target scaled into a 32x32 render-target texture level, and a same-size R5G6B5 offscreen plain converted into an A8R8G8B8 one), the same blit into face 3 of a DEFAULT render-target cube read back through that face's `GetDC` with a differently filled face 0 left alone, a `ColorFill` of two cube faces each reading its own colour back through its own `GetDC`, `GetRenderTargetData` from a render-target cube's face-3 surface and from that face's level 1 reading each subresource's own fill while face 0 keeps its own, a scaling `StretchRect` into face 3 of a DEFAULT render-target cube sampled back along that face's direction with a differently filled face 0 left alone, a scaling `StretchRect` out of a cube face onto the back buffer carrying that face's colour, a 1:1 same-format `StretchRect` out of face 3 into a 2D render target carrying face 3's colour rather than face 0's, a 1:1 same-format `StretchRect` from face 1 onto face 3 of one cube at the same rectangle carrying face 1's colour (both endpoints resolve to one Metal texture, where equal rectangles on two faces are still a real copy), the scaling form of that pair landing the whole of face 1 in face 3's top-left quarter through the scratch detour and leaving the rest of face 3 alone, and the surface-class restriction that keeps a render-target source out of an offscreen-plain destination (standalone `CreateRenderTarget`, render-target texture level, and the reverse direction accepted); surface-op contracts (ColorFill/CreateRenderTarget` rejecting an unmappable format, `GetRenderTargetData`/`GetFrontBufferData` refusing a non-SYSTEMMEM destination, `CreateOffscreenPlainSurface` taking `D3DPOOL_DEFAULT` and refusiong `D3DPOOL_MANAGED`); a fresh DEFAULT offscreen plain served out of its own staging (a read-only lock before anything wrote it, a `LockRect` write and the `LockRect` read after it, and a `ColorFill` of a plain no lock has touched); `GetDC` on a DEFAULT offscreen plain reading the `ColorFill` before it, with GDI's `SetPixel` through the DC reaching both the staging a later `LockRect` maps and the Metal texture a 1:1 `StretchRect` into the back buffer reads; `ColorFill` of a sub-rect and of an over-the-edge rect on a lockable DEFAULT offscreen-plain surface, read back inside and outside through `LockRect`; `ColorFill` of a DEFAULT offscreen plain in each of A1R5G5B5, X1R5G5B5, A4R4G4B4, L8 and A8 read back through `LockRect` as that format's own packing of the fill colour, over a seed the fill has to replace; `ColorFill` of a bound render target erasing an earlier draw and blending under a later `SRCALPHA` one; `ColorFill` into level 0 of an `AUTOGENMIPMAP` render-target texture regenerating the chain (a sample pinned to level 4 through `D3DSAMP_MAXMIPLEVEL` reads the fill colour, not the seeded chain); a lockable `CreateRenderTarget` surface staying coherent with its CPU staging in every direction (a whole-surface and a sub-rect `ColorFill`, a `Clear` and a draw all read back through `LockRect`, and a `GetDC` that shows the GPU's pixels with GDI's own drawing reaching the colour texture at `ReleaseDC`, and the same `GetDC` round trip on a 33x4 R5G6B5 surface, whose odd row length puts the last row out of reach of a DIB over a tighter store); a lockable `CreateRenderTarget` surface created at the back buffer's own size keeping the extent D3D9 reports rather than inheriting `render.scale`, with the bind-and-`Clear`, the `ColorFill`, the `LockRect` read-back and the `UnlockRect` upload all probed on the far corner a scaled texture would not reach; a depth texture with a mip chain (per-level `GetLevelDesc`, level 1 bound as the depth attachment beside the back buffer and gating a farther draw); a rect-bounded depth `Clear` touching only its rects; a full-surface depth→depth `StretchRect` feeding a later depth test; `StretchRect` addressing an upper mip level on both the source and the destination, on the scaling and the 1:1 path; `Clear(D3DCLEAR_ZBUFFER)` rejected once no depth-stencil is bound and accepted for an offscreen target with a custom depth surface; `CreateRenderTarget` reporting a DEFAULT-pool `D3DUSAGE_RENDERTARGET` surface (against a DEFAULT offscreen-plain surface reporting no usage), accepting A32B32G32R32F and rejecting an unmappable format; a DEFAULT-pool render target bound, drawn into and read back; 1:1 `StretchRect` between two DEFAULT render targets, from a rendered target into the backbuffer across a `Present`, and into a backbuffer with a pending `Clear` (the copy lands last); `SetRenderTarget` snapping the viewport and scissor to the new target; a float-texture sample rendered into an A32B32G32R32F target; depth surviving a mid-frame readback flush (the far group still fails LESS against the primed near depth); the RESZ resolve (`D3DRS_POINTSIZE` = `0x7FA05000` with the destination INTZ texture at stage 0) copying the bound depth-stencil into that texture, read back by sampling the destination, and the `RESZ` pseudo-format probe answering `D3D_OK`; the `oDepth` depth restore, a `ps_3_0` writing sampled INTZ depth into the bound depth buffer and gating a later sprite z-test, with a colour-writing twin painting the sampled depth back as grayscale; INTZ carrying a working stencil plane (a REPLACE mark gating a later EQUAL draw); and, under `depth.aliasSameSize`, a same-size depth-stencil rebind whose z-test sees the contents rendered through the other surface; `GetDC` on a DEFAULT offscreen plain rejected while its own `LockRect` is outstanding, and accepted once it is released; 64 rounds of create, bind, depth-test and release of a standalone `CreateDepthStencilSurface` surface, one per frame, each round's depth test proving its own fresh texture and the run proving the retirement of the previous one lands after the frame that drew with it.` on the standalone backbuffer, ``; a non-lockable A16B16G16R16F render target locked read-only reporting the pitch its own format asks for (eight bytes per texel), with the last texel of the last row inside the staging; `LockRect` and `UnlockRect` on a non-lockable `CreateRenderTarget` surface both rejected with the caller's `D3DLOCKED_RECT` left untouched, and the same surface created lockable lockinge |
 +| `transforms_ff.rs` | Set/Get/MultiplyTransform; FF diffuse passthrough; alpha test; Set/Get material + light + LightEnable; omitted declaration colors fall back to all four material sources, while declared colors on unbound streams read zero. |
- | `render_target.rs` | Render-to-texture + sample; A16B16G16R16F render target create and draw/readback round trip; depth occlusion; auto depth-stencil Get/Set; `GetDepthStencilSurface` answering with the surface `SetDepthStencilSurface` bound (pointer identity against an app-created surface, a save/bind-other/restore leaving that surface bound, `D3DERR_NOTFOUND` and a null out-pointer once depth is unbound); CreateDepthStencilSurface; backbuffer desc; StretchRect 1:1 accept; a full-surface depth→depth StretchRect, its copy read back by depth-testing two quads against the destination and the filtered form accepted as well; StretchRect between two rects of one surface (a disjoint copy, and an overlapping shift whose result is the source as it stood before the copy); StretchRect format conversion (R5G6B5 into X8R8G8B8 through the scaling render quad, YUY2/UYVY decode into the backbuffer and, on the CPU path, into an offscreen-plain surface, including a source sub-rectangle converted into a destination level smaller than the source level); INTZ sampleable-depth dual-use (render-as-depth → sample) via both the FF and a programmable PS; a depth texture's content surviving a `CreateDepthStencilSurface` bind and a `Present` before it is sampled (the store action a texture-backed depth bind's `is_sampleable` keeps); the INTZ texture sampled while it is still the bound depth attachment (the encoder copies it first); `GetRenderTargetData` read-back into a SYSTEMMEM offscreen surface (`Surface::GetDevice` + `CreateOffscreenPlainSurface` + `LockRect`, pixels matched against the private export); `GetRenderTargetData` and `GetFrontBufferData` into level 0 of a `D3DPOOL_SYSTEMMEM` / `D3DPOOL_SCRATCH` texture, read back through `LockRect`, plus the destinations both reject (a GPU-resident level, another extent, another byte layout); a 33x4 R5G6B5 read-back pinning that the blit writes its rows at the pitch the destination's `LockRect` reports, not the tight one (an odd width in a 16-bit format is where the two differ); `StretchRect` into a lockable DEFAULT offscreen plain read back through `LockRect` (whole surface and a sub-rect that leaves the rest alone), with a `D3DLOCK_DISCARD` lock after such a blit keeping the pixels it wrote instead of the blitted ones, `StretchRect` from a render target into a render-target texture level read back through `GetDC`/`GetPixel` over staging a lock seeded with another colour, the same round trip through `LockRect` for the two copies that take the render quad instead of the 1:1 blit (a 64x64 render target scaled into a 32x32 render-target texture level, and a same-size R5G6B5 offscreen plain converted into an A8R8G8B8 one), the same blit into face 3 of a DEFAULT render-target cube read back through that face's `GetDC` with a differently filled face 0 left alone, a `ColorFill` of two cube faces each reading its own colour back through its own `GetDC`, `GetRenderTargetData` from a render-target cube's face-3 surface and from that face's level 1 reading each subresource's own fill while face 0 keeps its own, a scaling `StretchRect` into face 3 of a DEFAULT render-target cube sampled back along that face's direction with a differently filled face 0 left alone, a scaling `StretchRect` out of a cube face onto the back buffer carrying that face's colour, a 1:1 same-format `StretchRect` out of face 3 into a 2D render target carrying face 3's colour rather than face 0's, a 1:1 same-format `StretchRect` from face 1 onto face 3 of one cube at the same rectangle carrying face 1's colour (both endpoints resolve to one Metal texture, where equal rectangles on two faces are still a real copy), the scaling form of that pair landing the whole of face 1 in face 3's top-left quarter through the scratch detour and leaving the rest of face 3 alone, and the surface-class restriction that keeps a render-target source out of an offscreen-plain destination (standalone `CreateRenderTarget`, render-target texture level, and the reverse direction accepted); surface-op contracts (ColorFill/CreateRenderTarget` rejecting an unmappable format, `GetRenderTargetData`/`GetFrontBufferData` refusing a non-SYSTEMMEM destination, `CreateOffscreenPlainSurface` taking `D3DPOOL_DEFAULT` and refusiong `D3DPOOL_MANAGED`); a fresh DEFAULT offscreen plain served out of its own staging (a read-only lock before anything wrote it, a `LockRect` write and the `LockRect` read after it, and a `ColorFill` of a plain no lock has touched); `GetDC` on a DEFAULT offscreen plain reading the `ColorFill` before it, with GDI's `SetPixel` through the DC reaching both the staging a later `LockRect` maps and the Metal texture a 1:1 `StretchRect` into the back buffer reads; `ColorFill` of a sub-rect and of an over-the-edge rect on a lockable DEFAULT offscreen-plain surface, read back inside and outside through `LockRect`; `ColorFill` of a DEFAULT offscreen plain in each of A1R5G5B5, X1R5G5B5, A4R4G4B4, L8 and A8 read back through `LockRect` as that format's own packing of the fill colour, over a seed the fill has to replace; `ColorFill` of a bound render target erasing an earlier draw and blending under a later `SRCALPHA` one; `ColorFill` into level 0 of an `AUTOGENMIPMAP` render-target texture regenerating the chain (a sample pinned to level 4 through `D3DSAMP_MAXMIPLEVEL` reads the fill colour, not the seeded chain); a lockable `CreateRenderTarget` surface staying coherent with its CPU staging in every direction (a whole-surface and a sub-rect `ColorFill`, a `Clear` and a draw all read back through `LockRect`, and a `GetDC` that shows the GPU's pixels with GDI's own drawing reaching the colour texture at `ReleaseDC`, and the same `GetDC` round trip on a 33x4 R5G6B5 surface, whose odd row length puts the last row out of reach of a DIB over a tighter store); a lockable `CreateRenderTarget` surface created at the back buffer's own size keeping the extent D3D9 reports rather than inheriting `render.scale`, with the bind-and-`Clear`, the `ColorFill`, the `LockRect` read-back and the `UnlockRect` upload all probed on the far corner a scaled texture would not reach; a depth texture with a mip chain (per-level `GetLevelDesc`, level 1 bound as the depth attachment beside the back buffer and gating a farther draw); a rect-bounded depth `Clear` touching only its rects; a full-surface depth→depth `StretchRect` feeding a later depth test; `StretchRect` addressing an upper mip level on both the source and the destination, on the scaling and the 1:1 path; `Clear(D3DCLEAR_ZBUFFER)` rejected once no depth-stencil is bound and accepted for an offscreen target with a custom depth surface; `CreateRenderTarget` reporting a DEFAULT-pool `D3DUSAGE_RENDERTARGET` surface (against a DEFAULT offscreen-plain surface reporting no usage), accepting A32B32G32R32F and rejecting an unmappable format; a DEFAULT-pool render target bound, drawn into and read back; 1:1 `StretchRect` between two DEFAULT render targets, from a rendered target into the backbuffer across a `Present`, and into a backbuffer with a pending `Clear` (the copy lands last); `SetRenderTarget` snapping the viewport and scissor to the new target; a float-texture sample rendered into an A32B32G32R32F target; depth surviving a mid-frame readback flush (the far group still fails LESS against the primed near depth); the RESZ resolve (`D3DRS_POINTSIZE` = `0x7FA05000` with the destination INTZ texture at stage 0) copying the bound depth-stencil into that texture, read back by sampling the destination, and the `RESZ` pseudo-format probe answering `D3D_OK`; the `oDepth` depth restore, a `ps_3_0` writing sampled INTZ depth into the bound depth buffer and gating a later sprite z-test, with a colour-writing twin painting the sampled depth back as grayscale; INTZ carrying a working stencil plane (a REPLACE mark gating a later EQUAL draw); and, under `depth.aliasSameSize`, a same-size depth-stencil rebind whose z-test sees the contents rendered through the other surface; `GetDC` on a DEFAULT offscreen plain rejected while its own `LockRect` is outstanding, and accepted once it is released; 64 rounds of create, bind, depth-test and release of a standalone `CreateDepthStencilSurface` surface, one per frame, each round's depth test proving its own fresh texture and the run proving the retirement of the previous one lands after the frame that drew with it.` on the standalone backbuffer, ``; a non-lockable A16B16G16R16F render target locked read-only reporting the pitch its own format asks for (eight bytes per texel), with the last texel of the last row inside the staging; `LockRect` and `UnlockRect` on a non-lockable `CreateRenderTarget` surface both rejected with the caller's `D3DLOCKED_RECT` left untouched, and the same surface created lockable lockinge |
++| `render_target.rs` | Render-to-texture + sample; A16B16G16R16F render target create and draw/readback round trip; depth occlusion; auto depth-stencil Get/Set; `GetDepthStencilSurface` answering with the surface `SetDepthStencilSurface` bound (pointer identity against an app-created surface, a save/bind-other/restore leaving that surface bound, `D3DERR_NOTFOUND` and a null out-pointer once depth is unbound); CreateDepthStencilSurface; backbuffer desc; StretchRect 1:1 accept; a full-surface depth→depth StretchRect, its copy read back by depth-testing two quads against the destination and the filtered form accepted as well; StretchRect between two rects of one surface (a disjoint copy, and an overlapping shift whose result is the source as it stood before the copy); StretchRect format conversion (R5G6B5 into X8R8G8B8 through the scaling render quad, YUY2/UYVY decode into the backbuffer and, on the CPU path, into an offscreen-plain surface, including a source sub-rectangle converted into a destination level smaller than the source level); INTZ sampleable-depth dual-use (render-as-depth → sample) via both the FF and a programmable PS; a depth texture's content surviving a `CreateDepthStencilSurface` bind and a `Present` before it is sampled (the store action a texture-backed depth bind's `is_sampleable` keeps); the INTZ texture sampled while it is still the bound depth attachment (the encoder copies it first); `GetRenderTargetData` read-back into a SYSTEMMEM offscreen surface (`Surface::GetDevice` + `CreateOffscreenPlainSurface` + `LockRect`, pixels matched against the private export); `GetRenderTargetData` and `GetFrontBufferData` into level 0 of a `D3DPOOL_SYSTEMMEM` / `D3DPOOL_SCRATCH` texture, read back through `LockRect`, plus the destinations both reject (a GPU-resident level, another extent, another byte layout); a 33x4 R5G6B5 read-back pinning that the blit writes its rows at the pitch the destination's `LockRect` reports, not the tight one (an odd width in a 16-bit format is where the two differ); `StretchRect` into a lockable DEFAULT offscreen plain read back through `LockRect` (whole surface and a sub-rect that leaves the rest alone), with a `D3DLOCK_DISCARD` lock after such a blit keeping the pixels it wrote instead of the blitted ones, `StretchRect` from a render target into a render-target texture level read back through `GetDC`/`GetPixel` over staging a lock seeded with another colour, the same round trip through `LockRect` for the two copies that take the render quad instead of the 1:1 blit (a 64x64 render target scaled into a 32x32 render-target texture level, and a same-size R5G6B5 offscreen plain converted into an A8R8G8B8 one), the same blit into face 3 of a DEFAULT render-target cube read back through that face's `GetDC` with a differently filled face 0 left alone, a `ColorFill` of two cube faces each reading its own colour back through its own `GetDC`, `GetRenderTargetData` from a render-target cube's face-3 surface and from that face's level 1 reading each subresource's own fill while face 0 keeps its own, a scaling `StretchRect` into face 3 of a DEFAULT render-target cube sampled back along that face's direction with a differently filled face 0 left alone, a scaling `StretchRect` out of a cube face onto the back buffer carrying that face's colour, a 1:1 same-format `StretchRect` out of face 3 into a 2D render target carrying face 3's colour rather than face 0's, a 1:1 same-format `StretchRect` from face 1 onto face 3 of one cube at the same rectangle carrying face 1's colour (both endpoints resolve to one Metal texture, where equal rectangles on two faces are still a real copy), the scaling form of that pair landing the whole of face 1 in face 3's top-left quarter through the scratch detour and leaving the rest of face 3 alone, and the surface-class restriction that keeps a render-target source out of an offscreen-plain destination (standalone `CreateRenderTarget`, render-target texture level, and the reverse direction accepted); surface-op contracts (ColorFill/CreateRenderTarget` rejecting an unmappable format, `GetRenderTargetData`/`GetFrontBufferData` refusing a non-SYSTEMMEM destination, `CreateOffscreenPlainSurface` taking `D3DPOOL_DEFAULT` and refusiong `D3DPOOL_MANAGED`); a fresh DEFAULT offscreen plain served out of its own staging (a read-only lock before anything wrote it, a `LockRect` write and the `LockRect` read after it, and a `ColorFill` of a plain no lock has touched); `GetDC` on a DEFAULT offscreen plain reading the `ColorFill` before it, with GDI's `SetPixel` through the DC reaching both the staging a later `LockRect` maps and the Metal texture a 1:1 `StretchRect` into the back buffer reads; `ColorFill` of a sub-rect and of an over-the-edge rect on a lockable DEFAULT offscreen-plain surface, read back inside and outside through `LockRect`; `ColorFill` of a DEFAULT offscreen plain in each of A1R5G5B5, X1R5G5B5, A4R4G4B4, L8 and A8 read back through `LockRect` as that format's own packing of the fill colour, over a seed the fill has to replace; `ColorFill` of a bound render target erasing an earlier draw and blending under a later `SRCALPHA` one; `ColorFill` into level 0 of an `AUTOGENMIPMAP` render-target texture regenerating the chain (a sample pinned to level 4 through `D3DSAMP_MAXMIPLEVEL` reads the fill colour, not the seeded chain); a lockable `CreateRenderTarget` surface staying coherent with its CPU staging in every direction (a whole-surface and a sub-rect `ColorFill`, a `Clear` and a draw all read back through `LockRect`, and a `GetDC` that shows the GPU's pixels with GDI's own drawing reaching the colour texture at `ReleaseDC`, and the same `GetDC` round trip on a 33x4 R5G6B5 surface, whose odd row length puts the last row out of reach of a DIB over a tighter store); a lockable `CreateRenderTarget` surface created at the back buffer's own size keeping the extent D3D9 reports rather than inheriting `render.scale`, with the bind-and-`Clear`, the `ColorFill`, the `LockRect` read-back and the `UnlockRect` upload all probed on the far corner a scaled texture would not reach; a depth texture with a mip chain (per-level `GetLevelDesc`, level 1 bound as the depth attachment beside the back buffer and gating a farther draw); a rect-bounded depth `Clear` touching only its rects; a full-surface depth→depth `StretchRect` feeding a later depth test; `StretchRect` addressing an upper mip level on both the source and the destination, on the scaling and the 1:1 path; `Clear(D3DCLEAR_ZBUFFER)` rejected once no depth-stencil is bound and accepted for an offscreen target with a custom depth surface; `CreateRenderTarget` reporting a DEFAULT-pool `D3DUSAGE_RENDERTARGET` surface (against a DEFAULT offscreen-plain surface reporting no usage), accepting A32B32G32R32F and rejecting an unmappable format; a DEFAULT-pool render target bound, drawn into and read back; 1:1 `StretchRect` between two DEFAULT render targets, from a rendered target into the backbuffer across a `Present`, and into a backbuffer with a pending `Clear` (the copy lands last); `SetRenderTarget` snapping the viewport and scissor to the new target; a float-texture sample rendered into an A32B32G32R32F target; depth surviving a mid-frame readback flush (the far group still fails LESS against the primed near depth); the RESZ resolve (`D3DRS_POINTSIZE` = `0x7FA05000` with the destination INTZ texture at stage 0) copying the bound depth-stencil into that texture, read back by sampling the destination, and the `RESZ` pseudo-format probe answering `D3D_OK`; the `oDepth` depth restore, a `ps_3_0` writing sampled INTZ depth into the bound depth buffer and gating a later sprite z-test, with a colour-writing twin painting the sampled depth back as grayscale; INTZ carrying a working stencil plane (a REPLACE mark gating a later EQUAL draw); and, under `depth.aliasSameSize`, a same-size depth-stencil rebind whose z-test sees the contents rendered through the other surface; `GetDC` on a DEFAULT offscreen plain rejected while its own `LockRect` is outstanding, and accepted once it is released; 64 rounds of create, bind, depth-test and release of a standalone `CreateDepthStencilSurface` surface, one per frame, each round's depth test proving its own fresh texture and the run proving the retirement of the previous one lands after the frame that drew with it.` on the standalone backbuffer, ``; a non-lockable A16B16G16R16F render target locked read-only reporting the pitch its own format asks for (eight bytes per texel), with the last texel of the last row inside the staging; `LockRect` and `UnlockRect` on a non-lockable `CreateRenderTarget` surface both rejected with the caller's `D3DLOCKED_RECT` left untouched, and the same surface created lockable lockinge Successive queued Presents and readback continuations retain each target's captured UP vertex data after the caller overwrites its input. |
  | `render_scale.rs` | Every assertion in *reported* coordinates, so the whole file must pass unchanged under `make test SCALE=0.75`: the scissor confining a whole-target clear; `Clear` with `pRects`, and those rects intersected with the scissor; the viewport bounding a whole-target colour clear, and bounding the colour plane of a combined `TARGET | ZBUFFER` clear; a whole-target depth clear bounded to the viewport, read back through the depth test, including that it writes `Clear`'s raw Z rather than one remapped through the viewport's `MinZ`; rebinding the back buffer by surface keeping its coordinate space; a back-buffer readback carrying the frame's alpha rather than an opaque one; a game-created render target passing through untouched; a resizing `Reset` reporting and clipping in the new size; `ColorFill` of a sub-rect of a render-target texture created at the reported back-buffer size, and of a sub-rect of that target's mip level 1 read back by sampling the level; `ColorFill` of a sub-rect of a standalone `CreateRenderTarget` surface at that size, copied onto the back buffer with `StretchRect`; and a point's diameter, which D3D9 states in the reported space and Metal consumes in the rasterized one, keeping its reported extent; a `D3DUSAGE_DEPTHSTENCIL` texture created at the reported back-buffer size charged the mip chain its Metal levels hold rather than the one its descriptor reports, while a texture of another size keeps costing what it asked for; and a `CreateRenderTarget` and a `CreateDepthStencilSurface` surface at that size each charged the texture their Metal create holds and refunded it on release, while a target of another size keeps costing what it asked for (those three tests pin `render.scale=0.5` themselves, since none of those quantities is observable at the identity). |
 -| `implicit_surface.rs` | The device-owned implicit surfaces: `GetRenderTarget(0)` and `GetBackBuffer(0)` handing back one cached object that survives its refcount reaching zero and resolves its extent live across a resizing `Reset`; the cached implicit depth-stencil; `GetDC` on a non-lockable back buffer rejected with the caller's out `HDC` untouched, and on a `D3DPRESENTFLAG_LOCKABLE_BACKBUFFER` one reading the pixels the GPU painted and carrying GDI's own drawing back into the back buffer at `ReleaseDC`, with no `Present` in between, both at the extent D3D9 reports and, with `render.scale` pinned below 1.0 in the test's own process, through the resample the write-back needs when the back buffer is rasterized smaller. |
 +| `implicit_surface.rs` | Window resizes preserve backbuffer/depth extents, viewport and scissor until an explicit `Reset`. The device-owned implicit surfaces: `GetRenderTarget(0)` and `GetBackBuffer(0)` handing back one cached object that survives its refcount reaching zero and resolves its extent live across a resizing `Reset`; the cached implicit depth-stencil; `GetDC` on a non-lockable back buffer rejected with the caller's out `HDC` untouched, and on a `D3DPRESENTFLAG_LOCKABLE_BACKBUFFER` one reading the pixels the GPU painted and carrying GDI's own drawing back into the back buffer at `ReleaseDC`, with no `Present` in between, both at the extent D3D9 reports and, with `render.scale` pinned below 1.0 in the test's own process, through the resample the write-back needs when the back buffer is rasterized smaller. |
@@ -6104,7 +6580,7 @@ index f138aa3..75164f6 100644
 +    assert_eq!((after.width, after.height), (800, 600));
 +}
 diff --git a/windows/tests/tests/render_target.rs b/windows/tests/tests/render_target.rs
-index 405966b..89e0d82 100644
+index 405966b..402f89f 100644
 --- a/windows/tests/tests/render_target.rs
 +++ b/windows/tests/tests/render_target.rs
 @@ -226,6 +226,61 @@ fn render_to_texture_then_sample() {
@@ -6218,6 +6694,55 @@ index 405966b..89e0d82 100644
  /// Assert each RGB channel of `got` is within `tolerance` of `expected` (alpha ignored).
  fn assert_rgb_close(got: u32, expected: u32, tolerance: i32, context: &str) {
      let channel = |c: u32, shift: u32| i32::try_from((c >> shift) & 0xff).unwrap_or(0);
+@@ -4880,3 +4977,48 @@ fn get_render_target_data_from_a_cube_face_reads_that_face() {
+         "face 0 still reads its own fill"
+     );
+ }
++
++#[test]
++fn successive_submits_preserve_up_data_across_readback_continuations() {
++    let h = Harness::new();
++    let targets = [
++        h.create_render_target(64, 64, D3DFMT_A8R8G8B8),
++        h.create_render_target(64, 64, D3DFMT_A8R8G8B8),
++        h.create_render_target(64, 64, D3DFMT_A8R8G8B8),
++    ];
++    let backbuffer = h.render_target(0);
++    assert_eq!(h.clear_texture(0), 0);
++    assert_eq!(h.set_render_state(D3DRS_LIGHTING, 0), 0);
++    assert_eq!(h.set_render_state(D3DRS_ZENABLE, 0), 0);
++    assert_eq!(h.set_fvf(D3DFVF_XYZ | D3DFVF_DIFFUSE), 0);
++    h.select_diffuse_stage(0);
++    let colors = [RED, GREEN, BLUE, WHITE];
++    let mut expected = [BLACK; 3];
++    for frame in 0..12 {
++        let slot = frame % targets.len();
++        let color = colors[frame % colors.len()];
++        expected[slot] = color;
++        assert_eq!(h.set_render_target(0, &targets[slot]), 0);
++        h.render_once(BLACK, |d| {
++            for _ in 0..768 {
++                let mut vertices = fullscreen_triangle(color);
++                assert_eq!(d.draw_primitive_up(D3DPT_TRIANGLELIST, 1, &vertices), 0);
++                // The API must have captured these bytes before it returned.
++                for vertex in &mut vertices {
++                    vertex.color = BLACK;
++                    vertex.x = 8.0;
++                }
++                std::hint::black_box(&vertices);
++            }
++        });
++        // Alternate queued Presents with a synchronous readback continuation.
++        if frame % 4 == 3 {
++            assert_eq!(h.read_pixel(32, 32), color, "frame {frame}");
++        }
++    }
++    for (target, color) in targets.iter().zip(expected) {
++        assert_eq!(h.set_render_target(0, target), 0);
++        assert_eq!(h.read_pixel(32, 32), color, "retained target contents");
++    }
++    assert_eq!(h.set_render_target(0, &backbuffer), 0);
++}
 diff --git a/windows/tests/tests/streams.rs b/windows/tests/tests/streams.rs
 index 51fcfaa..da35c1e 100644
 --- a/windows/tests/tests/streams.rs

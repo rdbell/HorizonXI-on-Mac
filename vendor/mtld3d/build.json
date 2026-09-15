@@ -5,25 +5,24 @@
   "frame_pointers": false,
   "rust": "1.97.1",
   "created_utc": "2026-09-13T05:37:39.933173+00:00",
-  "patch_sha256": "71b80d06c34b4f5436b9fa56f8f26cf958ca34cc092534f0f91f693c87d34263",
+  "patch_sha256": "05806b7d868664778dad5ca23bf896307fc2741b6cb167c9e9395dac7cc61f19",
   "files": {
     "native/i386-windows/d3d9.dll": "4a159a9b023c0c685dec4a5255c7bfb38ad84983cf66b3938270754a4e53a9e7",
     "wine/i386-windows/mtld3d.dll": "88328434b273c72525380e1f271e07bf718b47ee8e48623a82e1ce0ed6191a82",
-    "wine/x86_64-unix/mtld3d.so": "3fcbc5c8051ba73e89c358dcbc5153803c4bf98b92a8e4bf639c6403172b716b",
+    "wine/x86_64-unix/mtld3d.so": "dde236e7b994147325f80d81e8aaa891e31e75dc66c09016fe11d7b6fb6def33",
     "prefix-markers/syswow64/mtld3d.dll": "a74c0363a54b92db5deb731533e27d1248b9e51bc770dac281f8925e518123dc",
     "prefix-markers/system32/mtld3d.dll": "602de35e20ca24d8d44eddc4e7a1d24a428e80fedc8aa012666cb35caa24a1af"
   },
   "parent_patch_sha256": "71657aaaad937afaaf799980e220e0f641075155bb5b6060e7ee4b5021866dde",
-  "change": "Persist native graphics settings across launches, based on the accepted picture-controls renderer",
-  "source_head": "7dd9c8c1c7c7785bd49fa8e6202692d965615cd7",
+  "change": "Space visibility reconciliation and long-wait diagnostics",
+  "source_head": "6cc0561815bb83d00d96f833ee84a1600736bdc6",
   "source_dirty": true,
   "validation": {
-    "production_x86_64_build": "passed",
-    "automated_tests": "four isolated Foundation preference tests passed",
-    "runtime": "not run; awaiting user manual testing",
-    "device_capability_probe": "not run",
-    "picture_shaders": "unchanged from accepted baseline",
-    "performance_and_image_quality": "unmeasured"
+    "tests": "2161 passed",
+    "desktop_focus_probes": "12 passed",
+    "local_hxitest_space_round_trips": "6 passed",
+    "original_natural_freeze": "not reproduced",
+    "check_gate": "existing formatting/native-clippy/audit findings remain"
   },
   "parent_baseline": {
     "name": "native-picture-controls-20260913",
@@ -31,10 +30,25 @@
     "signed_renderer_sha256": "99fd358a792617c2c1fe6a22df9eab37b32a352e45900569fcc87aeef03fef04",
     "record": "docs/baselines/native-picture-controls-20260913.json"
   },
+  "space_resume_sources": {
+    "unix/Cargo.toml": "f0f7dde444fc1550e2969b51f2eea9947a62f207af6fcec039ee42adb186bce5",
+    "unix/unix/src/metal/macdrv.rs": "c84b8ce3b5fb3c7db7be56e475d613e5f224d46212f82a38a6623c624617712e",
+    "unix/unix/src/metal/macdrv/native_host.rs": "b6745d2669ad1e9504de58c2be4a60473cb5f4ee659efd04ba434e3f2e2ad661",
+    "unix/unix/src/metal/command.rs": "6f671beb16228c80215742945a6a716256906d693c8d2711c605a1aebcb1d950"
+  },
+  "pe_build_provenance": {
+    "created_utc": "2026-09-13T05:37:39.933173+00:00",
+    "source_head": "7dd9c8c1c7c7785bd49fa8e6202692d965615cd7",
+    "source_dirty": true
+  },
   "committed_source": {
     "repository": "https://github.com/rdbell/mtld3d.git",
-    "branch": "feature/persistent-graphics-settings",
-    "commit": "6cc0561815bb83d00d96f833ee84a1600736bdc6",
-    "relationship": "Code matches build-time source.patch; only docs/PERSISTENT-GRAPHICS.md contains subsequent checkpoint documentation. source_head and source_dirty describe the original build snapshot."
+    "branch": "development",
+    "commit": "930087ee28eca718784b8bf1ef2f113be630e759",
+    "relationship": "Native renderer source matches the tested dirty build, now committed. Existing PE binaries are preserved from the earlier baseline; test-only PE changes add coverage."
+  },
+  "baseline": {
+    "name": "space-resume-early-submit-20260915",
+    "record": "docs/baselines/space-resume-early-submit-20260915.json"
   }
 }

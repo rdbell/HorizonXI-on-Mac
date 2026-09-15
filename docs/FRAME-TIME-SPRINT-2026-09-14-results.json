@@ -1,0 +1,3979 @@
+{
+  "date": "2026-09-14",
+  "hardware": {
+    "model": "Mac14,5",
+    "processor": "Apple M2 Max",
+    "memory_gib": 96
+  },
+  "controls": "Local Docker LSB and Hxitest only; fixed full addons and cache; normalized RDM99/BLM49 with prior status effects cleared; noon, clear weather, fixed camera, draw distance 20; each run bounded to 360 seconds.",
+  "limitations": [
+    "These are synthetic stress results, not predictions of typical absolute FPS.",
+    "Separate launches can drift; within-run ABBA comparisons are stronger evidence.",
+    "Stable summaries trim settled holds; use untrimmed arrival intervals for loading spikes.",
+    "Diagnostic ABBA packages can override the static configuration at Present boundaries; the named comparison identifies the actual modes."
+  ],
+  "runs": [
+    {
+      "run": "normalized-baseline-a",
+      "scenario": "crowdsteady",
+      "workload_valid": true,
+      "restored": true,
+      "boot_sha256": "ef48e04f31634013e13f1395506750539deb975a82d6aa24a98164918ec54de3",
+      "shader_cache_seed_sha256": "97fd4fe2e9b8c0bacf22e42406c80791171334b1e02f7484ee3e3775a7eb5fdc",
+      "renderer_config": "color.hdr.enable=false;render.scale=1;present.maxFps=0;render.mergePasses=true;render.submitDraws=0;present.nativeHost=true",
+      "graphics_at_launch": {
+        "0000": 2,
+        "0001": 1882,
+        "0002": 1058,
+        "0003": 4096,
+        "0004": 4096,
+        "0007": 1,
+        "0011": 2,
+        "0017": 0,
+        "0018": 2,
+        "0019": 1,
+        "0020": 1,
+        "0021": 0,
+        "0022": 0,
+        "0023": 0,
+        "0024": 0,
+        "0028": 0,
+        "0029": 12,
+        "0030": 0,
+        "0031": 1002740646,
+        "0032": 0,
+        "0033": 0,
+        "0034": 1,
+        "0035": 1,
+        "0036": 1,
+        "0037": 1882,
+        "0038": 1058,
+        "0039": 1,
+        "0040": 0,
+        "0041": 0,
+        "0043": 0,
+        "0044": 1,
+        "0045": 0
+      },
+      "renderer_files": [
+        {
+          "file": "d3d8.dll",
+          "sha256": "ab6bf7a9a9f4b3e66a75ca038d8d10289c88acbfe8d52c3b5a8a9a259cb26cd5"
+        },
+        {
+          "file": "d3d9.dll",
+          "sha256": "4a159a9b023c0c685dec4a5255c7bfb38ad84983cf66b3938270754a4e53a9e7"
+        },
+        {
+          "file": "mtld3d.dll",
+          "sha256": "88328434b273c72525380e1f271e07bf718b47ee8e48623a82e1ce0ed6191a82"
+        },
+        {
+          "file": "mtld3d.so",
+          "sha256": "619faf2d6f588b98713a10edf03fc4c0e20f672a3662bd2c0fa116dd7fccb17e"
+        }
+      ],
+      "stable-summary": {
+        "valid": true,
+        "scenario": "crowdsteady",
+        "settle_seconds": 3,
+        "phases": [
+          {
+            "name": "mixed-32",
+            "frames": 1155,
+            "measured_seconds": 92.013369094,
+            "fps": 12.552523740545386,
+            "p50_ms": 77.195,
+            "p95_ms": 101.6437,
+            "p99_ms": 112.461399,
+            "max_ms": 148.607099,
+            "frames_over_50ms": 1155,
+            "frames_over_100ms": 70,
+            "frames_over_500ms": 0,
+            "valid": true
+          }
+        ],
+        "note": "Report whole frames after a fixed settling exclusion in a validated stress run.\n\nKeeps the workload report intact. Three seconds at phase start exclude the marker\nscreenshot; one second at the end excludes transitions. Separate launches can\nstill drift, so repeat controls and do not treat small differences as causal proof.\n"
+      }
+    },
+    {
+      "run": "normalized-baseline-aga",
+      "scenario": "aga8",
+      "workload_valid": true,
+      "restored": true,
+      "boot_sha256": "ef48e04f31634013e13f1395506750539deb975a82d6aa24a98164918ec54de3",
+      "shader_cache_seed_sha256": "97fd4fe2e9b8c0bacf22e42406c80791171334b1e02f7484ee3e3775a7eb5fdc",
+      "renderer_config": "color.hdr.enable=false;render.scale=1;present.maxFps=0;render.mergePasses=true;render.submitDraws=0;present.nativeHost=true",
+      "graphics_at_launch": {
+        "0000": 2,
+        "0001": 1882,
+        "0002": 1058,
+        "0003": 4096,
+        "0004": 4096,
+        "0007": 1,
+        "0011": 2,
+        "0017": 0,
+        "0018": 2,
+        "0019": 1,
+        "0020": 1,
+        "0021": 0,
+        "0022": 0,
+        "0023": 0,
+        "0024": 0,
+        "0028": 0,
+        "0029": 12,
+        "0030": 0,
+        "0031": 1002740646,
+        "0032": 0,
+        "0033": 0,
+        "0034": 1,
+        "0035": 1,
+        "0036": 1,
+        "0037": 1882,
+        "0038": 1058,
+        "0039": 1,
+        "0040": 0,
+        "0041": 0,
+        "0043": 0,
+        "0044": 1,
+        "0045": 0
+      },
+      "renderer_files": [
+        {
+          "file": "d3d8.dll",
+          "sha256": "ab6bf7a9a9f4b3e66a75ca038d8d10289c88acbfe8d52c3b5a8a9a259cb26cd5"
+        },
+        {
+          "file": "d3d9.dll",
+          "sha256": "4a159a9b023c0c685dec4a5255c7bfb38ad84983cf66b3938270754a4e53a9e7"
+        },
+        {
+          "file": "mtld3d.dll",
+          "sha256": "88328434b273c72525380e1f271e07bf718b47ee8e48623a82e1ce0ed6191a82"
+        },
+        {
+          "file": "mtld3d.so",
+          "sha256": "619faf2d6f588b98713a10edf03fc4c0e20f672a3662bd2c0fa116dd7fccb17e"
+        }
+      ],
+      "stable-summary": {
+        "valid": true,
+        "scenario": "aga8",
+        "settle_seconds": 3,
+        "phases": [
+          {
+            "name": "aga-idle",
+            "frames": 600,
+            "measured_seconds": 25.973230198,
+            "fps": 23.100707745092155,
+            "p50_ms": 41.2158,
+            "p95_ms": 52.780399,
+            "p99_ms": 66.907201,
+            "max_ms": 98.772399,
+            "frames_over_50ms": 53,
+            "frames_over_100ms": 0,
+            "frames_over_500ms": 0,
+            "valid": true
+          },
+          {
+            "name": "aga-round-1",
+            "frames": 750,
+            "measured_seconds": 34.979310319999996,
+            "fps": 21.441246072000887,
+            "p50_ms": 44.820001,
+            "p95_ms": 50.8986,
+            "p99_ms": 108.503601,
+            "max_ms": 131.526601,
+            "frames_over_50ms": 61,
+            "frames_over_100ms": 10,
+            "frames_over_500ms": 0,
+            "valid": true
+          },
+          {
+            "name": "aga-round-2",
+            "frames": 779,
+            "measured_seconds": 35.585352295,
+            "fps": 21.89102958830213,
+            "p50_ms": 44.4363,
+            "p95_ms": 52.330799,
+            "p99_ms": 106.297299,
+            "max_ms": 130.6103,
+            "frames_over_50ms": 71,
+            "frames_over_100ms": 9,
+            "frames_over_500ms": 0,
+            "valid": true
+          }
+        ],
+        "note": "Report whole frames after a fixed settling exclusion in a validated stress run.\n\nKeeps the workload report intact. Three seconds at phase start exclude the marker\nscreenshot; one second at the end excludes transitions. Separate launches can\nstill drift, so repeat controls and do not treat small differences as causal proof.\n"
+      },
+      "harness_sources": [
+        {
+          "file": "run.py",
+          "sha256": "1f3c2edef5c531b95b0a035fce332bfd100b5fffbf7063a5da35b1db3114ad09"
+        },
+        {
+          "file": "launcher/scripts/harness/renderer-run.py",
+          "sha256": "d8d8b9d964c1cf34e058ed1802287b1fdb62e5631f0438e7f0b312961793fffa"
+        },
+        {
+          "file": "launcher/scripts/harness/stress-report.py",
+          "sha256": "5813ac342a5f4e079662f946f3f656140fa543ce4121495267e015a4ae5831eb"
+        },
+        {
+          "file": "launcher/scripts/harness/stress-suite.py",
+          "sha256": "6ee2a6d15bc571674c6818c393e5793e5c8f64dafec8683927fd589db9411cf7"
+        },
+        {
+          "file": "launcher/scripts/lsb-docker/commands/perfstress.lua",
+          "sha256": "e87c5850d85c125825a8bd81a987ff422fac749fdb227a70a9d4512460149a78"
+        },
+        {
+          "file": "launcher/scripts/lsb-docker/commands/perftime.lua",
+          "sha256": "693a674b30080f3600a8dc365a973336d6eb8251d1d404bf45ea03c6591e7fcb"
+        },
+        {
+          "file": "launcher/scripts/harness/addons/perfscene/perfscene.lua",
+          "sha256": "1f14008754645a8ffb8640e5bca232f2298b75d24a91a65215963ebb0bc5ea30"
+        },
+        {
+          "file": "launcher/scripts/harness/addons/perfscene/stress.lua",
+          "sha256": "0be883409ebfd6577247a0f7d4ca85cf196fb7c88210585dbe8177deabe8302a"
+        }
+      ]
+    },
+    {
+      "run": "normalized-baseline-arrivals",
+      "scenario": "arrivals",
+      "workload_valid": true,
+      "restored": true,
+      "boot_sha256": "ef48e04f31634013e13f1395506750539deb975a82d6aa24a98164918ec54de3",
+      "shader_cache_seed_sha256": "97fd4fe2e9b8c0bacf22e42406c80791171334b1e02f7484ee3e3775a7eb5fdc",
+      "renderer_config": "color.hdr.enable=false;render.scale=1;present.maxFps=0;render.mergePasses=true;render.submitDraws=0;present.nativeHost=true",
+      "graphics_at_launch": {
+        "0000": 2,
+        "0001": 1882,
+        "0002": 1058,
+        "0003": 4096,
+        "0004": 4096,
+        "0007": 1,
+        "0011": 2,
+        "0017": 0,
+        "0018": 2,
+        "0019": 1,
+        "0020": 1,
+        "0021": 0,
+        "0022": 0,
+        "0023": 0,
+        "0024": 0,
+        "0028": 0,
+        "0029": 12,
+        "0030": 0,
+        "0031": 1002740646,
+        "0032": 0,
+        "0033": 0,
+        "0034": 1,
+        "0035": 1,
+        "0036": 1,
+        "0037": 1882,
+        "0038": 1058,
+        "0039": 1,
+        "0040": 0,
+        "0041": 0,
+        "0043": 0,
+        "0044": 1,
+        "0045": 0
+      },
+      "renderer_files": [
+        {
+          "file": "d3d8.dll",
+          "sha256": "ab6bf7a9a9f4b3e66a75ca038d8d10289c88acbfe8d52c3b5a8a9a259cb26cd5"
+        },
+        {
+          "file": "d3d9.dll",
+          "sha256": "4a159a9b023c0c685dec4a5255c7bfb38ad84983cf66b3938270754a4e53a9e7"
+        },
+        {
+          "file": "mtld3d.dll",
+          "sha256": "88328434b273c72525380e1f271e07bf718b47ee8e48623a82e1ce0ed6191a82"
+        },
+        {
+          "file": "mtld3d.so",
+          "sha256": "619faf2d6f588b98713a10edf03fc4c0e20f672a3662bd2c0fa116dd7fccb17e"
+        }
+      ],
+      "untrimmed_arrivals": [
+        {
+          "name": "arrival-1",
+          "start": 1789392159.57,
+          "end": 1789392179.955,
+          "p50_ms": 77.963,
+          "p95_ms": 95.576,
+          "p99_ms": 101.017,
+          "max_ms": 107.703,
+          "valid": true,
+          "fps": 15.32,
+          "frames_over_50ms": 184,
+          "frames_over_100ms": 4,
+          "frames_over_500ms": 0,
+          "casts": 0,
+          "problems": []
+        },
+        {
+          "name": "arrival-warm-1",
+          "start": 1789392180.208,
+          "end": 1789392200.267,
+          "p50_ms": 85.168,
+          "p95_ms": 91.008,
+          "p99_ms": 94.136,
+          "max_ms": 94.812,
+          "valid": true,
+          "fps": 11.765,
+          "frames_over_50ms": 237,
+          "frames_over_100ms": 0,
+          "frames_over_500ms": 0,
+          "casts": 0,
+          "problems": []
+        },
+        {
+          "name": "arrival-2",
+          "start": 1789392206.41,
+          "end": 1789392226.853,
+          "p50_ms": 85.566,
+          "p95_ms": 127.195,
+          "p99_ms": 163.14,
+          "max_ms": 172.743,
+          "valid": true,
+          "fps": 12.883,
+          "frames_over_50ms": 169,
+          "frames_over_100ms": 76,
+          "frames_over_500ms": 0,
+          "casts": 0,
+          "problems": []
+        },
+        {
+          "name": "arrival-warm-2",
+          "start": 1789392227.112,
+          "end": 1789392247.159,
+          "p50_ms": 88.226,
+          "p95_ms": 96.166,
+          "p99_ms": 98.428,
+          "max_ms": 98.933,
+          "valid": true,
+          "fps": 11.175,
+          "frames_over_50ms": 225,
+          "frames_over_100ms": 0,
+          "frames_over_500ms": 0,
+          "casts": 0,
+          "problems": []
+        },
+        {
+          "name": "arrival-3",
+          "start": 1789392253.305,
+          "end": 1789392273.694,
+          "p50_ms": 78.975,
+          "p95_ms": 93.977,
+          "p99_ms": 99.562,
+          "max_ms": 104.212,
+          "valid": true,
+          "fps": 15.362,
+          "frames_over_50ms": 187,
+          "frames_over_100ms": 3,
+          "frames_over_500ms": 0,
+          "casts": 0,
+          "problems": []
+        },
+        {
+          "name": "arrival-warm-3",
+          "start": 1789392273.942,
+          "end": 1789392294.001,
+          "p50_ms": 83.28,
+          "p95_ms": 92.287,
+          "p99_ms": 94.692,
+          "max_ms": 95.717,
+          "valid": true,
+          "fps": 11.915,
+          "frames_over_50ms": 240,
+          "frames_over_100ms": 0,
+          "frames_over_500ms": 0,
+          "casts": 0,
+          "problems": []
+        }
+      ],
+      "harness_sources": [
+        {
+          "file": "run.py",
+          "sha256": "1f3c2edef5c531b95b0a035fce332bfd100b5fffbf7063a5da35b1db3114ad09"
+        },
+        {
+          "file": "launcher/scripts/harness/renderer-run.py",
+          "sha256": "d8d8b9d964c1cf34e058ed1802287b1fdb62e5631f0438e7f0b312961793fffa"
+        },
+        {
+          "file": "launcher/scripts/harness/stress-report.py",
+          "sha256": "5813ac342a5f4e079662f946f3f656140fa543ce4121495267e015a4ae5831eb"
+        },
+        {
+          "file": "launcher/scripts/harness/stress-suite.py",
+          "sha256": "6ee2a6d15bc571674c6818c393e5793e5c8f64dafec8683927fd589db9411cf7"
+        },
+        {
+          "file": "launcher/scripts/lsb-docker/commands/perfstress.lua",
+          "sha256": "e87c5850d85c125825a8bd81a987ff422fac749fdb227a70a9d4512460149a78"
+        },
+        {
+          "file": "launcher/scripts/lsb-docker/commands/perftime.lua",
+          "sha256": "693a674b30080f3600a8dc365a973336d6eb8251d1d404bf45ea03c6591e7fcb"
+        },
+        {
+          "file": "launcher/scripts/harness/addons/perfscene/perfscene.lua",
+          "sha256": "1f14008754645a8ffb8640e5bca232f2298b75d24a91a65215963ebb0bc5ea30"
+        },
+        {
+          "file": "launcher/scripts/harness/addons/perfscene/stress.lua",
+          "sha256": "0be883409ebfd6577247a0f7d4ca85cf196fb7c88210585dbe8177deabe8302a"
+        }
+      ]
+    },
+    {
+      "run": "normalized-baseline-b",
+      "scenario": "crowdsteady",
+      "workload_valid": true,
+      "restored": true,
+      "boot_sha256": "ef48e04f31634013e13f1395506750539deb975a82d6aa24a98164918ec54de3",
+      "shader_cache_seed_sha256": "97fd4fe2e9b8c0bacf22e42406c80791171334b1e02f7484ee3e3775a7eb5fdc",
+      "renderer_config": "color.hdr.enable=false;render.scale=1;present.maxFps=0;render.mergePasses=true;render.submitDraws=0;present.nativeHost=true",
+      "graphics_at_launch": {
+        "0000": 2,
+        "0001": 1882,
+        "0002": 1058,
+        "0003": 4096,
+        "0004": 4096,
+        "0007": 1,
+        "0011": 2,
+        "0017": 0,
+        "0018": 2,
+        "0019": 1,
+        "0020": 1,
+        "0021": 0,
+        "0022": 0,
+        "0023": 0,
+        "0024": 0,
+        "0028": 0,
+        "0029": 12,
+        "0030": 0,
+        "0031": 1002740646,
+        "0032": 0,
+        "0033": 0,
+        "0034": 1,
+        "0035": 1,
+        "0036": 1,
+        "0037": 1882,
+        "0038": 1058,
+        "0039": 1,
+        "0040": 0,
+        "0041": 0,
+        "0043": 0,
+        "0044": 1,
+        "0045": 0
+      },
+      "renderer_files": [
+        {
+          "file": "d3d8.dll",
+          "sha256": "ab6bf7a9a9f4b3e66a75ca038d8d10289c88acbfe8d52c3b5a8a9a259cb26cd5"
+        },
+        {
+          "file": "d3d9.dll",
+          "sha256": "4a159a9b023c0c685dec4a5255c7bfb38ad84983cf66b3938270754a4e53a9e7"
+        },
+        {
+          "file": "mtld3d.dll",
+          "sha256": "88328434b273c72525380e1f271e07bf718b47ee8e48623a82e1ce0ed6191a82"
+        },
+        {
+          "file": "mtld3d.so",
+          "sha256": "619faf2d6f588b98713a10edf03fc4c0e20f672a3662bd2c0fa116dd7fccb17e"
+        }
+      ],
+      "stable-summary": {
+        "valid": true,
+        "scenario": "crowdsteady",
+        "settle_seconds": 3,
+        "phases": [
+          {
+            "name": "mixed-32",
+            "frames": 1148,
+            "measured_seconds": 91.97199650900001,
+            "fps": 12.482060231101554,
+            "p50_ms": 80.1195,
+            "p95_ms": 87.0928,
+            "p99_ms": 88.3686,
+            "max_ms": 96.035499,
+            "frames_over_50ms": 1148,
+            "frames_over_100ms": 0,
+            "frames_over_500ms": 0,
+            "valid": true
+          }
+        ],
+        "note": "Report whole frames after a fixed settling exclusion in a validated stress run.\n\nKeeps the workload report intact. Three seconds at phase start exclude the marker\nscreenshot; one second at the end excludes transitions. Separate launches can\nstill drift, so repeat controls and do not treat small differences as causal proof.\n"
+      },
+      "harness_sources": [
+        {
+          "file": "run.py",
+          "sha256": "233c102bad1ea854de37bf38f93287e3c39d6f70cd35bbbedebb747ab487834d"
+        },
+        {
+          "file": "launcher/scripts/harness/renderer-run.py",
+          "sha256": "3e56aa9d6c9fbb8eb18e5c220d894cd44975007cd34e5af5ac51925da7944b71"
+        },
+        {
+          "file": "launcher/scripts/harness/stress-report.py",
+          "sha256": "5813ac342a5f4e079662f946f3f656140fa543ce4121495267e015a4ae5831eb"
+        },
+        {
+          "file": "launcher/scripts/harness/stress-suite.py",
+          "sha256": "6ee2a6d15bc571674c6818c393e5793e5c8f64dafec8683927fd589db9411cf7"
+        },
+        {
+          "file": "launcher/scripts/lsb-docker/commands/perfstress.lua",
+          "sha256": "e87c5850d85c125825a8bd81a987ff422fac749fdb227a70a9d4512460149a78"
+        },
+        {
+          "file": "launcher/scripts/lsb-docker/commands/perftime.lua",
+          "sha256": "693a674b30080f3600a8dc365a973336d6eb8251d1d404bf45ea03c6591e7fcb"
+        },
+        {
+          "file": "launcher/scripts/harness/addons/perfscene/perfscene.lua",
+          "sha256": "1f14008754645a8ffb8640e5bca232f2298b75d24a91a65215963ebb0bc5ea30"
+        },
+        {
+          "file": "launcher/scripts/harness/addons/perfscene/stress.lua",
+          "sha256": "5427ff118a92f8a05f269f759aeffab1151c920b8334a03c4ef481777e3b80d3"
+        }
+      ]
+    },
+    {
+      "run": "normalized-combined-aga",
+      "scenario": "aga8",
+      "workload_valid": true,
+      "restored": true,
+      "boot_sha256": "ef48e04f31634013e13f1395506750539deb975a82d6aa24a98164918ec54de3",
+      "shader_cache_seed_sha256": "97fd4fe2e9b8c0bacf22e42406c80791171334b1e02f7484ee3e3775a7eb5fdc",
+      "renderer_config": "color.hdr.enable=false;render.scale=1;present.maxFps=0;render.mergePasses=true;render.submitDraws=512;present.nativeHost=true",
+      "graphics_at_launch": {
+        "0000": 2,
+        "0001": 1882,
+        "0002": 1058,
+        "0003": 4096,
+        "0004": 4096,
+        "0007": 1,
+        "0011": 2,
+        "0017": 0,
+        "0018": 2,
+        "0019": 1,
+        "0020": 1,
+        "0021": 0,
+        "0022": 0,
+        "0023": 0,
+        "0024": 0,
+        "0028": 0,
+        "0029": 12,
+        "0030": 0,
+        "0031": 1002740646,
+        "0032": 0,
+        "0033": 0,
+        "0034": 1,
+        "0035": 1,
+        "0036": 1,
+        "0037": 1882,
+        "0038": 1058,
+        "0039": 1,
+        "0040": 0,
+        "0041": 0,
+        "0043": 0,
+        "0044": 1,
+        "0045": 0
+      },
+      "renderer_files": [
+        {
+          "file": "d3d8.dll",
+          "sha256": "ab6bf7a9a9f4b3e66a75ca038d8d10289c88acbfe8d52c3b5a8a9a259cb26cd5"
+        },
+        {
+          "file": "d3d9.dll",
+          "sha256": "4a159a9b023c0c685dec4a5255c7bfb38ad84983cf66b3938270754a4e53a9e7"
+        },
+        {
+          "file": "mtld3d.dll",
+          "sha256": "88328434b273c72525380e1f271e07bf718b47ee8e48623a82e1ce0ed6191a82"
+        },
+        {
+          "file": "mtld3d.so",
+          "sha256": "619faf2d6f588b98713a10edf03fc4c0e20f672a3662bd2c0fa116dd7fccb17e"
+        }
+      ],
+      "stable-summary": {
+        "valid": true,
+        "scenario": "aga8",
+        "settle_seconds": 3,
+        "phases": [
+          {
+            "name": "aga-idle",
+            "frames": 700,
+            "measured_seconds": 25.985862005999998,
+            "fps": 26.937724822766075,
+            "p50_ms": 36.400199,
+            "p95_ms": 40.859502,
+            "p99_ms": 46.9914,
+            "max_ms": 48.772801,
+            "frames_over_50ms": 0,
+            "frames_over_100ms": 0,
+            "frames_over_500ms": 0,
+            "valid": true
+          },
+          {
+            "name": "aga-round-1",
+            "frames": 860,
+            "measured_seconds": 34.908871609,
+            "fps": 24.635571428160393,
+            "p50_ms": 39.2328,
+            "p95_ms": 44.192301,
+            "p99_ms": 99.955,
+            "max_ms": 115.3358,
+            "frames_over_50ms": 23,
+            "frames_over_100ms": 7,
+            "frames_over_500ms": 0,
+            "valid": true
+          },
+          {
+            "name": "aga-round-2",
+            "frames": 826,
+            "measured_seconds": 35.638825913,
+            "fps": 23.17697002747499,
+            "p50_ms": 40.5438,
+            "p95_ms": 54.955501,
+            "p99_ms": 100.152399,
+            "max_ms": 131.7486,
+            "frames_over_50ms": 109,
+            "frames_over_100ms": 10,
+            "frames_over_500ms": 0,
+            "valid": true
+          }
+        ],
+        "note": "Report whole frames after a fixed settling exclusion in a validated stress run.\n\nKeeps the workload report intact. Three seconds at phase start exclude the marker\nscreenshot; one second at the end excludes transitions. Separate launches can\nstill drift, so repeat controls and do not treat small differences as causal proof.\n"
+      },
+      "scanner": {
+        "dll_sha256": "4337a6eed907b81412ee68c6c5c148c1e1ae15610bdb88d3428a68721d0fc6aa",
+        "packaged_dll_mapped": true
+      },
+      "harness_sources": [
+        {
+          "file": "run.py",
+          "sha256": "18a29dc440d41cd10c1ca80224627a5cae08a334718f603407b756e6c7467bc2"
+        },
+        {
+          "file": "launcher/scripts/harness/renderer-run.py",
+          "sha256": "30e82d004a588bb376232d14f7422e3202d336a99e6122c682542c91be7d510b"
+        },
+        {
+          "file": "launcher/scripts/harness/stress-report.py",
+          "sha256": "5813ac342a5f4e079662f946f3f656140fa543ce4121495267e015a4ae5831eb"
+        },
+        {
+          "file": "launcher/scripts/harness/stress-suite.py",
+          "sha256": "6ee2a6d15bc571674c6818c393e5793e5c8f64dafec8683927fd589db9411cf7"
+        },
+        {
+          "file": "launcher/scripts/lsb-docker/commands/perfstress.lua",
+          "sha256": "e87c5850d85c125825a8bd81a987ff422fac749fdb227a70a9d4512460149a78"
+        },
+        {
+          "file": "launcher/scripts/lsb-docker/commands/perftime.lua",
+          "sha256": "693a674b30080f3600a8dc365a973336d6eb8251d1d404bf45ea03c6591e7fcb"
+        },
+        {
+          "file": "launcher/scripts/harness/addons/perfscene/perfscene.lua",
+          "sha256": "1f14008754645a8ffb8640e5bca232f2298b75d24a91a65215963ebb0bc5ea30"
+        },
+        {
+          "file": "launcher/scripts/harness/addons/perfscene/stress.lua",
+          "sha256": "0be883409ebfd6577247a0f7d4ca85cf196fb7c88210585dbe8177deabe8302a"
+        }
+      ]
+    },
+    {
+      "run": "normalized-combined-arrivals",
+      "scenario": "arrivals",
+      "workload_valid": true,
+      "restored": true,
+      "boot_sha256": "ef48e04f31634013e13f1395506750539deb975a82d6aa24a98164918ec54de3",
+      "shader_cache_seed_sha256": "97fd4fe2e9b8c0bacf22e42406c80791171334b1e02f7484ee3e3775a7eb5fdc",
+      "renderer_config": "color.hdr.enable=false;render.scale=1;present.maxFps=0;render.mergePasses=true;render.submitDraws=512;present.nativeHost=true",
+      "graphics_at_launch": {
+        "0000": 2,
+        "0001": 1882,
+        "0002": 1058,
+        "0003": 4096,
+        "0004": 4096,
+        "0007": 1,
+        "0011": 2,
+        "0017": 0,
+        "0018": 2,
+        "0019": 1,
+        "0020": 1,
+        "0021": 0,
+        "0022": 0,
+        "0023": 0,
+        "0024": 0,
+        "0028": 0,
+        "0029": 12,
+        "0030": 0,
+        "0031": 1002740646,
+        "0032": 0,
+        "0033": 0,
+        "0034": 1,
+        "0035": 1,
+        "0036": 1,
+        "0037": 1882,
+        "0038": 1058,
+        "0039": 1,
+        "0040": 0,
+        "0041": 0,
+        "0043": 0,
+        "0044": 1,
+        "0045": 0
+      },
+      "renderer_files": [
+        {
+          "file": "d3d8.dll",
+          "sha256": "ab6bf7a9a9f4b3e66a75ca038d8d10289c88acbfe8d52c3b5a8a9a259cb26cd5"
+        },
+        {
+          "file": "d3d9.dll",
+          "sha256": "4a159a9b023c0c685dec4a5255c7bfb38ad84983cf66b3938270754a4e53a9e7"
+        },
+        {
+          "file": "mtld3d.dll",
+          "sha256": "88328434b273c72525380e1f271e07bf718b47ee8e48623a82e1ce0ed6191a82"
+        },
+        {
+          "file": "mtld3d.so",
+          "sha256": "619faf2d6f588b98713a10edf03fc4c0e20f672a3662bd2c0fa116dd7fccb17e"
+        }
+      ],
+      "untrimmed_arrivals": [
+        {
+          "name": "arrival-1",
+          "start": 1789395690.955,
+          "end": 1789395711.294,
+          "p50_ms": 60.995,
+          "p95_ms": 76.162,
+          "p99_ms": 82.525,
+          "max_ms": 88.923,
+          "valid": true,
+          "fps": 17.908,
+          "frames_over_50ms": 232,
+          "frames_over_100ms": 0,
+          "frames_over_500ms": 0,
+          "casts": 0,
+          "problems": []
+        },
+        {
+          "name": "arrival-warm-1",
+          "start": 1789395711.511,
+          "end": 1789395731.533,
+          "p50_ms": 75.006,
+          "p95_ms": 98.568,
+          "p99_ms": 147.069,
+          "max_ms": 183.072,
+          "valid": true,
+          "fps": 12.79,
+          "frames_over_50ms": 257,
+          "frames_over_100ms": 12,
+          "frames_over_500ms": 0,
+          "casts": 0,
+          "problems": []
+        },
+        {
+          "name": "arrival-2",
+          "start": 1789395737.63,
+          "end": 1789395758.009,
+          "p50_ms": 63.05,
+          "p95_ms": 85.816,
+          "p99_ms": 101.314,
+          "max_ms": 115.453,
+          "valid": true,
+          "fps": 16.745,
+          "frames_over_50ms": 239,
+          "frames_over_100ms": 4,
+          "frames_over_500ms": 0,
+          "casts": 0,
+          "problems": []
+        },
+        {
+          "name": "arrival-warm-2",
+          "start": 1789395758.253,
+          "end": 1789395778.272,
+          "p50_ms": 70.392,
+          "p95_ms": 87.763,
+          "p99_ms": 149.056,
+          "max_ms": 214.151,
+          "valid": true,
+          "fps": 14.093,
+          "frames_over_50ms": 283,
+          "frames_over_100ms": 5,
+          "frames_over_500ms": 0,
+          "casts": 0,
+          "problems": []
+        },
+        {
+          "name": "arrival-3",
+          "start": 1789395784.357,
+          "end": 1789395804.703,
+          "p50_ms": 59.891,
+          "p95_ms": 71.069,
+          "p99_ms": 87.654,
+          "max_ms": 101.644,
+          "valid": true,
+          "fps": 18.873,
+          "frames_over_50ms": 262,
+          "frames_over_100ms": 1,
+          "frames_over_500ms": 0,
+          "casts": 0,
+          "problems": []
+        },
+        {
+          "name": "arrival-warm-3",
+          "start": 1789395804.948,
+          "end": 1789395824.984,
+          "p50_ms": 62.741,
+          "p95_ms": 90.633,
+          "p99_ms": 128.9,
+          "max_ms": 236.971,
+          "valid": true,
+          "fps": 14.725,
+          "frames_over_50ms": 296,
+          "frames_over_100ms": 4,
+          "frames_over_500ms": 0,
+          "casts": 0,
+          "problems": []
+        }
+      ],
+      "scanner": {
+        "dll_sha256": "4337a6eed907b81412ee68c6c5c148c1e1ae15610bdb88d3428a68721d0fc6aa",
+        "packaged_dll_mapped": true
+      },
+      "harness_sources": [
+        {
+          "file": "run.py",
+          "sha256": "18a29dc440d41cd10c1ca80224627a5cae08a334718f603407b756e6c7467bc2"
+        },
+        {
+          "file": "launcher/scripts/harness/renderer-run.py",
+          "sha256": "30e82d004a588bb376232d14f7422e3202d336a99e6122c682542c91be7d510b"
+        },
+        {
+          "file": "launcher/scripts/harness/stress-report.py",
+          "sha256": "5813ac342a5f4e079662f946f3f656140fa543ce4121495267e015a4ae5831eb"
+        },
+        {
+          "file": "launcher/scripts/harness/stress-suite.py",
+          "sha256": "6ee2a6d15bc571674c6818c393e5793e5c8f64dafec8683927fd589db9411cf7"
+        },
+        {
+          "file": "launcher/scripts/lsb-docker/commands/perfstress.lua",
+          "sha256": "e87c5850d85c125825a8bd81a987ff422fac749fdb227a70a9d4512460149a78"
+        },
+        {
+          "file": "launcher/scripts/lsb-docker/commands/perftime.lua",
+          "sha256": "693a674b30080f3600a8dc365a973336d6eb8251d1d404bf45ea03c6591e7fcb"
+        },
+        {
+          "file": "launcher/scripts/harness/addons/perfscene/perfscene.lua",
+          "sha256": "1f14008754645a8ffb8640e5bca232f2298b75d24a91a65215963ebb0bc5ea30"
+        },
+        {
+          "file": "launcher/scripts/harness/addons/perfscene/stress.lua",
+          "sha256": "0be883409ebfd6577247a0f7d4ca85cf196fb7c88210585dbe8177deabe8302a"
+        }
+      ]
+    },
+    {
+      "run": "normalized-compact-a",
+      "scenario": "crowdsteady",
+      "workload_valid": true,
+      "restored": true,
+      "boot_sha256": "ef48e04f31634013e13f1395506750539deb975a82d6aa24a98164918ec54de3",
+      "shader_cache_seed_sha256": "97fd4fe2e9b8c0bacf22e42406c80791171334b1e02f7484ee3e3775a7eb5fdc",
+      "renderer_config": "color.hdr.enable=false;render.scale=1;present.maxFps=0;render.mergePasses=true;render.submitDraws=0;present.nativeHost=true",
+      "graphics_at_launch": {
+        "0000": 2,
+        "0001": 1882,
+        "0002": 1058,
+        "0003": 4096,
+        "0004": 4096,
+        "0007": 1,
+        "0011": 2,
+        "0017": 0,
+        "0018": 2,
+        "0019": 1,
+        "0020": 1,
+        "0021": 0,
+        "0022": 0,
+        "0023": 0,
+        "0024": 0,
+        "0028": 0,
+        "0029": 12,
+        "0030": 0,
+        "0031": 1002740646,
+        "0032": 0,
+        "0033": 0,
+        "0034": 1,
+        "0035": 1,
+        "0036": 1,
+        "0037": 1882,
+        "0038": 1058,
+        "0039": 1,
+        "0040": 0,
+        "0041": 0,
+        "0043": 0,
+        "0044": 1,
+        "0045": 0
+      },
+      "renderer_files": [
+        {
+          "file": "d3d8.dll",
+          "sha256": "ab6bf7a9a9f4b3e66a75ca038d8d10289c88acbfe8d52c3b5a8a9a259cb26cd5"
+        },
+        {
+          "file": "d3d9.dll",
+          "sha256": "393bfdc5482d9cb19400be86f32da2c2492324380460806368e7cf32365f751e"
+        },
+        {
+          "file": "mtld3d.dll",
+          "sha256": "28f9740c5f7e0cc05b6fa1936bc4d10280a02af5ec04a1c5f159e5ce89ff7329"
+        },
+        {
+          "file": "mtld3d.so",
+          "sha256": "619faf2d6f588b98713a10edf03fc4c0e20f672a3662bd2c0fa116dd7fccb17e"
+        }
+      ],
+      "stable-summary": {
+        "valid": true,
+        "scenario": "crowdsteady",
+        "settle_seconds": 3,
+        "phases": [
+          {
+            "name": "mixed-32",
+            "frames": 1269,
+            "measured_seconds": 91.971222194,
+            "fps": 13.797794241803462,
+            "p50_ms": 71.033299,
+            "p95_ms": 88.3868,
+            "p99_ms": 98.1353,
+            "max_ms": 197.1434,
+            "frames_over_50ms": 1269,
+            "frames_over_100ms": 6,
+            "frames_over_500ms": 0,
+            "valid": true
+          }
+        ],
+        "note": "Report whole frames after a fixed settling exclusion in a validated stress run.\n\nKeeps the workload report intact. Three seconds at phase start exclude the marker\nscreenshot; one second at the end excludes transitions. Separate launches can\nstill drift, so repeat controls and do not treat small differences as causal proof.\n"
+      }
+    },
+    {
+      "run": "normalized-compact-b",
+      "scenario": "crowdsteady",
+      "workload_valid": true,
+      "restored": true,
+      "boot_sha256": "ef48e04f31634013e13f1395506750539deb975a82d6aa24a98164918ec54de3",
+      "shader_cache_seed_sha256": "97fd4fe2e9b8c0bacf22e42406c80791171334b1e02f7484ee3e3775a7eb5fdc",
+      "renderer_config": "color.hdr.enable=false;render.scale=1;present.maxFps=0;render.mergePasses=true;render.submitDraws=0;present.nativeHost=true",
+      "graphics_at_launch": {
+        "0000": 2,
+        "0001": 1882,
+        "0002": 1058,
+        "0003": 4096,
+        "0004": 4096,
+        "0007": 1,
+        "0011": 2,
+        "0017": 0,
+        "0018": 2,
+        "0019": 1,
+        "0020": 1,
+        "0021": 0,
+        "0022": 0,
+        "0023": 0,
+        "0024": 0,
+        "0028": 0,
+        "0029": 12,
+        "0030": 0,
+        "0031": 1002740646,
+        "0032": 0,
+        "0033": 0,
+        "0034": 1,
+        "0035": 1,
+        "0036": 1,
+        "0037": 1882,
+        "0038": 1058,
+        "0039": 1,
+        "0040": 0,
+        "0041": 0,
+        "0043": 0,
+        "0044": 1,
+        "0045": 0
+      },
+      "renderer_files": [
+        {
+          "file": "d3d8.dll",
+          "sha256": "ab6bf7a9a9f4b3e66a75ca038d8d10289c88acbfe8d52c3b5a8a9a259cb26cd5"
+        },
+        {
+          "file": "d3d9.dll",
+          "sha256": "393bfdc5482d9cb19400be86f32da2c2492324380460806368e7cf32365f751e"
+        },
+        {
+          "file": "mtld3d.dll",
+          "sha256": "28f9740c5f7e0cc05b6fa1936bc4d10280a02af5ec04a1c5f159e5ce89ff7329"
+        },
+        {
+          "file": "mtld3d.so",
+          "sha256": "619faf2d6f588b98713a10edf03fc4c0e20f672a3662bd2c0fa116dd7fccb17e"
+        }
+      ],
+      "stable-summary": {
+        "valid": true,
+        "scenario": "crowdsteady",
+        "settle_seconds": 3,
+        "phases": [
+          {
+            "name": "mixed-32",
+            "frames": 1092,
+            "measured_seconds": 91.9772117,
+            "fps": 11.872506024228608,
+            "p50_ms": 81.6935,
+            "p95_ms": 106.0577,
+            "p99_ms": 116.4722,
+            "max_ms": 148.747401,
+            "frames_over_50ms": 1092,
+            "frames_over_100ms": 89,
+            "frames_over_500ms": 0,
+            "valid": true
+          }
+        ],
+        "note": "Report whole frames after a fixed settling exclusion in a validated stress run.\n\nKeeps the workload report intact. Three seconds at phase start exclude the marker\nscreenshot; one second at the end excludes transitions. Separate launches can\nstill drift, so repeat controls and do not treat small differences as causal proof.\n"
+      },
+      "harness_sources": [
+        {
+          "file": "run.py",
+          "sha256": "233c102bad1ea854de37bf38f93287e3c39d6f70cd35bbbedebb747ab487834d"
+        },
+        {
+          "file": "launcher/scripts/harness/renderer-run.py",
+          "sha256": "3e56aa9d6c9fbb8eb18e5c220d894cd44975007cd34e5af5ac51925da7944b71"
+        },
+        {
+          "file": "launcher/scripts/harness/stress-report.py",
+          "sha256": "5813ac342a5f4e079662f946f3f656140fa543ce4121495267e015a4ae5831eb"
+        },
+        {
+          "file": "launcher/scripts/harness/stress-suite.py",
+          "sha256": "6ee2a6d15bc571674c6818c393e5793e5c8f64dafec8683927fd589db9411cf7"
+        },
+        {
+          "file": "launcher/scripts/lsb-docker/commands/perfstress.lua",
+          "sha256": "e87c5850d85c125825a8bd81a987ff422fac749fdb227a70a9d4512460149a78"
+        },
+        {
+          "file": "launcher/scripts/lsb-docker/commands/perftime.lua",
+          "sha256": "693a674b30080f3600a8dc365a973336d6eb8251d1d404bf45ea03c6591e7fcb"
+        },
+        {
+          "file": "launcher/scripts/harness/addons/perfscene/perfscene.lua",
+          "sha256": "1f14008754645a8ffb8640e5bca232f2298b75d24a91a65215963ebb0bc5ea30"
+        },
+        {
+          "file": "launcher/scripts/harness/addons/perfscene/stress.lua",
+          "sha256": "5427ff118a92f8a05f269f759aeffab1151c920b8334a03c4ef481777e3b80d3"
+        }
+      ]
+    },
+    {
+      "run": "normalized-early-aga",
+      "scenario": "aga8",
+      "workload_valid": true,
+      "restored": true,
+      "boot_sha256": "ef48e04f31634013e13f1395506750539deb975a82d6aa24a98164918ec54de3",
+      "shader_cache_seed_sha256": "97fd4fe2e9b8c0bacf22e42406c80791171334b1e02f7484ee3e3775a7eb5fdc",
+      "renderer_config": "color.hdr.enable=false;render.scale=1;present.maxFps=0;render.mergePasses=true;render.submitDraws=512;present.nativeHost=true",
+      "graphics_at_launch": {
+        "0000": 2,
+        "0001": 1882,
+        "0002": 1058,
+        "0003": 4096,
+        "0004": 4096,
+        "0007": 1,
+        "0011": 2,
+        "0017": 0,
+        "0018": 2,
+        "0019": 1,
+        "0020": 1,
+        "0021": 0,
+        "0022": 0,
+        "0023": 0,
+        "0024": 0,
+        "0028": 0,
+        "0029": 12,
+        "0030": 0,
+        "0031": 1002740646,
+        "0032": 0,
+        "0033": 0,
+        "0034": 1,
+        "0035": 1,
+        "0036": 1,
+        "0037": 1882,
+        "0038": 1058,
+        "0039": 1,
+        "0040": 0,
+        "0041": 0,
+        "0043": 0,
+        "0044": 1,
+        "0045": 0
+      },
+      "renderer_files": [
+        {
+          "file": "d3d8.dll",
+          "sha256": "ab6bf7a9a9f4b3e66a75ca038d8d10289c88acbfe8d52c3b5a8a9a259cb26cd5"
+        },
+        {
+          "file": "d3d9.dll",
+          "sha256": "4a159a9b023c0c685dec4a5255c7bfb38ad84983cf66b3938270754a4e53a9e7"
+        },
+        {
+          "file": "mtld3d.dll",
+          "sha256": "88328434b273c72525380e1f271e07bf718b47ee8e48623a82e1ce0ed6191a82"
+        },
+        {
+          "file": "mtld3d.so",
+          "sha256": "619faf2d6f588b98713a10edf03fc4c0e20f672a3662bd2c0fa116dd7fccb17e"
+        }
+      ],
+      "stable-summary": {
+        "valid": true,
+        "scenario": "aga8",
+        "settle_seconds": 3,
+        "phases": [
+          {
+            "name": "aga-idle",
+            "frames": 639,
+            "measured_seconds": 26.012259394,
+            "fps": 24.565340146784482,
+            "p50_ms": 39.481701,
+            "p95_ms": 44.9648,
+            "p99_ms": 50.237998,
+            "max_ms": 56.804299,
+            "frames_over_50ms": 10,
+            "frames_over_100ms": 0,
+            "frames_over_500ms": 0,
+            "valid": true
+          },
+          {
+            "name": "aga-round-1",
+            "frames": 763,
+            "measured_seconds": 34.785568601,
+            "fps": 21.934383443657886,
+            "p50_ms": 43.795599,
+            "p95_ms": 54.8079,
+            "p99_ms": 109.158201,
+            "max_ms": 138.374601,
+            "frames_over_50ms": 70,
+            "frames_over_100ms": 9,
+            "frames_over_500ms": 0,
+            "valid": true
+          },
+          {
+            "name": "aga-round-2",
+            "frames": 789,
+            "measured_seconds": 34.566470005,
+            "fps": 22.825587914700925,
+            "p50_ms": 42.030999,
+            "p95_ms": 48.170801,
+            "p99_ms": 100.575399,
+            "max_ms": 117.620701,
+            "frames_over_50ms": 23,
+            "frames_over_100ms": 8,
+            "frames_over_500ms": 0,
+            "valid": true
+          }
+        ],
+        "note": "Report whole frames after a fixed settling exclusion in a validated stress run.\n\nKeeps the workload report intact. Three seconds at phase start exclude the marker\nscreenshot; one second at the end excludes transitions. Separate launches can\nstill drift, so repeat controls and do not treat small differences as causal proof.\n"
+      },
+      "harness_sources": [
+        {
+          "file": "run.py",
+          "sha256": "1f3c2edef5c531b95b0a035fce332bfd100b5fffbf7063a5da35b1db3114ad09"
+        },
+        {
+          "file": "launcher/scripts/harness/renderer-run.py",
+          "sha256": "d8d8b9d964c1cf34e058ed1802287b1fdb62e5631f0438e7f0b312961793fffa"
+        },
+        {
+          "file": "launcher/scripts/harness/stress-report.py",
+          "sha256": "5813ac342a5f4e079662f946f3f656140fa543ce4121495267e015a4ae5831eb"
+        },
+        {
+          "file": "launcher/scripts/harness/stress-suite.py",
+          "sha256": "6ee2a6d15bc571674c6818c393e5793e5c8f64dafec8683927fd589db9411cf7"
+        },
+        {
+          "file": "launcher/scripts/lsb-docker/commands/perfstress.lua",
+          "sha256": "e87c5850d85c125825a8bd81a987ff422fac749fdb227a70a9d4512460149a78"
+        },
+        {
+          "file": "launcher/scripts/lsb-docker/commands/perftime.lua",
+          "sha256": "693a674b30080f3600a8dc365a973336d6eb8251d1d404bf45ea03c6591e7fcb"
+        },
+        {
+          "file": "launcher/scripts/harness/addons/perfscene/perfscene.lua",
+          "sha256": "1f14008754645a8ffb8640e5bca232f2298b75d24a91a65215963ebb0bc5ea30"
+        },
+        {
+          "file": "launcher/scripts/harness/addons/perfscene/stress.lua",
+          "sha256": "0be883409ebfd6577247a0f7d4ca85cf196fb7c88210585dbe8177deabe8302a"
+        }
+      ]
+    },
+    {
+      "run": "normalized-early-arrivals",
+      "scenario": "arrivals",
+      "workload_valid": true,
+      "restored": true,
+      "boot_sha256": "ef48e04f31634013e13f1395506750539deb975a82d6aa24a98164918ec54de3",
+      "shader_cache_seed_sha256": "97fd4fe2e9b8c0bacf22e42406c80791171334b1e02f7484ee3e3775a7eb5fdc",
+      "renderer_config": "color.hdr.enable=false;render.scale=1;present.maxFps=0;render.mergePasses=true;render.submitDraws=512;present.nativeHost=true",
+      "graphics_at_launch": {
+        "0000": 2,
+        "0001": 1882,
+        "0002": 1058,
+        "0003": 4096,
+        "0004": 4096,
+        "0007": 1,
+        "0011": 2,
+        "0017": 0,
+        "0018": 2,
+        "0019": 1,
+        "0020": 1,
+        "0021": 0,
+        "0022": 0,
+        "0023": 0,
+        "0024": 0,
+        "0028": 0,
+        "0029": 12,
+        "0030": 0,
+        "0031": 1002740646,
+        "0032": 0,
+        "0033": 0,
+        "0034": 1,
+        "0035": 1,
+        "0036": 1,
+        "0037": 1882,
+        "0038": 1058,
+        "0039": 1,
+        "0040": 0,
+        "0041": 0,
+        "0043": 0,
+        "0044": 1,
+        "0045": 0
+      },
+      "renderer_files": [
+        {
+          "file": "d3d8.dll",
+          "sha256": "ab6bf7a9a9f4b3e66a75ca038d8d10289c88acbfe8d52c3b5a8a9a259cb26cd5"
+        },
+        {
+          "file": "d3d9.dll",
+          "sha256": "4a159a9b023c0c685dec4a5255c7bfb38ad84983cf66b3938270754a4e53a9e7"
+        },
+        {
+          "file": "mtld3d.dll",
+          "sha256": "88328434b273c72525380e1f271e07bf718b47ee8e48623a82e1ce0ed6191a82"
+        },
+        {
+          "file": "mtld3d.so",
+          "sha256": "619faf2d6f588b98713a10edf03fc4c0e20f672a3662bd2c0fa116dd7fccb17e"
+        }
+      ],
+      "untrimmed_arrivals": [
+        {
+          "name": "arrival-1",
+          "start": 1789392494.977,
+          "end": 1789392515.289,
+          "p50_ms": 56.466,
+          "p95_ms": 69.187,
+          "p99_ms": 79.427,
+          "max_ms": 86.517,
+          "valid": true,
+          "fps": 18.961,
+          "frames_over_50ms": 256,
+          "frames_over_100ms": 0,
+          "frames_over_500ms": 0,
+          "casts": 0,
+          "problems": []
+        },
+        {
+          "name": "arrival-warm-1",
+          "start": 1789392515.514,
+          "end": 1789392535.561,
+          "p50_ms": 58.886,
+          "p95_ms": 66.834,
+          "p99_ms": 67.782,
+          "max_ms": 69.225,
+          "valid": true,
+          "fps": 16.615,
+          "frames_over_50ms": 334,
+          "frames_over_100ms": 0,
+          "frames_over_500ms": 0,
+          "casts": 0,
+          "problems": []
+        },
+        {
+          "name": "arrival-2",
+          "start": 1789392541.676,
+          "end": 1789392562.042,
+          "p50_ms": 57.541,
+          "p95_ms": 68.242,
+          "p99_ms": 77.05,
+          "max_ms": 78.48,
+          "valid": true,
+          "fps": 18.077,
+          "frames_over_50ms": 276,
+          "frames_over_100ms": 0,
+          "frames_over_500ms": 0,
+          "casts": 0,
+          "problems": []
+        },
+        {
+          "name": "arrival-warm-2",
+          "start": 1789392562.287,
+          "end": 1789392582.331,
+          "p50_ms": 60.97,
+          "p95_ms": 73.803,
+          "p99_ms": 78.12,
+          "max_ms": 79.835,
+          "valid": true,
+          "fps": 16.266,
+          "frames_over_50ms": 327,
+          "frames_over_100ms": 0,
+          "frames_over_500ms": 0,
+          "casts": 0,
+          "problems": []
+        },
+        {
+          "name": "arrival-3",
+          "start": 1789392588.467,
+          "end": 1789392608.805,
+          "p50_ms": 56.702,
+          "p95_ms": 76.505,
+          "p99_ms": 88.925,
+          "max_ms": 198.397,
+          "valid": true,
+          "fps": 18.543,
+          "frames_over_50ms": 234,
+          "frames_over_100ms": 2,
+          "frames_over_500ms": 0,
+          "casts": 0,
+          "problems": []
+        },
+        {
+          "name": "arrival-warm-3",
+          "start": 1789392609.057,
+          "end": 1789392629.123,
+          "p50_ms": 62.997,
+          "p95_ms": 67.335,
+          "p99_ms": 69.303,
+          "max_ms": 92.862,
+          "valid": true,
+          "fps": 16.194,
+          "frames_over_50ms": 326,
+          "frames_over_100ms": 0,
+          "frames_over_500ms": 0,
+          "casts": 0,
+          "problems": []
+        }
+      ],
+      "harness_sources": [
+        {
+          "file": "run.py",
+          "sha256": "f3da68a52b5c891bdbc35880e64340fc02380efb157eb72be0b58e68042385b1"
+        },
+        {
+          "file": "launcher/scripts/harness/renderer-run.py",
+          "sha256": "0bf24e6cc052cfca2bd1a9f37aa847a890dbd64f804cead38a2867f1cc40ec8e"
+        },
+        {
+          "file": "launcher/scripts/harness/stress-report.py",
+          "sha256": "5813ac342a5f4e079662f946f3f656140fa543ce4121495267e015a4ae5831eb"
+        },
+        {
+          "file": "launcher/scripts/harness/stress-suite.py",
+          "sha256": "6ee2a6d15bc571674c6818c393e5793e5c8f64dafec8683927fd589db9411cf7"
+        },
+        {
+          "file": "launcher/scripts/lsb-docker/commands/perfstress.lua",
+          "sha256": "e87c5850d85c125825a8bd81a987ff422fac749fdb227a70a9d4512460149a78"
+        },
+        {
+          "file": "launcher/scripts/lsb-docker/commands/perftime.lua",
+          "sha256": "693a674b30080f3600a8dc365a973336d6eb8251d1d404bf45ea03c6591e7fcb"
+        },
+        {
+          "file": "launcher/scripts/harness/addons/perfscene/perfscene.lua",
+          "sha256": "1f14008754645a8ffb8640e5bca232f2298b75d24a91a65215963ebb0bc5ea30"
+        },
+        {
+          "file": "launcher/scripts/harness/addons/perfscene/stress.lua",
+          "sha256": "0be883409ebfd6577247a0f7d4ca85cf196fb7c88210585dbe8177deabe8302a"
+        }
+      ]
+    },
+    {
+      "run": "normalized-early-crowd-repeat",
+      "scenario": "crowdsteady",
+      "workload_valid": true,
+      "restored": true,
+      "boot_sha256": "ef48e04f31634013e13f1395506750539deb975a82d6aa24a98164918ec54de3",
+      "shader_cache_seed_sha256": "97fd4fe2e9b8c0bacf22e42406c80791171334b1e02f7484ee3e3775a7eb5fdc",
+      "renderer_config": "color.hdr.enable=false;render.scale=1;present.maxFps=0;render.mergePasses=true;render.submitDraws=0;present.nativeHost=true",
+      "graphics_at_launch": {
+        "0000": 2,
+        "0001": 1882,
+        "0002": 1058,
+        "0003": 4096,
+        "0004": 4096,
+        "0007": 1,
+        "0011": 2,
+        "0017": 0,
+        "0018": 2,
+        "0019": 1,
+        "0020": 1,
+        "0021": 0,
+        "0022": 0,
+        "0023": 0,
+        "0024": 0,
+        "0028": 0,
+        "0029": 12,
+        "0030": 0,
+        "0031": 1002740646,
+        "0032": 0,
+        "0033": 0,
+        "0034": 1,
+        "0035": 1,
+        "0036": 1,
+        "0037": 1882,
+        "0038": 1058,
+        "0039": 1,
+        "0040": 0,
+        "0041": 0,
+        "0043": 0,
+        "0044": 1,
+        "0045": 0
+      },
+      "renderer_files": [
+        {
+          "file": "d3d8.dll",
+          "sha256": "ab6bf7a9a9f4b3e66a75ca038d8d10289c88acbfe8d52c3b5a8a9a259cb26cd5"
+        },
+        {
+          "file": "d3d9.dll",
+          "sha256": "8fbadbb66b774a58e3ff11870a45a5541f08855335c4ab92a9d719a2f0aac562"
+        },
+        {
+          "file": "mtld3d.dll",
+          "sha256": "28f9740c5f7e0cc05b6fa1936bc4d10280a02af5ec04a1c5f159e5ce89ff7329"
+        },
+        {
+          "file": "mtld3d.so",
+          "sha256": "619faf2d6f588b98713a10edf03fc4c0e20f672a3662bd2c0fa116dd7fccb17e"
+        }
+      ],
+      "early-summary": {
+        "valid": true,
+        "switch_count": 15,
+        "phases": [
+          {
+            "phase": "mixed-32",
+            "valid": true,
+            "fps_change_percent": 45.3578205782263,
+            "baseline": {
+              "windows": [
+                {
+                  "block": 223673775,
+                  "frames": 60,
+                  "seconds": 4.8699349000000005,
+                  "fps": 12.320493236983516
+                },
+                {
+                  "block": 223673776,
+                  "frames": 52,
+                  "seconds": 4.9413735999999995,
+                  "fps": 10.523389690672246
+                },
+                {
+                  "block": 223673779,
+                  "frames": 59,
+                  "seconds": 4.8882172,
+                  "fps": 12.069840104486357
+                },
+                {
+                  "block": 223673780,
+                  "frames": 55,
+                  "seconds": 4.903279001,
+                  "fps": 11.21698357135766
+                },
+                {
+                  "block": 223673783,
+                  "frames": 63,
+                  "seconds": 4.900628601,
+                  "fps": 12.855493678330266
+                },
+                {
+                  "block": 223673784,
+                  "frames": 62,
+                  "seconds": 4.8876635020000005,
+                  "fps": 12.684997642458406
+                }
+              ],
+              "frames": 351,
+              "seconds": 29.391096804,
+              "fps": 11.942392022342984,
+              "p50_ms": 81.1626,
+              "p99_ms": 114.0205
+            },
+            "optimized": {
+              "windows": [
+                {
+                  "block": 223673773,
+                  "frames": 25,
+                  "seconds": 1.472898697,
+                  "fps": 16.973332959639382
+                },
+                {
+                  "block": 223673774,
+                  "frames": 92,
+                  "seconds": 4.946267303,
+                  "fps": 18.59988439043728
+                },
+                {
+                  "block": 223673777,
+                  "frames": 77,
+                  "seconds": 4.886426401,
+                  "fps": 15.757937126453408
+                },
+                {
+                  "block": 223673778,
+                  "frames": 85,
+                  "seconds": 4.980180899,
+                  "fps": 17.067653108156705
+                },
+                {
+                  "block": 223673781,
+                  "frames": 89,
+                  "seconds": 4.964565996999999,
+                  "fps": 17.927045396069094
+                },
+                {
+                  "block": 223673782,
+                  "frames": 86,
+                  "seconds": 4.902938498,
+                  "fps": 17.54050148397354
+                }
+              ],
+              "frames": 454,
+              "seconds": 26.153277795,
+              "fps": 17.359200768585726,
+              "p50_ms": 56.8277995,
+              "p99_ms": 71.2317
+            }
+          }
+        ],
+        "note": "Whole frames only; first two seconds after each log boundary and last second before the next are excluded, plus the first three seconds of the phase. At least four usable windows per mode required. Within-run comparison reduces drift but does not establish universal FPS gains. Startup without application presents is excluded before parsing; contiguous markers are required from 16 seconds before through 16 seconds after the measured phase."
+      },
+      "harness_sources": [
+        {
+          "file": "run.py",
+          "sha256": "8a9e89b3bfe8bdad735c323798b2976ec71806e449637e7e506737401983f7cc"
+        },
+        {
+          "file": "launcher/scripts/harness/renderer-run.py",
+          "sha256": "d8d8b9d964c1cf34e058ed1802287b1fdb62e5631f0438e7f0b312961793fffa"
+        },
+        {
+          "file": "launcher/scripts/harness/stress-report.py",
+          "sha256": "5813ac342a5f4e079662f946f3f656140fa543ce4121495267e015a4ae5831eb"
+        },
+        {
+          "file": "launcher/scripts/harness/stress-suite.py",
+          "sha256": "6ee2a6d15bc571674c6818c393e5793e5c8f64dafec8683927fd589db9411cf7"
+        },
+        {
+          "file": "launcher/scripts/lsb-docker/commands/perfstress.lua",
+          "sha256": "e87c5850d85c125825a8bd81a987ff422fac749fdb227a70a9d4512460149a78"
+        },
+        {
+          "file": "launcher/scripts/lsb-docker/commands/perftime.lua",
+          "sha256": "693a674b30080f3600a8dc365a973336d6eb8251d1d404bf45ea03c6591e7fcb"
+        },
+        {
+          "file": "launcher/scripts/harness/addons/perfscene/perfscene.lua",
+          "sha256": "1f14008754645a8ffb8640e5bca232f2298b75d24a91a65215963ebb0bc5ea30"
+        },
+        {
+          "file": "launcher/scripts/harness/addons/perfscene/stress.lua",
+          "sha256": "0be883409ebfd6577247a0f7d4ca85cf196fb7c88210585dbe8177deabe8302a"
+        }
+      ]
+    },
+    {
+      "run": "normalized-early-crowd-retry",
+      "scenario": "crowdsteady",
+      "workload_valid": true,
+      "restored": true,
+      "boot_sha256": "ef48e04f31634013e13f1395506750539deb975a82d6aa24a98164918ec54de3",
+      "shader_cache_seed_sha256": "97fd4fe2e9b8c0bacf22e42406c80791171334b1e02f7484ee3e3775a7eb5fdc",
+      "renderer_config": "color.hdr.enable=false;render.scale=1;present.maxFps=0;render.mergePasses=true;render.submitDraws=0;present.nativeHost=true",
+      "graphics_at_launch": {
+        "0000": 2,
+        "0001": 1882,
+        "0002": 1058,
+        "0003": 4096,
+        "0004": 4096,
+        "0007": 1,
+        "0011": 2,
+        "0017": 0,
+        "0018": 2,
+        "0019": 1,
+        "0020": 1,
+        "0021": 0,
+        "0022": 0,
+        "0023": 0,
+        "0024": 0,
+        "0028": 0,
+        "0029": 12,
+        "0030": 0,
+        "0031": 1002740646,
+        "0032": 0,
+        "0033": 0,
+        "0034": 1,
+        "0035": 1,
+        "0036": 1,
+        "0037": 1882,
+        "0038": 1058,
+        "0039": 1,
+        "0040": 0,
+        "0041": 0,
+        "0043": 0,
+        "0044": 1,
+        "0045": 0
+      },
+      "renderer_files": [
+        {
+          "file": "d3d8.dll",
+          "sha256": "ab6bf7a9a9f4b3e66a75ca038d8d10289c88acbfe8d52c3b5a8a9a259cb26cd5"
+        },
+        {
+          "file": "d3d9.dll",
+          "sha256": "8fbadbb66b774a58e3ff11870a45a5541f08855335c4ab92a9d719a2f0aac562"
+        },
+        {
+          "file": "mtld3d.dll",
+          "sha256": "28f9740c5f7e0cc05b6fa1936bc4d10280a02af5ec04a1c5f159e5ce89ff7329"
+        },
+        {
+          "file": "mtld3d.so",
+          "sha256": "619faf2d6f588b98713a10edf03fc4c0e20f672a3662bd2c0fa116dd7fccb17e"
+        }
+      ],
+      "early-summary": {
+        "valid": true,
+        "switch_count": 15,
+        "phases": [
+          {
+            "phase": "mixed-32",
+            "valid": true,
+            "fps_change_percent": 31.253371403356468,
+            "baseline": {
+              "windows": [
+                {
+                  "block": 223673692,
+                  "frames": 27,
+                  "seconds": 2.3828228979999997,
+                  "fps": 11.331098094895008
+                },
+                {
+                  "block": 223673695,
+                  "frames": 60,
+                  "seconds": 4.879139798,
+                  "fps": 12.297249614490346
+                },
+                {
+                  "block": 223673696,
+                  "frames": 58,
+                  "seconds": 4.901070799,
+                  "fps": 11.834148572559725
+                },
+                {
+                  "block": 223673699,
+                  "frames": 59,
+                  "seconds": 4.970533103,
+                  "fps": 11.869954143226636
+                },
+                {
+                  "block": 223673700,
+                  "frames": 58,
+                  "seconds": 4.8424427990000005,
+                  "fps": 11.977425941299176
+                },
+                {
+                  "block": 223673703,
+                  "frames": 59,
+                  "seconds": 4.893843802,
+                  "fps": 12.055963039909052
+                }
+              ],
+              "frames": 321,
+              "seconds": 26.869853199,
+              "fps": 11.946473902281925,
+              "p50_ms": 83.587602,
+              "p99_ms": 95.245499
+            },
+            "optimized": {
+              "windows": [
+                {
+                  "block": 223673693,
+                  "frames": 86,
+                  "seconds": 4.9403185050000005,
+                  "fps": 17.407784520969866
+                },
+                {
+                  "block": 223673694,
+                  "frames": 77,
+                  "seconds": 4.942769698,
+                  "fps": 15.578310280399391
+                },
+                {
+                  "block": 223673697,
+                  "frames": 76,
+                  "seconds": 4.899164601000001,
+                  "fps": 15.512848860903171
+                },
+                {
+                  "block": 223673698,
+                  "frames": 82,
+                  "seconds": 4.947288400000001,
+                  "fps": 16.574736172647626
+                },
+                {
+                  "block": 223673701,
+                  "frames": 78,
+                  "seconds": 4.9099014,
+                  "fps": 15.886266066361333
+                },
+                {
+                  "block": 223673702,
+                  "frames": 64,
+                  "seconds": 4.8883365990000005,
+                  "fps": 13.092388116868298
+                }
+              ],
+              "frames": 463,
+              "seconds": 29.527779202999998,
+              "fps": 15.680149760567147,
+              "p50_ms": 61.239,
+              "p99_ms": 85.312599
+            }
+          }
+        ],
+        "note": "Whole frames only; first two seconds after each log boundary and last second before the next are excluded, plus the first three seconds of the phase. At least four usable windows per mode required. Within-run comparison reduces drift but does not establish universal FPS gains. Startup without application presents is excluded before parsing; contiguous markers are required from 16 seconds before through 16 seconds after the measured phase."
+      },
+      "harness_sources": [
+        {
+          "file": "run.py",
+          "sha256": "a87e2d290ebbb89b5026759750408a7f9f238f61c0d212eb63bedbf23bd27d94"
+        },
+        {
+          "file": "launcher/scripts/harness/renderer-run.py",
+          "sha256": "3e56aa9d6c9fbb8eb18e5c220d894cd44975007cd34e5af5ac51925da7944b71"
+        },
+        {
+          "file": "launcher/scripts/harness/stress-report.py",
+          "sha256": "5813ac342a5f4e079662f946f3f656140fa543ce4121495267e015a4ae5831eb"
+        },
+        {
+          "file": "launcher/scripts/harness/stress-suite.py",
+          "sha256": "6ee2a6d15bc571674c6818c393e5793e5c8f64dafec8683927fd589db9411cf7"
+        },
+        {
+          "file": "launcher/scripts/lsb-docker/commands/perfstress.lua",
+          "sha256": "e87c5850d85c125825a8bd81a987ff422fac749fdb227a70a9d4512460149a78"
+        },
+        {
+          "file": "launcher/scripts/lsb-docker/commands/perftime.lua",
+          "sha256": "693a674b30080f3600a8dc365a973336d6eb8251d1d404bf45ea03c6591e7fcb"
+        },
+        {
+          "file": "launcher/scripts/harness/addons/perfscene/perfscene.lua",
+          "sha256": "1f14008754645a8ffb8640e5bca232f2298b75d24a91a65215963ebb0bc5ea30"
+        },
+        {
+          "file": "launcher/scripts/harness/addons/perfscene/stress.lua",
+          "sha256": "0be883409ebfd6577247a0f7d4ca85cf196fb7c88210585dbe8177deabe8302a"
+        }
+      ]
+    },
+    {
+      "run": "normalized-early-light",
+      "scenario": "lightsteady",
+      "workload_valid": true,
+      "restored": true,
+      "boot_sha256": "ef48e04f31634013e13f1395506750539deb975a82d6aa24a98164918ec54de3",
+      "shader_cache_seed_sha256": "97fd4fe2e9b8c0bacf22e42406c80791171334b1e02f7484ee3e3775a7eb5fdc",
+      "renderer_config": "color.hdr.enable=false;render.scale=1;present.maxFps=0;render.mergePasses=true;render.submitDraws=0;present.nativeHost=true",
+      "graphics_at_launch": {
+        "0000": 2,
+        "0001": 1882,
+        "0002": 1058,
+        "0003": 4096,
+        "0004": 4096,
+        "0007": 1,
+        "0011": 2,
+        "0017": 0,
+        "0018": 2,
+        "0019": 1,
+        "0020": 1,
+        "0021": 0,
+        "0022": 0,
+        "0023": 0,
+        "0024": 0,
+        "0028": 0,
+        "0029": 12,
+        "0030": 0,
+        "0031": 1002740646,
+        "0032": 0,
+        "0033": 0,
+        "0034": 1,
+        "0035": 1,
+        "0036": 1,
+        "0037": 1882,
+        "0038": 1058,
+        "0039": 1,
+        "0040": 0,
+        "0041": 0,
+        "0043": 0,
+        "0044": 1,
+        "0045": 0
+      },
+      "renderer_files": [
+        {
+          "file": "d3d8.dll",
+          "sha256": "ab6bf7a9a9f4b3e66a75ca038d8d10289c88acbfe8d52c3b5a8a9a259cb26cd5"
+        },
+        {
+          "file": "d3d9.dll",
+          "sha256": "8fbadbb66b774a58e3ff11870a45a5541f08855335c4ab92a9d719a2f0aac562"
+        },
+        {
+          "file": "mtld3d.dll",
+          "sha256": "28f9740c5f7e0cc05b6fa1936bc4d10280a02af5ec04a1c5f159e5ce89ff7329"
+        },
+        {
+          "file": "mtld3d.so",
+          "sha256": "619faf2d6f588b98713a10edf03fc4c0e20f672a3662bd2c0fa116dd7fccb17e"
+        }
+      ],
+      "early-summary": {
+        "valid": true,
+        "switch_count": 15,
+        "phases": [
+          {
+            "phase": "empty",
+            "valid": true,
+            "fps_change_percent": 14.250634601029288,
+            "baseline": {
+              "windows": [
+                {
+                  "block": 223673735,
+                  "frames": 109,
+                  "seconds": 4.956861998,
+                  "fps": 21.9897185041624
+                },
+                {
+                  "block": 223673736,
+                  "frames": 109,
+                  "seconds": 4.968937502,
+                  "fps": 21.93627912529136
+                },
+                {
+                  "block": 223673739,
+                  "frames": 106,
+                  "seconds": 4.983435502,
+                  "fps": 21.270466921355574
+                },
+                {
+                  "block": 223673740,
+                  "frames": 98,
+                  "seconds": 4.966998906,
+                  "fps": 19.730223794013455
+                },
+                {
+                  "block": 223673743,
+                  "frames": 103,
+                  "seconds": 4.975394403,
+                  "fps": 20.70187640559598
+                },
+                {
+                  "block": 223673744,
+                  "frames": 110,
+                  "seconds": 4.956233201,
+                  "fps": 22.194274469935298
+                }
+              ],
+              "frames": 635,
+              "seconds": 29.807861512,
+              "fps": 21.303104878703316,
+              "p50_ms": 46.224,
+              "p99_ms": 55.1064
+            },
+            "optimized": {
+              "windows": [
+                {
+                  "block": 223673734,
+                  "frames": 48,
+                  "seconds": 1.974700597,
+                  "fps": 24.30748239653264
+                },
+                {
+                  "block": 223673737,
+                  "frames": 121,
+                  "seconds": 4.976888701,
+                  "fps": 24.31237812806375
+                },
+                {
+                  "block": 223673738,
+                  "frames": 120,
+                  "seconds": 4.993654899,
+                  "fps": 24.03049518380425
+                },
+                {
+                  "block": 223673741,
+                  "frames": 125,
+                  "seconds": 4.9659183,
+                  "fps": 25.17157803421776
+                },
+                {
+                  "block": 223673742,
+                  "frames": 119,
+                  "seconds": 4.970433697000001,
+                  "fps": 23.941572758897216
+                },
+                {
+                  "block": 223673745,
+                  "frames": 120,
+                  "seconds": 4.9478467010000005,
+                  "fps": 24.252974526423184
+                }
+              ],
+              "frames": 653,
+              "seconds": 26.829442895,
+              "fps": 24.33893251364137,
+              "p50_ms": 40.902399,
+              "p99_ms": 45.947699
+            }
+          }
+        ],
+        "note": "Whole frames only; first two seconds after each log boundary and last second before the next are excluded, plus the first three seconds of the phase. At least four usable windows per mode required. Within-run comparison reduces drift but does not establish universal FPS gains. Startup without application presents is excluded before parsing; contiguous markers are required from 16 seconds before through 16 seconds after the measured phase."
+      },
+      "harness_sources": [
+        {
+          "file": "run.py",
+          "sha256": "512e3f5440d06ed704204c18ccc2ba237ee3588c0ed8f1f186e99705b1838897"
+        },
+        {
+          "file": "launcher/scripts/harness/renderer-run.py",
+          "sha256": "3e56aa9d6c9fbb8eb18e5c220d894cd44975007cd34e5af5ac51925da7944b71"
+        },
+        {
+          "file": "launcher/scripts/harness/stress-report.py",
+          "sha256": "5813ac342a5f4e079662f946f3f656140fa543ce4121495267e015a4ae5831eb"
+        },
+        {
+          "file": "launcher/scripts/harness/stress-suite.py",
+          "sha256": "6ee2a6d15bc571674c6818c393e5793e5c8f64dafec8683927fd589db9411cf7"
+        },
+        {
+          "file": "launcher/scripts/lsb-docker/commands/perfstress.lua",
+          "sha256": "e87c5850d85c125825a8bd81a987ff422fac749fdb227a70a9d4512460149a78"
+        },
+        {
+          "file": "launcher/scripts/lsb-docker/commands/perftime.lua",
+          "sha256": "693a674b30080f3600a8dc365a973336d6eb8251d1d404bf45ea03c6591e7fcb"
+        },
+        {
+          "file": "launcher/scripts/harness/addons/perfscene/perfscene.lua",
+          "sha256": "1f14008754645a8ffb8640e5bca232f2298b75d24a91a65215963ebb0bc5ea30"
+        },
+        {
+          "file": "launcher/scripts/harness/addons/perfscene/stress.lua",
+          "sha256": "0be883409ebfd6577247a0f7d4ca85cf196fb7c88210585dbe8177deabe8302a"
+        }
+      ]
+    },
+    {
+      "run": "normalized-early-production",
+      "scenario": "crowdsteady",
+      "workload_valid": true,
+      "restored": true,
+      "boot_sha256": "ef48e04f31634013e13f1395506750539deb975a82d6aa24a98164918ec54de3",
+      "shader_cache_seed_sha256": "97fd4fe2e9b8c0bacf22e42406c80791171334b1e02f7484ee3e3775a7eb5fdc",
+      "renderer_config": "color.hdr.enable=false;render.scale=1;present.maxFps=0;render.mergePasses=true;render.submitDraws=512;present.nativeHost=true",
+      "graphics_at_launch": {
+        "0000": 2,
+        "0001": 1882,
+        "0002": 1058,
+        "0003": 4096,
+        "0004": 4096,
+        "0007": 1,
+        "0011": 2,
+        "0017": 0,
+        "0018": 2,
+        "0019": 1,
+        "0020": 1,
+        "0021": 0,
+        "0022": 0,
+        "0023": 0,
+        "0024": 0,
+        "0028": 0,
+        "0029": 12,
+        "0030": 0,
+        "0031": 1002740646,
+        "0032": 0,
+        "0033": 0,
+        "0034": 1,
+        "0035": 1,
+        "0036": 1,
+        "0037": 1882,
+        "0038": 1058,
+        "0039": 1,
+        "0040": 0,
+        "0041": 0,
+        "0043": 0,
+        "0044": 1,
+        "0045": 0
+      },
+      "renderer_files": [
+        {
+          "file": "d3d8.dll",
+          "sha256": "ab6bf7a9a9f4b3e66a75ca038d8d10289c88acbfe8d52c3b5a8a9a259cb26cd5"
+        },
+        {
+          "file": "d3d9.dll",
+          "sha256": "4a159a9b023c0c685dec4a5255c7bfb38ad84983cf66b3938270754a4e53a9e7"
+        },
+        {
+          "file": "mtld3d.dll",
+          "sha256": "88328434b273c72525380e1f271e07bf718b47ee8e48623a82e1ce0ed6191a82"
+        },
+        {
+          "file": "mtld3d.so",
+          "sha256": "619faf2d6f588b98713a10edf03fc4c0e20f672a3662bd2c0fa116dd7fccb17e"
+        }
+      ],
+      "stable-summary": {
+        "valid": true,
+        "scenario": "crowdsteady",
+        "settle_seconds": 3,
+        "phases": [
+          {
+            "name": "mixed-32",
+            "frames": 1668,
+            "measured_seconds": 92.02716532699999,
+            "fps": 18.12508289343802,
+            "p50_ms": 55.8565,
+            "p95_ms": 62.569901,
+            "p99_ms": 65.628199,
+            "max_ms": 77.7789,
+            "frames_over_50ms": 1464,
+            "frames_over_100ms": 0,
+            "frames_over_500ms": 0,
+            "valid": true
+          }
+        ],
+        "note": "Report whole frames after a fixed settling exclusion in a validated stress run.\n\nKeeps the workload report intact. Three seconds at phase start exclude the marker\nscreenshot; one second at the end excludes transitions. Separate launches can\nstill drift, so repeat controls and do not treat small differences as causal proof.\n"
+      },
+      "harness_sources": [
+        {
+          "file": "run.py",
+          "sha256": "8a9e89b3bfe8bdad735c323798b2976ec71806e449637e7e506737401983f7cc"
+        },
+        {
+          "file": "launcher/scripts/harness/renderer-run.py",
+          "sha256": "d8d8b9d964c1cf34e058ed1802287b1fdb62e5631f0438e7f0b312961793fffa"
+        },
+        {
+          "file": "launcher/scripts/harness/stress-report.py",
+          "sha256": "5813ac342a5f4e079662f946f3f656140fa543ce4121495267e015a4ae5831eb"
+        },
+        {
+          "file": "launcher/scripts/harness/stress-suite.py",
+          "sha256": "6ee2a6d15bc571674c6818c393e5793e5c8f64dafec8683927fd589db9411cf7"
+        },
+        {
+          "file": "launcher/scripts/lsb-docker/commands/perfstress.lua",
+          "sha256": "e87c5850d85c125825a8bd81a987ff422fac749fdb227a70a9d4512460149a78"
+        },
+        {
+          "file": "launcher/scripts/lsb-docker/commands/perftime.lua",
+          "sha256": "693a674b30080f3600a8dc365a973336d6eb8251d1d404bf45ea03c6591e7fcb"
+        },
+        {
+          "file": "launcher/scripts/harness/addons/perfscene/perfscene.lua",
+          "sha256": "1f14008754645a8ffb8640e5bca232f2298b75d24a91a65215963ebb0bc5ea30"
+        },
+        {
+          "file": "launcher/scripts/harness/addons/perfscene/stress.lua",
+          "sha256": "0be883409ebfd6577247a0f7d4ca85cf196fb7c88210585dbe8177deabe8302a"
+        }
+      ]
+    },
+    {
+      "run": "normalized-early-small-crowd",
+      "scenario": "crowdsteady",
+      "workload_valid": true,
+      "restored": true,
+      "boot_sha256": "ef48e04f31634013e13f1395506750539deb975a82d6aa24a98164918ec54de3",
+      "shader_cache_seed_sha256": "97fd4fe2e9b8c0bacf22e42406c80791171334b1e02f7484ee3e3775a7eb5fdc",
+      "renderer_config": "color.hdr.enable=false;render.scale=1;present.maxFps=0;render.mergePasses=true;render.submitDraws=0;present.nativeHost=true",
+      "graphics_at_launch": {
+        "0000": 2,
+        "0001": 1882,
+        "0002": 1058,
+        "0003": 4096,
+        "0004": 4096,
+        "0007": 1,
+        "0011": 2,
+        "0017": 0,
+        "0018": 2,
+        "0019": 1,
+        "0020": 1,
+        "0021": 0,
+        "0022": 0,
+        "0023": 0,
+        "0024": 0,
+        "0028": 0,
+        "0029": 12,
+        "0030": 0,
+        "0031": 1002740646,
+        "0032": 0,
+        "0033": 0,
+        "0034": 1,
+        "0035": 1,
+        "0036": 1,
+        "0037": 1882,
+        "0038": 1058,
+        "0039": 1,
+        "0040": 0,
+        "0041": 0,
+        "0043": 0,
+        "0044": 1,
+        "0045": 0
+      },
+      "renderer_files": [
+        {
+          "file": "d3d8.dll",
+          "sha256": "ab6bf7a9a9f4b3e66a75ca038d8d10289c88acbfe8d52c3b5a8a9a259cb26cd5"
+        },
+        {
+          "file": "d3d9.dll",
+          "sha256": "c78c8221f46fb03c01249532a22b70d4a6221f4997b5709a0a1197a78d8f6f4a"
+        },
+        {
+          "file": "mtld3d.dll",
+          "sha256": "28f9740c5f7e0cc05b6fa1936bc4d10280a02af5ec04a1c5f159e5ce89ff7329"
+        },
+        {
+          "file": "mtld3d.so",
+          "sha256": "619faf2d6f588b98713a10edf03fc4c0e20f672a3662bd2c0fa116dd7fccb17e"
+        }
+      ],
+      "tune-summary": {
+        "valid": true,
+        "switch_count": 15,
+        "phases": [
+          {
+            "phase": "mixed-32",
+            "valid": true,
+            "fps_change_percent": -3.6048988037507446,
+            "baseline": {
+              "windows": [
+                {
+                  "block": 223674596,
+                  "frames": 78,
+                  "seconds": 4.9359416000000005,
+                  "fps": 15.802456009609188
+                },
+                {
+                  "block": 223674599,
+                  "frames": 89,
+                  "seconds": 4.965708303,
+                  "fps": 17.922921478539372
+                },
+                {
+                  "block": 223674600,
+                  "frames": 84,
+                  "seconds": 4.927595602,
+                  "fps": 17.04685343210922
+                },
+                {
+                  "block": 223674603,
+                  "frames": 93,
+                  "seconds": 4.946969299,
+                  "fps": 18.799388954930322
+                },
+                {
+                  "block": 223674604,
+                  "frames": 90,
+                  "seconds": 4.959528299,
+                  "fps": 18.146887077576892
+                }
+              ],
+              "frames": 434,
+              "seconds": 24.735743103,
+              "fps": 17.545460356408846,
+              "p50_ms": 56.2041,
+              "p99_ms": 79.4512
+            },
+            "optimized": {
+              "windows": [
+                {
+                  "block": 223674597,
+                  "frames": 80,
+                  "seconds": 4.987991398,
+                  "fps": 16.03852004076772
+                },
+                {
+                  "block": 223674598,
+                  "frames": 84,
+                  "seconds": 4.9567359,
+                  "fps": 16.94663619257988
+                },
+                {
+                  "block": 223674601,
+                  "frames": 86,
+                  "seconds": 4.951841599000001,
+                  "fps": 17.367276048847618
+                },
+                {
+                  "block": 223674602,
+                  "frames": 77,
+                  "seconds": 4.938949501,
+                  "fps": 15.590359849682537
+                },
+                {
+                  "block": 223674605,
+                  "frames": 88,
+                  "seconds": 4.958078996,
+                  "fps": 17.748809583509104
+                },
+                {
+                  "block": 223674606,
+                  "frames": 88,
+                  "seconds": 4.946901793,
+                  "fps": 17.788911864901458
+                }
+              ],
+              "frames": 503,
+              "seconds": 29.740499187,
+              "fps": 16.9129642659081,
+              "p50_ms": 57.977401,
+              "p99_ms": 74.879199
+            }
+          }
+        ],
+        "note": "Whole frames only; first two seconds after each log boundary and last second before the next are excluded, plus the first three seconds of the phase. At least four usable windows per mode required. Within-run comparison reduces drift but does not establish universal FPS gains. Startup without application presents is excluded before parsing; contiguous markers are required from 16 seconds before through 16 seconds after the measured phase.",
+        "control": {
+          "baseline_submit_draws": 512,
+          "optimized_submit_draws": 128
+        }
+      },
+      "harness_sources": [
+        {
+          "file": "run.py",
+          "sha256": "0914d76a89e1a6446498140e06fc2441cc0a7c4e923e3579de2f63bc492a4aa8"
+        },
+        {
+          "file": "launcher/scripts/harness/renderer-run.py",
+          "sha256": "30e82d004a588bb376232d14f7422e3202d336a99e6122c682542c91be7d510b"
+        },
+        {
+          "file": "launcher/scripts/harness/stress-report.py",
+          "sha256": "5813ac342a5f4e079662f946f3f656140fa543ce4121495267e015a4ae5831eb"
+        },
+        {
+          "file": "launcher/scripts/harness/stress-suite.py",
+          "sha256": "6ee2a6d15bc571674c6818c393e5793e5c8f64dafec8683927fd589db9411cf7"
+        },
+        {
+          "file": "launcher/scripts/lsb-docker/commands/perfstress.lua",
+          "sha256": "e87c5850d85c125825a8bd81a987ff422fac749fdb227a70a9d4512460149a78"
+        },
+        {
+          "file": "launcher/scripts/lsb-docker/commands/perftime.lua",
+          "sha256": "693a674b30080f3600a8dc365a973336d6eb8251d1d404bf45ea03c6591e7fcb"
+        },
+        {
+          "file": "launcher/scripts/harness/addons/perfscene/perfscene.lua",
+          "sha256": "1f14008754645a8ffb8640e5bca232f2298b75d24a91a65215963ebb0bc5ea30"
+        },
+        {
+          "file": "launcher/scripts/harness/addons/perfscene/stress.lua",
+          "sha256": "0be883409ebfd6577247a0f7d4ca85cf196fb7c88210585dbe8177deabe8302a"
+        }
+      ]
+    },
+    {
+      "run": "normalized-early-tune-crowd",
+      "scenario": "crowdsteady",
+      "workload_valid": true,
+      "restored": true,
+      "boot_sha256": "ef48e04f31634013e13f1395506750539deb975a82d6aa24a98164918ec54de3",
+      "shader_cache_seed_sha256": "97fd4fe2e9b8c0bacf22e42406c80791171334b1e02f7484ee3e3775a7eb5fdc",
+      "renderer_config": "color.hdr.enable=false;render.scale=1;present.maxFps=0;render.mergePasses=true;render.submitDraws=0;present.nativeHost=true",
+      "graphics_at_launch": {
+        "0000": 2,
+        "0001": 1882,
+        "0002": 1058,
+        "0003": 4096,
+        "0004": 4096,
+        "0007": 1,
+        "0011": 2,
+        "0017": 0,
+        "0018": 2,
+        "0019": 1,
+        "0020": 1,
+        "0021": 0,
+        "0022": 0,
+        "0023": 0,
+        "0024": 0,
+        "0028": 0,
+        "0029": 12,
+        "0030": 0,
+        "0031": 1002740646,
+        "0032": 0,
+        "0033": 0,
+        "0034": 1,
+        "0035": 1,
+        "0036": 1,
+        "0037": 1882,
+        "0038": 1058,
+        "0039": 1,
+        "0040": 0,
+        "0041": 0,
+        "0043": 0,
+        "0044": 1,
+        "0045": 0
+      },
+      "renderer_files": [
+        {
+          "file": "d3d8.dll",
+          "sha256": "ab6bf7a9a9f4b3e66a75ca038d8d10289c88acbfe8d52c3b5a8a9a259cb26cd5"
+        },
+        {
+          "file": "d3d9.dll",
+          "sha256": "3e1cc585c9b899018eba2c0bf41fab5a327e6fe7015ba7a2c2938b1f3c2454a5"
+        },
+        {
+          "file": "mtld3d.dll",
+          "sha256": "28f9740c5f7e0cc05b6fa1936bc4d10280a02af5ec04a1c5f159e5ce89ff7329"
+        },
+        {
+          "file": "mtld3d.so",
+          "sha256": "619faf2d6f588b98713a10edf03fc4c0e20f672a3662bd2c0fa116dd7fccb17e"
+        }
+      ],
+      "tune-summary": {
+        "valid": true,
+        "switch_count": 15,
+        "phases": [
+          {
+            "phase": "mixed-32",
+            "valid": true,
+            "fps_change_percent": -3.720193697821539,
+            "baseline": {
+              "windows": [
+                {
+                  "block": 223674240,
+                  "frames": 76,
+                  "seconds": 4.897979803999999,
+                  "fps": 15.51660134203363
+                },
+                {
+                  "block": 223674243,
+                  "frames": 73,
+                  "seconds": 4.938144303,
+                  "fps": 14.782881082606549
+                },
+                {
+                  "block": 223674244,
+                  "frames": 72,
+                  "seconds": 4.929156401,
+                  "fps": 14.606961951013167
+                },
+                {
+                  "block": 223674247,
+                  "frames": 79,
+                  "seconds": 4.942489994,
+                  "fps": 15.983846218384475
+                },
+                {
+                  "block": 223674248,
+                  "frames": 78,
+                  "seconds": 4.894781298,
+                  "fps": 15.935339140049154
+                },
+                {
+                  "block": 223674251,
+                  "frames": 57,
+                  "seconds": 3.619358401,
+                  "fps": 15.748647601257547
+                }
+              ],
+              "frames": 435,
+              "seconds": 28.221910201,
+              "fps": 15.413556237046862,
+              "p50_ms": 64.5693,
+              "p99_ms": 77.6903
+            },
+            "optimized": {
+              "windows": [
+                {
+                  "block": 223674241,
+                  "frames": 73,
+                  "seconds": 4.911036602,
+                  "fps": 14.864478910678661
+                },
+                {
+                  "block": 223674242,
+                  "frames": 76,
+                  "seconds": 4.959417598,
+                  "fps": 15.32438003015692
+                },
+                {
+                  "block": 223674245,
+                  "frames": 76,
+                  "seconds": 4.913296398000001,
+                  "fps": 15.46823025595127
+                },
+                {
+                  "block": 223674246,
+                  "frames": 74,
+                  "seconds": 4.930470500999999,
+                  "fps": 15.008709611991655
+                },
+                {
+                  "block": 223674249,
+                  "frames": 65,
+                  "seconds": 4.886039601999999,
+                  "fps": 13.30320777043919
+                },
+                {
+                  "block": 223674250,
+                  "frames": 75,
+                  "seconds": 4.981666302,
+                  "fps": 15.055203510899474
+                }
+              ],
+              "frames": 439,
+              "seconds": 29.581927003,
+              "fps": 14.840142089306067,
+              "p50_ms": 67.3248,
+              "p99_ms": 83.3096
+            }
+          }
+        ],
+        "note": "Whole frames only; first two seconds after each log boundary and last second before the next are excluded, plus the first three seconds of the phase. At least four usable windows per mode required. Within-run comparison reduces drift but does not establish universal FPS gains. Startup without application presents is excluded before parsing; contiguous markers are required from 16 seconds before through 16 seconds after the measured phase.",
+        "control": {
+          "baseline_submit_draws": 512,
+          "optimized_submit_draws": 1024
+        }
+      },
+      "harness_sources": [
+        {
+          "file": "run.py",
+          "sha256": "56a81b34b56627b6642a054ad83e7bf36061d05eae0984bf6b023cdd601525f4"
+        },
+        {
+          "file": "launcher/scripts/harness/renderer-run.py",
+          "sha256": "0bf24e6cc052cfca2bd1a9f37aa847a890dbd64f804cead38a2867f1cc40ec8e"
+        },
+        {
+          "file": "launcher/scripts/harness/stress-report.py",
+          "sha256": "5813ac342a5f4e079662f946f3f656140fa543ce4121495267e015a4ae5831eb"
+        },
+        {
+          "file": "launcher/scripts/harness/stress-suite.py",
+          "sha256": "6ee2a6d15bc571674c6818c393e5793e5c8f64dafec8683927fd589db9411cf7"
+        },
+        {
+          "file": "launcher/scripts/lsb-docker/commands/perfstress.lua",
+          "sha256": "e87c5850d85c125825a8bd81a987ff422fac749fdb227a70a9d4512460149a78"
+        },
+        {
+          "file": "launcher/scripts/lsb-docker/commands/perftime.lua",
+          "sha256": "693a674b30080f3600a8dc365a973336d6eb8251d1d404bf45ea03c6591e7fcb"
+        },
+        {
+          "file": "launcher/scripts/harness/addons/perfscene/perfscene.lua",
+          "sha256": "1f14008754645a8ffb8640e5bca232f2298b75d24a91a65215963ebb0bc5ea30"
+        },
+        {
+          "file": "launcher/scripts/harness/addons/perfscene/stress.lua",
+          "sha256": "0be883409ebfd6577247a0f7d4ca85cf196fb7c88210585dbe8177deabe8302a"
+        }
+      ]
+    },
+    {
+      "run": "normalized-final-profile",
+      "scenario": "crowdsteady",
+      "workload_valid": true,
+      "restored": true,
+      "boot_sha256": "ef48e04f31634013e13f1395506750539deb975a82d6aa24a98164918ec54de3",
+      "shader_cache_seed_sha256": "97fd4fe2e9b8c0bacf22e42406c80791171334b1e02f7484ee3e3775a7eb5fdc",
+      "renderer_config": "color.hdr.enable=false;render.scale=1;present.maxFps=0;render.mergePasses=true;render.submitDraws=512;present.nativeHost=true",
+      "graphics_at_launch": {
+        "0000": 2,
+        "0001": 1882,
+        "0002": 1058,
+        "0003": 4096,
+        "0004": 4096,
+        "0007": 1,
+        "0011": 2,
+        "0017": 0,
+        "0018": 2,
+        "0019": 1,
+        "0020": 1,
+        "0021": 0,
+        "0022": 0,
+        "0023": 0,
+        "0024": 0,
+        "0028": 0,
+        "0029": 12,
+        "0030": 0,
+        "0031": 1002740646,
+        "0032": 0,
+        "0033": 0,
+        "0034": 1,
+        "0035": 1,
+        "0036": 1,
+        "0037": 1882,
+        "0038": 1058,
+        "0039": 1,
+        "0040": 0,
+        "0041": 0,
+        "0043": 0,
+        "0044": 1,
+        "0045": 0
+      },
+      "renderer_files": [
+        {
+          "file": "d3d8.dll",
+          "sha256": "ab6bf7a9a9f4b3e66a75ca038d8d10289c88acbfe8d52c3b5a8a9a259cb26cd5"
+        },
+        {
+          "file": "d3d9.dll",
+          "sha256": "4a159a9b023c0c685dec4a5255c7bfb38ad84983cf66b3938270754a4e53a9e7"
+        },
+        {
+          "file": "mtld3d.dll",
+          "sha256": "88328434b273c72525380e1f271e07bf718b47ee8e48623a82e1ce0ed6191a82"
+        },
+        {
+          "file": "mtld3d.so",
+          "sha256": "619faf2d6f588b98713a10edf03fc4c0e20f672a3662bd2c0fa116dd7fccb17e"
+        }
+      ],
+      "profile-summary": {
+        "run": "normalized-final-profile",
+        "windows": 8,
+        "samples": 80245,
+        "top_guest_modules": [
+          {
+            "module": "Addons.dll",
+            "count": 28094,
+            "percent_of_samples": 35.01
+          },
+          {
+            "module": "FFXiMain.dll",
+            "count": 13308,
+            "percent_of_samples": 16.58
+          },
+          {
+            "module": "ucrtbase.dll",
+            "count": 8874,
+            "percent_of_samples": 11.06
+          },
+          {
+            "module": "d3d9.dll",
+            "count": 8413,
+            "percent_of_samples": 10.48
+          },
+          {
+            "module": "Ashita.dll",
+            "count": 2149,
+            "percent_of_samples": 2.68
+          },
+          {
+            "module": "d3d8.dll",
+            "count": 912,
+            "percent_of_samples": 1.14
+          },
+          {
+            "module": "Minimap.dll",
+            "count": 510,
+            "percent_of_samples": 0.64
+          },
+          {
+            "module": "ntdll.dll",
+            "count": 360,
+            "percent_of_samples": 0.45
+          },
+          {
+            "module": "win32u.so",
+            "count": 242,
+            "percent_of_samples": 0.3
+          },
+          {
+            "module": "AGXMetalG14X",
+            "count": 192,
+            "percent_of_samples": 0.24
+          },
+          {
+            "module": "kernelbase.dll",
+            "count": 121,
+            "percent_of_samples": 0.15
+          },
+          {
+            "module": "xiapi.dll",
+            "count": 111,
+            "percent_of_samples": 0.14
+          }
+        ],
+        "top_host_syscalls": [
+          {
+            "svc": 305,
+            "name": "psynch_cvwait",
+            "count": 6536,
+            "percent_of_samples": 8.15
+          },
+          {
+            "svc": 544,
+            "name": "ulock_wait2",
+            "count": 3640,
+            "percent_of_samples": 4.54
+          },
+          {
+            "svc": 3,
+            "name": "read",
+            "count": 252,
+            "percent_of_samples": 0.31
+          },
+          {
+            "svc": -47,
+            "name": "mach_msg2_trap",
+            "count": 221,
+            "percent_of_samples": 0.28
+          },
+          {
+            "svc": -59,
+            "name": "swtch_pri",
+            "count": 151,
+            "percent_of_samples": 0.19
+          },
+          {
+            "svc": 230,
+            "name": "syscall 230",
+            "count": 116,
+            "percent_of_samples": 0.14
+          },
+          {
+            "svc": -100,
+            "name": "syscall -100",
+            "count": 88,
+            "percent_of_samples": 0.11
+          },
+          {
+            "svc": 375,
+            "name": "kevent_id",
+            "count": 84,
+            "percent_of_samples": 0.1
+          },
+          {
+            "svc": 516,
+            "name": "ulock_wake",
+            "count": 78,
+            "percent_of_samples": 0.1
+          },
+          {
+            "svc": 363,
+            "name": "kevent64",
+            "count": 64,
+            "percent_of_samples": 0.08
+          },
+          {
+            "svc": 48,
+            "name": "syscall 48",
+            "count": 50,
+            "percent_of_samples": 0.06
+          },
+          {
+            "svc": 4,
+            "name": "write",
+            "count": 35,
+            "percent_of_samples": 0.04
+          }
+        ],
+        "note": "Diagnostic sampling of the selected thread, not all-thread CPU utilization. Whole sampling windows within first-3s/last-1s phase margins. FPS from this instrumented run is not a controlled performance comparison.",
+        "renderer_functions": [
+          {
+            "function": "d3d9::device::emit_snapshot_deltas",
+            "samples": 1792,
+            "percent_of_all_samples": 2.2331609446071408
+          },
+          {
+            "function": "mtld3d_core::vs_draw::build_vs_draw_bytes",
+            "samples": 1265,
+            "percent_of_all_samples": 1.5764222069910898
+          },
+          {
+            "function": "mtld3d_core::ff_state::FfState::build_vs_key",
+            "samples": 395,
+            "percent_of_all_samples": 0.4922425073213284
+          },
+          {
+            "function": "mtld3d_core::ff_state::FfState::set_texture_stage_state",
+            "samples": 301,
+            "percent_of_all_samples": 0.37510125241448067
+          },
+          {
+            "function": "d3d9::device::device_set_render_state",
+            "samples": 298,
+            "percent_of_all_samples": 0.37136270172596425
+          },
+          {
+            "function": "d3d9::device::DeviceInner::set_render_state",
+            "samples": 292,
+            "percent_of_all_samples": 0.3638856003489314
+          },
+          {
+            "function": "d3d9::device::snapshot_bound_vertex_source",
+            "samples": 270,
+            "percent_of_all_samples": 0.33646956196647765
+          },
+          {
+            "function": "d3d9::device::device_set_texture_stage_state",
+            "samples": 257,
+            "percent_of_all_samples": 0.3202691756495732
+          },
+          {
+            "function": "mtld3d_core::convert::resolve_attrs_for_ff",
+            "samples": 224,
+            "percent_of_all_samples": 0.2791451180758926
+          },
+          {
+            "function": "mtld3d_core::ff_state::FfState::resolve_active_lights",
+            "samples": 223,
+            "percent_of_all_samples": 0.27789893451305375
+          },
+          {
+            "function": "d3d9::stage_bindings::StageBindings::replace_texture",
+            "samples": 199,
+            "percent_of_all_samples": 0.24799052900492244
+          },
+          {
+            "function": "mtld3d_core::convert::ff_vs_layout_from_elements",
+            "samples": 172,
+            "percent_of_all_samples": 0.21434357280827465
+          },
+          {
+            "function": "sn_rust_alloc",
+            "samples": 163,
+            "percent_of_all_samples": 0.2031279207427254
+          },
+          {
+            "function": "d3d9::device::DeviceInner::push_op_inline",
+            "samples": 151,
+            "percent_of_all_samples": 0.18817371798865973
+          },
+          {
+            "function": "d3d9::device::device_draw_indexed_primitive",
+            "samples": 133,
+            "percent_of_all_samples": 0.16574241385756122
+          },
+          {
+            "function": "d3d9::device::device_set_stream_source",
+            "samples": 116,
+            "percent_of_all_samples": 0.1445572932893015
+          },
+          {
+            "function": "d3d9::device::flush_mapped_bound_buffers",
+            "samples": 100,
+            "percent_of_all_samples": 0.12461835628388061
+          },
+          {
+            "function": "d3d9::device::device_set_render_target",
+            "samples": 92,
+            "percent_of_all_samples": 0.11464888778117016
+          },
+          {
+            "function": "d3d9::device::device_set_texture",
+            "samples": 88,
+            "percent_of_all_samples": 0.10966415352981494
+          },
+          {
+            "function": "fmaf",
+            "samples": 84,
+            "percent_of_all_samples": 0.10467941927845972
+          }
+        ]
+      },
+      "scanner": {
+        "dll_sha256": "4337a6eed907b81412ee68c6c5c148c1e1ae15610bdb88d3428a68721d0fc6aa",
+        "packaged_dll_mapped": false
+      },
+      "harness_sources": [
+        {
+          "file": "run.py",
+          "sha256": "0914d76a89e1a6446498140e06fc2441cc0a7c4e923e3579de2f63bc492a4aa8"
+        },
+        {
+          "file": "launcher/scripts/harness/renderer-run.py",
+          "sha256": "30e82d004a588bb376232d14f7422e3202d336a99e6122c682542c91be7d510b"
+        },
+        {
+          "file": "launcher/scripts/harness/stress-report.py",
+          "sha256": "5813ac342a5f4e079662f946f3f656140fa543ce4121495267e015a4ae5831eb"
+        },
+        {
+          "file": "launcher/scripts/harness/stress-suite.py",
+          "sha256": "6ee2a6d15bc571674c6818c393e5793e5c8f64dafec8683927fd589db9411cf7"
+        },
+        {
+          "file": "launcher/scripts/lsb-docker/commands/perfstress.lua",
+          "sha256": "e87c5850d85c125825a8bd81a987ff422fac749fdb227a70a9d4512460149a78"
+        },
+        {
+          "file": "launcher/scripts/lsb-docker/commands/perftime.lua",
+          "sha256": "693a674b30080f3600a8dc365a973336d6eb8251d1d404bf45ea03c6591e7fcb"
+        },
+        {
+          "file": "launcher/scripts/harness/addons/perfscene/perfscene.lua",
+          "sha256": "1f14008754645a8ffb8640e5bca232f2298b75d24a91a65215963ebb0bc5ea30"
+        },
+        {
+          "file": "launcher/scripts/harness/addons/perfscene/stress.lua",
+          "sha256": "0be883409ebfd6577247a0f7d4ca85cf196fb7c88210585dbe8177deabe8302a"
+        }
+      ]
+    },
+    {
+      "run": "normalized-production-scan-early-ab",
+      "scenario": "crowdsteady",
+      "workload_valid": true,
+      "restored": true,
+      "boot_sha256": "ef48e04f31634013e13f1395506750539deb975a82d6aa24a98164918ec54de3",
+      "shader_cache_seed_sha256": "97fd4fe2e9b8c0bacf22e42406c80791171334b1e02f7484ee3e3775a7eb5fdc",
+      "renderer_config": "color.hdr.enable=false;render.scale=1;present.maxFps=0;render.mergePasses=true;render.submitDraws=512;present.nativeHost=true",
+      "graphics_at_launch": {
+        "0000": 2,
+        "0001": 1882,
+        "0002": 1058,
+        "0003": 4096,
+        "0004": 4096,
+        "0007": 1,
+        "0011": 2,
+        "0017": 0,
+        "0018": 2,
+        "0019": 1,
+        "0020": 1,
+        "0021": 0,
+        "0022": 0,
+        "0023": 0,
+        "0024": 0,
+        "0028": 0,
+        "0029": 12,
+        "0030": 0,
+        "0031": 1002740646,
+        "0032": 0,
+        "0033": 0,
+        "0034": 1,
+        "0035": 1,
+        "0036": 1,
+        "0037": 1882,
+        "0038": 1058,
+        "0039": 1,
+        "0040": 0,
+        "0041": 0,
+        "0043": 0,
+        "0044": 1,
+        "0045": 0
+      },
+      "renderer_files": [
+        {
+          "file": "d3d8.dll",
+          "sha256": "ab6bf7a9a9f4b3e66a75ca038d8d10289c88acbfe8d52c3b5a8a9a259cb26cd5"
+        },
+        {
+          "file": "d3d9.dll",
+          "sha256": "4a159a9b023c0c685dec4a5255c7bfb38ad84983cf66b3938270754a4e53a9e7"
+        },
+        {
+          "file": "mtld3d.dll",
+          "sha256": "88328434b273c72525380e1f271e07bf718b47ee8e48623a82e1ce0ed6191a82"
+        },
+        {
+          "file": "mtld3d.so",
+          "sha256": "619faf2d6f588b98713a10edf03fc4c0e20f672a3662bd2c0fa116dd7fccb17e"
+        }
+      ],
+      "scan-summary": {
+        "valid": true,
+        "shadow": false,
+        "accelerated": 1939.0,
+        "fallbacks": 0.0,
+        "mismatches": 0.0,
+        "mismatch_files": [],
+        "phases": [
+          {
+            "phase": "mixed-32",
+            "calls": 1668.0,
+            "accelerated": 891.0,
+            "fast_ms": 567.672801,
+            "reference_ms": 2791.21622,
+            "baseline": {
+              "windows": [
+                {
+                  "block": 223674199,
+                  "frames": 115,
+                  "seconds": 5.934179295,
+                  "fps": 19.379259419562246,
+                  "p50_ms": 51.574999,
+                  "p95_ms": 53.658601,
+                  "p99_ms": 55.426801,
+                  "max_ms": 55.7927
+                },
+                {
+                  "block": 223674200,
+                  "frames": 97,
+                  "seconds": 5.911398995,
+                  "fps": 16.40897528352339,
+                  "p50_ms": 57.4775,
+                  "p95_ms": 75.813701,
+                  "p99_ms": 78.8466,
+                  "max_ms": 78.8466
+                },
+                {
+                  "block": 223674203,
+                  "frames": 116,
+                  "seconds": 5.9432758,
+                  "fps": 19.517855792591686,
+                  "p50_ms": 50.34985,
+                  "p95_ms": 56.972601,
+                  "p99_ms": 57.952499,
+                  "max_ms": 59.121899
+                },
+                {
+                  "block": 223674204,
+                  "frames": 104,
+                  "seconds": 5.894506701999999,
+                  "fps": 17.643545975562795,
+                  "p50_ms": 56.453500000000005,
+                  "p95_ms": 58.951901,
+                  "p99_ms": 59.387799,
+                  "max_ms": 60.480399
+                },
+                {
+                  "block": 223674207,
+                  "frames": 106,
+                  "seconds": 5.943386403000001,
+                  "fps": 17.83495011303575,
+                  "p50_ms": 56.306599500000004,
+                  "p95_ms": 58.917299,
+                  "p99_ms": 59.797401,
+                  "max_ms": 61.068401
+                }
+              ],
+              "frames": 538,
+              "seconds": 29.626747195,
+              "fps": 18.159266572835115,
+              "p50_ms": 54.750399,
+              "p95_ms": 70.517799,
+              "p99_ms": 75.6488,
+              "max_ms": 78.8466
+            },
+            "optimized": {
+              "windows": [
+                {
+                  "block": 223674197,
+                  "frames": 122,
+                  "seconds": 5.925427697,
+                  "fps": 20.58923106289318,
+                  "p50_ms": 48.478399499999995,
+                  "p95_ms": 53.089,
+                  "p99_ms": 54.7048,
+                  "max_ms": 55.598499
+                },
+                {
+                  "block": 223674198,
+                  "frames": 119,
+                  "seconds": 5.931846403,
+                  "fps": 20.06120723891576,
+                  "p50_ms": 49.077099,
+                  "p95_ms": 55.2167,
+                  "p99_ms": 56.609301,
+                  "max_ms": 56.640299
+                },
+                {
+                  "block": 223674201,
+                  "frames": 108,
+                  "seconds": 5.991328103,
+                  "fps": 18.026053346322637,
+                  "p50_ms": 53.5897005,
+                  "p95_ms": 67.2506,
+                  "p99_ms": 72.2674,
+                  "max_ms": 72.8305
+                },
+                {
+                  "block": 223674202,
+                  "frames": 107,
+                  "seconds": 5.944125997,
+                  "fps": 18.000964322425684,
+                  "p50_ms": 54.4693,
+                  "p95_ms": 63.7387,
+                  "p99_ms": 73.206199,
+                  "max_ms": 73.958701
+                },
+                {
+                  "block": 223674205,
+                  "frames": 102,
+                  "seconds": 5.984595498,
+                  "fps": 17.0437584351503,
+                  "p50_ms": 57.426949,
+                  "p95_ms": 70.541501,
+                  "p99_ms": 71.492499,
+                  "max_ms": 74.657999
+                },
+                {
+                  "block": 223674206,
+                  "frames": 111,
+                  "seconds": 5.952767103,
+                  "fps": 18.646790321102873,
+                  "p50_ms": 53.626001,
+                  "p95_ms": 55.814799,
+                  "p99_ms": 58.8386,
+                  "max_ms": 60.0692
+                }
+              ],
+              "frames": 669,
+              "seconds": 35.730090800999996,
+              "fps": 18.72371396216201,
+              "p50_ms": 52.860999,
+              "p95_ms": 64.7239,
+              "p99_ms": 70.966799,
+              "max_ms": 74.657999
+            },
+            "valid": true,
+            "fps_change_percent": 3.108316005291001
+          }
+        ],
+        "note": "Absolute-epoch ABBA in 8s blocks. Whole frames only, first/last 1s of each block excluded, first 3s/last 1s of phase excluded. At least four measured windows per mode; accelerated-call evidence required. Full addon workload unchanged. Here accelerated counts invocation of the production wrapper, including its internal original-API fallbacks.",
+        "control": {
+          "baseline": "original Ashita memory search",
+          "optimized": "production SEH helper and Lua wrapper",
+          "submit_draws": 512,
+          "dll_sha256": "4337a6eed907b81412ee68c6c5c148c1e1ae15610bdb88d3428a68721d0fc6aa"
+        }
+      },
+      "harness_sources": [
+        {
+          "file": "run.py",
+          "sha256": "56a81b34b56627b6642a054ad83e7bf36061d05eae0984bf6b023cdd601525f4"
+        },
+        {
+          "file": "launcher/scripts/harness/renderer-run.py",
+          "sha256": "0bf24e6cc052cfca2bd1a9f37aa847a890dbd64f804cead38a2867f1cc40ec8e"
+        },
+        {
+          "file": "launcher/scripts/harness/stress-report.py",
+          "sha256": "5813ac342a5f4e079662f946f3f656140fa543ce4121495267e015a4ae5831eb"
+        },
+        {
+          "file": "launcher/scripts/harness/stress-suite.py",
+          "sha256": "6ee2a6d15bc571674c6818c393e5793e5c8f64dafec8683927fd589db9411cf7"
+        },
+        {
+          "file": "launcher/scripts/lsb-docker/commands/perfstress.lua",
+          "sha256": "e87c5850d85c125825a8bd81a987ff422fac749fdb227a70a9d4512460149a78"
+        },
+        {
+          "file": "launcher/scripts/lsb-docker/commands/perftime.lua",
+          "sha256": "693a674b30080f3600a8dc365a973336d6eb8251d1d404bf45ea03c6591e7fcb"
+        },
+        {
+          "file": "launcher/scripts/harness/addons/perfscene/perfscene.lua",
+          "sha256": "1f14008754645a8ffb8640e5bca232f2298b75d24a91a65215963ebb0bc5ea30"
+        },
+        {
+          "file": "launcher/scripts/harness/addons/perfscene/stress.lua",
+          "sha256": "0be883409ebfd6577247a0f7d4ca85cf196fb7c88210585dbe8177deabe8302a"
+        }
+      ]
+    },
+    {
+      "run": "normalized-production-scan-early-repeat",
+      "scenario": "crowdsteady",
+      "workload_valid": true,
+      "restored": true,
+      "boot_sha256": "ef48e04f31634013e13f1395506750539deb975a82d6aa24a98164918ec54de3",
+      "shader_cache_seed_sha256": "97fd4fe2e9b8c0bacf22e42406c80791171334b1e02f7484ee3e3775a7eb5fdc",
+      "renderer_config": "color.hdr.enable=false;render.scale=1;present.maxFps=0;render.mergePasses=true;render.submitDraws=512;present.nativeHost=true",
+      "graphics_at_launch": {
+        "0000": 2,
+        "0001": 1882,
+        "0002": 1058,
+        "0003": 4096,
+        "0004": 4096,
+        "0007": 1,
+        "0011": 2,
+        "0017": 0,
+        "0018": 2,
+        "0019": 1,
+        "0020": 1,
+        "0021": 0,
+        "0022": 0,
+        "0023": 0,
+        "0024": 0,
+        "0028": 0,
+        "0029": 12,
+        "0030": 0,
+        "0031": 1002740646,
+        "0032": 0,
+        "0033": 0,
+        "0034": 1,
+        "0035": 1,
+        "0036": 1,
+        "0037": 1882,
+        "0038": 1058,
+        "0039": 1,
+        "0040": 0,
+        "0041": 0,
+        "0043": 0,
+        "0044": 1,
+        "0045": 0
+      },
+      "renderer_files": [
+        {
+          "file": "d3d8.dll",
+          "sha256": "ab6bf7a9a9f4b3e66a75ca038d8d10289c88acbfe8d52c3b5a8a9a259cb26cd5"
+        },
+        {
+          "file": "d3d9.dll",
+          "sha256": "4a159a9b023c0c685dec4a5255c7bfb38ad84983cf66b3938270754a4e53a9e7"
+        },
+        {
+          "file": "mtld3d.dll",
+          "sha256": "88328434b273c72525380e1f271e07bf718b47ee8e48623a82e1ce0ed6191a82"
+        },
+        {
+          "file": "mtld3d.so",
+          "sha256": "619faf2d6f588b98713a10edf03fc4c0e20f672a3662bd2c0fa116dd7fccb17e"
+        }
+      ],
+      "scan-summary": {
+        "valid": true,
+        "shadow": false,
+        "accelerated": 1648.0,
+        "fallbacks": 0.0,
+        "mismatches": 0.0,
+        "mismatch_files": [],
+        "phases": [
+          {
+            "phase": "mixed-32",
+            "calls": 1363.0,
+            "accelerated": 666.0,
+            "fast_ms": 511.215588,
+            "reference_ms": 3163.198296,
+            "baseline": {
+              "windows": [
+                {
+                  "block": 223674423,
+                  "frames": 82,
+                  "seconds": 5.9273208969999995,
+                  "fps": 13.834243400167981,
+                  "p50_ms": 74.4662,
+                  "p95_ms": 81.1351,
+                  "p99_ms": 88.318901,
+                  "max_ms": 88.318901
+                },
+                {
+                  "block": 223674424,
+                  "frames": 77,
+                  "seconds": 5.976511197,
+                  "fps": 12.883770725411058,
+                  "p50_ms": 79.5839,
+                  "p95_ms": 90.5999,
+                  "p99_ms": 94.0862,
+                  "max_ms": 94.0862
+                },
+                {
+                  "block": 223674427,
+                  "frames": 88,
+                  "seconds": 5.941788302,
+                  "fps": 14.810355995076312,
+                  "p50_ms": 65.872401,
+                  "p95_ms": 76.504199,
+                  "p99_ms": 106.0188,
+                  "max_ms": 106.0188
+                },
+                {
+                  "block": 223674428,
+                  "frames": 89,
+                  "seconds": 5.922773199,
+                  "fps": 15.02674456874809,
+                  "p50_ms": 65.4388,
+                  "p95_ms": 75.1615,
+                  "p99_ms": 78.1896,
+                  "max_ms": 78.1896
+                },
+                {
+                  "block": 223674431,
+                  "frames": 89,
+                  "seconds": 5.949012901,
+                  "fps": 14.96046511935443,
+                  "p50_ms": 65.2842,
+                  "p95_ms": 75.9941,
+                  "p99_ms": 79.340801,
+                  "max_ms": 79.340801
+                },
+                {
+                  "block": 223674432,
+                  "frames": 92,
+                  "seconds": 5.9428092,
+                  "fps": 15.480894119905448,
+                  "p50_ms": 64.25444949999999,
+                  "p95_ms": 67.2701,
+                  "p99_ms": 68.489999,
+                  "max_ms": 68.489999
+                }
+              ],
+              "frames": 517,
+              "seconds": 35.660215696,
+              "fps": 14.497949322779665,
+              "p50_ms": 65.9228,
+              "p95_ms": 83.4965,
+              "p99_ms": 89.573599,
+              "max_ms": 106.0188
+            },
+            "optimized": {
+              "windows": [
+                {
+                  "block": 223674422,
+                  "frames": 96,
+                  "seconds": 5.995588299,
+                  "fps": 16.011773192634287,
+                  "p50_ms": 61.354749999999996,
+                  "p95_ms": 71.4553,
+                  "p99_ms": 75.658299,
+                  "max_ms": 75.658299
+                },
+                {
+                  "block": 223674425,
+                  "frames": 87,
+                  "seconds": 5.9586687959999995,
+                  "fps": 14.600576568109023,
+                  "p50_ms": 62.4914,
+                  "p95_ms": 88.662401,
+                  "p99_ms": 141.081501,
+                  "max_ms": 141.081501
+                },
+                {
+                  "block": 223674426,
+                  "frames": 95,
+                  "seconds": 5.926105798,
+                  "fps": 16.030763411625475,
+                  "p50_ms": 61.155101,
+                  "p95_ms": 72.113501,
+                  "p99_ms": 74.358299,
+                  "max_ms": 74.358299
+                },
+                {
+                  "block": 223674429,
+                  "frames": 92,
+                  "seconds": 5.941971899,
+                  "fps": 15.483075578913974,
+                  "p50_ms": 63.49135,
+                  "p95_ms": 72.3492,
+                  "p99_ms": 74.8103,
+                  "max_ms": 74.8103
+                },
+                {
+                  "block": 223674430,
+                  "frames": 87,
+                  "seconds": 5.927190198,
+                  "fps": 14.678118483418372,
+                  "p50_ms": 70.1678,
+                  "p95_ms": 74.253801,
+                  "p99_ms": 75.71,
+                  "max_ms": 75.71
+                }
+              ],
+              "frames": 457,
+              "seconds": 29.74952499,
+              "fps": 15.361589812059718,
+              "p50_ms": 62.3079,
+              "p95_ms": 74.2613,
+              "p99_ms": 88.662401,
+              "max_ms": 141.081501
+            },
+            "valid": true,
+            "fps_change_percent": 5.95698377785796
+          }
+        ],
+        "note": "Absolute-epoch ABBA in 8s blocks. Whole frames only, first/last 1s of each block excluded, first 3s/last 1s of phase excluded. At least four measured windows per mode; accelerated-call evidence required. Full addon workload unchanged. Here accelerated counts invocation of the production wrapper, including its internal original-API fallbacks.",
+        "control": {
+          "baseline": "original Ashita memory search",
+          "optimized": "production SEH helper and Lua wrapper",
+          "submit_draws": 512,
+          "dll_sha256": "4337a6eed907b81412ee68c6c5c148c1e1ae15610bdb88d3428a68721d0fc6aa"
+        }
+      },
+      "harness_sources": [
+        {
+          "file": "run.py",
+          "sha256": "18a29dc440d41cd10c1ca80224627a5cae08a334718f603407b756e6c7467bc2"
+        },
+        {
+          "file": "launcher/scripts/harness/renderer-run.py",
+          "sha256": "30e82d004a588bb376232d14f7422e3202d336a99e6122c682542c91be7d510b"
+        },
+        {
+          "file": "launcher/scripts/harness/stress-report.py",
+          "sha256": "5813ac342a5f4e079662f946f3f656140fa543ce4121495267e015a4ae5831eb"
+        },
+        {
+          "file": "launcher/scripts/harness/stress-suite.py",
+          "sha256": "6ee2a6d15bc571674c6818c393e5793e5c8f64dafec8683927fd589db9411cf7"
+        },
+        {
+          "file": "launcher/scripts/lsb-docker/commands/perfstress.lua",
+          "sha256": "e87c5850d85c125825a8bd81a987ff422fac749fdb227a70a9d4512460149a78"
+        },
+        {
+          "file": "launcher/scripts/lsb-docker/commands/perftime.lua",
+          "sha256": "693a674b30080f3600a8dc365a973336d6eb8251d1d404bf45ea03c6591e7fcb"
+        },
+        {
+          "file": "launcher/scripts/harness/addons/perfscene/perfscene.lua",
+          "sha256": "1f14008754645a8ffb8640e5bca232f2298b75d24a91a65215963ebb0bc5ea30"
+        },
+        {
+          "file": "launcher/scripts/harness/addons/perfscene/stress.lua",
+          "sha256": "0be883409ebfd6577247a0f7d4ca85cf196fb7c88210585dbe8177deabe8302a"
+        }
+      ]
+    },
+    {
+      "run": "normalized-scanner-app-aga",
+      "scenario": "aga8",
+      "workload_valid": true,
+      "restored": true,
+      "boot_sha256": "ef48e04f31634013e13f1395506750539deb975a82d6aa24a98164918ec54de3",
+      "shader_cache_seed_sha256": "97fd4fe2e9b8c0bacf22e42406c80791171334b1e02f7484ee3e3775a7eb5fdc",
+      "renderer_config": "color.hdr.enable=false;render.scale=1;present.maxFps=0;render.mergePasses=true;render.submitDraws=0;present.nativeHost=true",
+      "graphics_at_launch": {
+        "0000": 2,
+        "0001": 1882,
+        "0002": 1058,
+        "0003": 4096,
+        "0004": 4096,
+        "0007": 1,
+        "0011": 2,
+        "0017": 0,
+        "0018": 2,
+        "0019": 1,
+        "0020": 1,
+        "0021": 0,
+        "0022": 0,
+        "0023": 0,
+        "0024": 0,
+        "0028": 0,
+        "0029": 12,
+        "0030": 0,
+        "0031": 1002740646,
+        "0032": 0,
+        "0033": 0,
+        "0034": 1,
+        "0035": 1,
+        "0036": 1,
+        "0037": 1882,
+        "0038": 1058,
+        "0039": 1,
+        "0040": 0,
+        "0041": 0,
+        "0043": 0,
+        "0044": 1,
+        "0045": 0
+      },
+      "renderer_files": [
+        {
+          "file": "d3d8.dll",
+          "sha256": "ab6bf7a9a9f4b3e66a75ca038d8d10289c88acbfe8d52c3b5a8a9a259cb26cd5"
+        },
+        {
+          "file": "d3d9.dll",
+          "sha256": "4a159a9b023c0c685dec4a5255c7bfb38ad84983cf66b3938270754a4e53a9e7"
+        },
+        {
+          "file": "mtld3d.dll",
+          "sha256": "88328434b273c72525380e1f271e07bf718b47ee8e48623a82e1ce0ed6191a82"
+        },
+        {
+          "file": "mtld3d.so",
+          "sha256": "619faf2d6f588b98713a10edf03fc4c0e20f672a3662bd2c0fa116dd7fccb17e"
+        }
+      ],
+      "stable-summary": {
+        "valid": true,
+        "scenario": "aga8",
+        "settle_seconds": 3,
+        "phases": [
+          {
+            "name": "aga-idle",
+            "frames": 851,
+            "measured_seconds": 25.98225951,
+            "fps": 32.75311755209238,
+            "p50_ms": 30.606801,
+            "p95_ms": 33.4458,
+            "p99_ms": 34.7708,
+            "max_ms": 35.3966,
+            "frames_over_50ms": 0,
+            "frames_over_100ms": 0,
+            "frames_over_500ms": 0,
+            "valid": true
+          },
+          {
+            "name": "aga-round-1",
+            "frames": 975,
+            "measured_seconds": 35.283133201999995,
+            "fps": 27.633600293318988,
+            "p50_ms": 35.352899,
+            "p95_ms": 38.5959,
+            "p99_ms": 82.611701,
+            "max_ms": 98.0244,
+            "frames_over_50ms": 15,
+            "frames_over_100ms": 0,
+            "frames_over_500ms": 0,
+            "valid": true
+          },
+          {
+            "name": "aga-round-2",
+            "frames": 912,
+            "measured_seconds": 35.605174207000005,
+            "fps": 25.614254678206297,
+            "p50_ms": 37.427599,
+            "p95_ms": 47.1214,
+            "p99_ms": 90.499699,
+            "max_ms": 118.906401,
+            "frames_over_50ms": 31,
+            "frames_over_100ms": 3,
+            "frames_over_500ms": 0,
+            "valid": true
+          }
+        ],
+        "note": "Report whole frames after a fixed settling exclusion in a validated stress run.\n\nKeeps the workload report intact. Three seconds at phase start exclude the marker\nscreenshot; one second at the end excludes transitions. Separate launches can\nstill drift, so repeat controls and do not treat small differences as causal proof.\n"
+      },
+      "scanner": {
+        "dll_sha256": "4337a6eed907b81412ee68c6c5c148c1e1ae15610bdb88d3428a68721d0fc6aa",
+        "packaged_dll_mapped": true,
+        "verification": "manual lsof receipt"
+      }
+    },
+    {
+      "run": "normalized-scanner-arrivals",
+      "scenario": "arrivals",
+      "workload_valid": true,
+      "restored": true,
+      "boot_sha256": "ef48e04f31634013e13f1395506750539deb975a82d6aa24a98164918ec54de3",
+      "shader_cache_seed_sha256": "97fd4fe2e9b8c0bacf22e42406c80791171334b1e02f7484ee3e3775a7eb5fdc",
+      "renderer_config": "color.hdr.enable=false;render.scale=1;present.maxFps=0;render.mergePasses=true;render.submitDraws=0;present.nativeHost=true",
+      "graphics_at_launch": {
+        "0000": 2,
+        "0001": 1882,
+        "0002": 1058,
+        "0003": 4096,
+        "0004": 4096,
+        "0007": 1,
+        "0011": 2,
+        "0017": 0,
+        "0018": 2,
+        "0019": 1,
+        "0020": 1,
+        "0021": 0,
+        "0022": 0,
+        "0023": 0,
+        "0024": 0,
+        "0028": 0,
+        "0029": 12,
+        "0030": 0,
+        "0031": 1002740646,
+        "0032": 0,
+        "0033": 0,
+        "0034": 1,
+        "0035": 1,
+        "0036": 1,
+        "0037": 1882,
+        "0038": 1058,
+        "0039": 1,
+        "0040": 0,
+        "0041": 0,
+        "0043": 0,
+        "0044": 1,
+        "0045": 0
+      },
+      "renderer_files": [
+        {
+          "file": "d3d8.dll",
+          "sha256": "ab6bf7a9a9f4b3e66a75ca038d8d10289c88acbfe8d52c3b5a8a9a259cb26cd5"
+        },
+        {
+          "file": "d3d9.dll",
+          "sha256": "4a159a9b023c0c685dec4a5255c7bfb38ad84983cf66b3938270754a4e53a9e7"
+        },
+        {
+          "file": "mtld3d.dll",
+          "sha256": "88328434b273c72525380e1f271e07bf718b47ee8e48623a82e1ce0ed6191a82"
+        },
+        {
+          "file": "mtld3d.so",
+          "sha256": "619faf2d6f588b98713a10edf03fc4c0e20f672a3662bd2c0fa116dd7fccb17e"
+        }
+      ],
+      "untrimmed_arrivals": [
+        {
+          "name": "arrival-1",
+          "start": 1789392870.144,
+          "end": 1789392890.55,
+          "p50_ms": 74.718,
+          "p95_ms": 92.748,
+          "p99_ms": 98.837,
+          "max_ms": 101.386,
+          "valid": true,
+          "fps": 16.134,
+          "frames_over_50ms": 200,
+          "frames_over_100ms": 3,
+          "frames_over_500ms": 0,
+          "casts": 0,
+          "problems": []
+        },
+        {
+          "name": "arrival-warm-1",
+          "start": 1789392890.794,
+          "end": 1789392910.874,
+          "p50_ms": 83.316,
+          "p95_ms": 90.873,
+          "p99_ms": 93.965,
+          "max_ms": 94.073,
+          "valid": true,
+          "fps": 11.954,
+          "frames_over_50ms": 241,
+          "frames_over_100ms": 0,
+          "frames_over_500ms": 0,
+          "casts": 0,
+          "problems": []
+        },
+        {
+          "name": "arrival-2",
+          "start": 1789392917.035,
+          "end": 1789392937.437,
+          "p50_ms": 77.039,
+          "p95_ms": 96.729,
+          "p99_ms": 101.704,
+          "max_ms": 106.958,
+          "valid": true,
+          "fps": 15.11,
+          "frames_over_50ms": 207,
+          "frames_over_100ms": 9,
+          "frames_over_500ms": 0,
+          "casts": 0,
+          "problems": []
+        },
+        {
+          "name": "arrival-warm-2",
+          "start": 1789392937.681,
+          "end": 1789392957.738,
+          "p50_ms": 88.521,
+          "p95_ms": 120.096,
+          "p99_ms": 124.674,
+          "max_ms": 126.67,
+          "valid": true,
+          "fps": 10.626,
+          "frames_over_50ms": 214,
+          "frames_over_100ms": 69,
+          "frames_over_500ms": 0,
+          "casts": 0,
+          "problems": []
+        },
+        {
+          "name": "arrival-3",
+          "start": 1789392963.844,
+          "end": 1789392984.283,
+          "p50_ms": 73.124,
+          "p95_ms": 97.384,
+          "p99_ms": 101.932,
+          "max_ms": 103.947,
+          "valid": true,
+          "fps": 16.159,
+          "frames_over_50ms": 194,
+          "frames_over_100ms": 11,
+          "frames_over_500ms": 0,
+          "casts": 0,
+          "problems": []
+        },
+        {
+          "name": "arrival-warm-3",
+          "start": 1789392984.524,
+          "end": 1789393004.587,
+          "p50_ms": 82.254,
+          "p95_ms": 100.874,
+          "p99_ms": 137.232,
+          "max_ms": 151.956,
+          "valid": true,
+          "fps": 11.867,
+          "frames_over_50ms": 239,
+          "frames_over_100ms": 15,
+          "frames_over_500ms": 0,
+          "casts": 0,
+          "problems": []
+        }
+      ],
+      "scanner": {
+        "dll_sha256": "4337a6eed907b81412ee68c6c5c148c1e1ae15610bdb88d3428a68721d0fc6aa",
+        "packaged_dll_mapped": true
+      },
+      "harness_sources": [
+        {
+          "file": "run.py",
+          "sha256": "f3da68a52b5c891bdbc35880e64340fc02380efb157eb72be0b58e68042385b1"
+        },
+        {
+          "file": "launcher/scripts/harness/renderer-run.py",
+          "sha256": "0bf24e6cc052cfca2bd1a9f37aa847a890dbd64f804cead38a2867f1cc40ec8e"
+        },
+        {
+          "file": "launcher/scripts/harness/stress-report.py",
+          "sha256": "5813ac342a5f4e079662f946f3f656140fa543ce4121495267e015a4ae5831eb"
+        },
+        {
+          "file": "launcher/scripts/harness/stress-suite.py",
+          "sha256": "6ee2a6d15bc571674c6818c393e5793e5c8f64dafec8683927fd589db9411cf7"
+        },
+        {
+          "file": "launcher/scripts/lsb-docker/commands/perfstress.lua",
+          "sha256": "e87c5850d85c125825a8bd81a987ff422fac749fdb227a70a9d4512460149a78"
+        },
+        {
+          "file": "launcher/scripts/lsb-docker/commands/perftime.lua",
+          "sha256": "693a674b30080f3600a8dc365a973336d6eb8251d1d404bf45ea03c6591e7fcb"
+        },
+        {
+          "file": "launcher/scripts/harness/addons/perfscene/perfscene.lua",
+          "sha256": "1f14008754645a8ffb8640e5bca232f2298b75d24a91a65215963ebb0bc5ea30"
+        },
+        {
+          "file": "launcher/scripts/harness/addons/perfscene/stress.lua",
+          "sha256": "0be883409ebfd6577247a0f7d4ca85cf196fb7c88210585dbe8177deabe8302a"
+        }
+      ]
+    },
+    {
+      "run": "normalized-storage-early-ab",
+      "scenario": "crowdsteady",
+      "workload_valid": true,
+      "restored": true,
+      "boot_sha256": "ef48e04f31634013e13f1395506750539deb975a82d6aa24a98164918ec54de3",
+      "shader_cache_seed_sha256": "97fd4fe2e9b8c0bacf22e42406c80791171334b1e02f7484ee3e3775a7eb5fdc",
+      "renderer_config": "color.hdr.enable=false;render.scale=1;present.maxFps=0;render.mergePasses=true;render.submitDraws=512;present.nativeHost=true",
+      "graphics_at_launch": {
+        "0000": 2,
+        "0001": 1882,
+        "0002": 1058,
+        "0003": 4096,
+        "0004": 4096,
+        "0007": 1,
+        "0011": 2,
+        "0017": 0,
+        "0018": 2,
+        "0019": 1,
+        "0020": 1,
+        "0021": 0,
+        "0022": 0,
+        "0023": 0,
+        "0024": 0,
+        "0028": 0,
+        "0029": 12,
+        "0030": 0,
+        "0031": 1002740646,
+        "0032": 0,
+        "0033": 0,
+        "0034": 1,
+        "0035": 1,
+        "0036": 1,
+        "0037": 1882,
+        "0038": 1058,
+        "0039": 1,
+        "0040": 0,
+        "0041": 0,
+        "0043": 0,
+        "0044": 1,
+        "0045": 0
+      },
+      "renderer_files": [
+        {
+          "file": "d3d8.dll",
+          "sha256": "ab6bf7a9a9f4b3e66a75ca038d8d10289c88acbfe8d52c3b5a8a9a259cb26cd5"
+        },
+        {
+          "file": "d3d9.dll",
+          "sha256": "6f6f39c9b14d52996d284fa4870520f726d2c50b3aa965bfc090e9942f220a8f"
+        },
+        {
+          "file": "mtld3d.dll",
+          "sha256": "28f9740c5f7e0cc05b6fa1936bc4d10280a02af5ec04a1c5f159e5ce89ff7329"
+        },
+        {
+          "file": "mtld3d.so",
+          "sha256": "619faf2d6f588b98713a10edf03fc4c0e20f672a3662bd2c0fa116dd7fccb17e"
+        }
+      ],
+      "storage-summary": {
+        "valid": true,
+        "switch_count": 15,
+        "phases": [
+          {
+            "phase": "mixed-32",
+            "valid": true,
+            "fps_change_percent": -3.4597053773429476,
+            "baseline": {
+              "windows": [
+                {
+                  "block": 223673859,
+                  "frames": 91,
+                  "seconds": 4.962636196,
+                  "fps": 18.337028225713606
+                },
+                {
+                  "block": 223673860,
+                  "frames": 88,
+                  "seconds": 4.913704803,
+                  "fps": 17.9090937547312
+                },
+                {
+                  "block": 223673863,
+                  "frames": 83,
+                  "seconds": 4.9448904,
+                  "fps": 16.78500295982293
+                },
+                {
+                  "block": 223673864,
+                  "frames": 101,
+                  "seconds": 4.948917297,
+                  "fps": 20.408504312897996
+                },
+                {
+                  "block": 223673867,
+                  "frames": 88,
+                  "seconds": 4.958090895000001,
+                  "fps": 17.748766987862975
+                },
+                {
+                  "block": 223673868,
+                  "frames": 100,
+                  "seconds": 4.912174901999999,
+                  "fps": 20.357581314803113
+                }
+              ],
+              "frames": 551,
+              "seconds": 29.640414493,
+              "fps": 18.589483629863757,
+              "p50_ms": 54.366101,
+              "p99_ms": 66.650201
+            },
+            "optimized": {
+              "windows": [
+                {
+                  "block": 223673858,
+                  "frames": 89,
+                  "seconds": 4.985978102,
+                  "fps": 17.85005833946601
+                },
+                {
+                  "block": 223673861,
+                  "frames": 86,
+                  "seconds": 4.920728999,
+                  "fps": 17.477085207796872
+                },
+                {
+                  "block": 223673862,
+                  "frames": 86,
+                  "seconds": 4.9081131,
+                  "fps": 17.522008610600274
+                },
+                {
+                  "block": 223673865,
+                  "frames": 94,
+                  "seconds": 4.9408713980000005,
+                  "fps": 19.02498414309062
+                },
+                {
+                  "block": 223673866,
+                  "frames": 90,
+                  "seconds": 4.967520494,
+                  "fps": 18.117690728947398
+                },
+                {
+                  "block": 223673869,
+                  "frames": 27,
+                  "seconds": 1.5774119020000001,
+                  "fps": 17.116645288251412
+                }
+              ],
+              "frames": 472,
+              "seconds": 26.300623995000002,
+              "fps": 17.946342265101073,
+              "p50_ms": 55.90545,
+              "p99_ms": 64.017901
+            }
+          }
+        ],
+        "note": "Whole frames only; first two seconds after each log boundary and last second before the next are excluded, plus the first three seconds of the phase. At least four usable windows per mode required. Within-run comparison reduces drift but does not establish universal FPS gains. Startup without application presents is excluded before parsing; contiguous markers are required from 16 seconds before through 16 seconds after the measured phase."
+      },
+      "harness_sources": [
+        {
+          "file": "run.py",
+          "sha256": "8a9e89b3bfe8bdad735c323798b2976ec71806e449637e7e506737401983f7cc"
+        },
+        {
+          "file": "launcher/scripts/harness/renderer-run.py",
+          "sha256": "d8d8b9d964c1cf34e058ed1802287b1fdb62e5631f0438e7f0b312961793fffa"
+        },
+        {
+          "file": "launcher/scripts/harness/stress-report.py",
+          "sha256": "5813ac342a5f4e079662f946f3f656140fa543ce4121495267e015a4ae5831eb"
+        },
+        {
+          "file": "launcher/scripts/harness/stress-suite.py",
+          "sha256": "6ee2a6d15bc571674c6818c393e5793e5c8f64dafec8683927fd589db9411cf7"
+        },
+        {
+          "file": "launcher/scripts/lsb-docker/commands/perfstress.lua",
+          "sha256": "e87c5850d85c125825a8bd81a987ff422fac749fdb227a70a9d4512460149a78"
+        },
+        {
+          "file": "launcher/scripts/lsb-docker/commands/perftime.lua",
+          "sha256": "693a674b30080f3600a8dc365a973336d6eb8251d1d404bf45ea03c6591e7fcb"
+        },
+        {
+          "file": "launcher/scripts/harness/addons/perfscene/perfscene.lua",
+          "sha256": "1f14008754645a8ffb8640e5bca232f2298b75d24a91a65215963ebb0bc5ea30"
+        },
+        {
+          "file": "launcher/scripts/harness/addons/perfscene/stress.lua",
+          "sha256": "0be883409ebfd6577247a0f7d4ca85cf196fb7c88210585dbe8177deabe8302a"
+        }
+      ]
+    }
+  ],
+  "renderer_tests_submit512": {
+    "core_types_passed": 1046,
+    "native_shared_passed": 207,
+    "i686_rendering_passed": 454,
+    "x86_64_rendering_passed": 454,
+    "leaky_processes_per_rendering_leg": 1
+  },
+  "conformance": {
+    "comparison": "submit0 vs submit512; same source and isolated test SDK",
+    "subtests": [
+      {
+        "subtest": "i686-d3d9ex",
+        "same_failure_counts": true,
+        "baseline_failures": 1,
+        "candidate_failures": 1,
+        "baseline_timed_out": false,
+        "candidate_timed_out": false,
+        "different_sites": {}
+      },
+      {
+        "subtest": "i686-device",
+        "same_failure_counts": false,
+        "baseline_failures": 24,
+        "candidate_failures": 22,
+        "baseline_timed_out": true,
+        "candidate_timed_out": true,
+        "different_sites": {
+          "device.c:4487": [
+            1,
+            0
+          ],
+          "device.c:4302": [
+            1,
+            0
+          ]
+        }
+      },
+      {
+        "subtest": "i686-stateblock",
+        "same_failure_counts": true,
+        "baseline_failures": 0,
+        "candidate_failures": 0,
+        "baseline_timed_out": false,
+        "candidate_timed_out": false,
+        "different_sites": {}
+      },
+      {
+        "subtest": "i686-visual",
+        "same_failure_counts": true,
+        "baseline_failures": 236,
+        "candidate_failures": 236,
+        "baseline_timed_out": false,
+        "candidate_timed_out": false,
+        "different_sites": {}
+      }
+    ],
+    "limitation": "Both i686 device subtests timed out after 90 seconds. Both conformance gates fail against the stored upstream baseline. x86-64 conformance was not reached. Identical counts do not cover the timed-out remainder."
+  },
+  "final_restoration": {
+    "installed_app_unchanged": true,
+    "installed_file_count": 40,
+    "installed_native_sha256": "99fd358a792617c2c1fe6a22df9eab37b32a352e45900569fcc87aeef03fef04",
+    "related_processes": [],
+    "graphics_preferences_restored": true,
+    "last_launcher_preferences_restored": true,
+    "docker_unchanged": true,
+    "normalized_restoration_receipts_verified": 23,
+    "candidate_signature_verified": true,
+    "default_scanner_disabled_verified": true
+  },
+  "static_checks": {
+    "pe_clippy": "passed",
+    "rustdoc": "passed",
+    "native_clippy": "fails on unchanged picture/settings code; new observer warnings corrected",
+    "format": "fails in unchanged picture/native settings files",
+    "audit": "fails in unchanged picture settings, shader cache and execution policy files"
+  }
+}

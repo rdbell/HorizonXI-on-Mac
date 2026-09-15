@@ -1,7 +1,7 @@
 -- Repeatable local stress workloads. Only the driver starts them; no packet injection.
 local M = {}
 local bit = require('bit')
-local names = { crowd = true, arrivals = true, camera = true,
+local names = { lightsteady = true, crowdsteady = true, crowd = true, arrivals = true, camera = true,
                 aga8 = true, aga24 = true, aga40 = true }
 function M.is_scenario(name) return names[name] == true end
 function M.scenarios(world, entities)
@@ -9,14 +9,17 @@ function M.scenarios(world, entities)
     for name in pairs(names) do
         local aga = name:match('^aga(%d+)$')
         local s = {
-            {1, "!exec xi.commands.perfstress = dofile('scripts/commands/perfstress.lua')", 'fixture command refreshed'},
-            {1, "!exec xi.commands.perftime = dofile('scripts/commands/perftime.lua')", 'clock command refreshed'},
-            {1, '!perftime 12', 'clock pinned to noon'},
+            {2, "!exec xi.commands.perfstress = dofile('scripts/commands/perfstress.lua')", 'fixture command refreshed'},
+            {2, "!exec xi.commands.perftime = dofile('scripts/commands/perftime.lua')", 'clock command refreshed'},
+            {2, '!perftime 12', 'clock pinned to noon'},
             {1, '/fps 0', 'fps uncapped'}, {1, world, 'world draw distance set'},
             {1, entities, 'entity draw distance set'},
             {2, aga and '!exec player:setPos(30,-1,60,192,106)'
                     or '!exec player:setPos(0,0,-90,192,234)', 'stress zone requested'},
             {8, '!setweather 0', 'clear weather requested'},
+            {2, '!changejob RDM 99', 'RDM99 requested'},
+            {2, '!changesjob BLM 49', 'BLM49 requested'},
+            {2, '!exec for i=1,1023 do player:delStatusEffectSilent(i) end', 'prior spell effects cleared'},
             {2, 'home', 'camera reset requested'},
             {2, 'fixture clear 0', 'fixture cleared'},
         }
@@ -26,7 +29,7 @@ function M.scenarios(world, entities)
             add(seconds, 'phase_end '..id, id..' end')
         end
         if not aga then
-            add(1, 'fixture city 1', 'camera anchor requested')
+            add(2, 'fixture city 1', 'camera anchor requested')
             add(5, 'fixture_ready', 'camera anchor confirmed')
             add(1, 'align_camera', 'camera target selected')
             add(1, '/lockon', 'camera lock requested')
@@ -34,12 +37,10 @@ function M.scenarios(world, entities)
             add(1, 'fixture clear 0', 'camera anchor removed')
         end
         if aga then
-            add(2, '!changejob RDM 99', 'RDM99 requested')
-            add(2, '!changesjob BLM 49', 'BLM49 requested')
             add(2, '!addallspells', 'spells requested')
             add(3, 'aga_ready', 'aga character confirmed')
             add(1, '!exec player:delStatusEffect(48)', 'idle Chainspell cleared')
-            add(1, 'fixture aga '..aga, 'mob pack requested')
+            add(2, 'fixture aga '..aga, 'mob pack requested')
             add(10, 'fixture_ready', 'mob pack confirmed')
             phase('aga-idle', 30)
             for round = 1, 2 do
@@ -52,6 +53,14 @@ function M.scenarios(world, entities)
                 for cast = 1, 10 do add(3, 'aga_cast', 'Firaga requested') end
                 add(3, 'phase_end aga-round-'..round, 'aga-round-'..round..' end')
             end
+        elseif name == 'lightsteady' then
+            add(3, 'fixture_ready', 'empty fixture confirmed')
+            phase('empty', 96)
+        elseif name == 'crowdsteady' then
+            -- Leave room for the client's chat-command cooldown after clearing the anchor.
+            add(2, 'fixture mixed 32', 'steady crowd requested')
+            add(10, 'fixture_ready', 'steady crowd confirmed')
+            phase('mixed-32', 96)
         elseif name == 'crowd' then
             add(3, 'fixture_ready', 'empty fixture confirmed')
             phase('empty', 30)
@@ -65,7 +74,7 @@ function M.scenarios(world, entities)
             phase('mixed-32', 30)
         elseif name == 'arrivals' then
             for round = 1, 3 do
-                add(1, 'fixture clear 0', 'crowd removed')
+                add(2, 'fixture clear 0', 'crowd removed')
                 add(3, 'fixture_ready', 'empty fixture confirmed')
                 add(1, 'phase_start arrival-'..round, 'arrival-'..round..' start')
                 add(0.2, 'fixture mixed 32', 'arrival batch requested')

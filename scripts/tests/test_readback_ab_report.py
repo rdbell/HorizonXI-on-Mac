@@ -27,3 +27,11 @@ class ComparisonTests(unittest.TestCase):
                                 [{'epoch': 0, 'block': 0, 'fused': False}])[0]
         self.assertFalse(result['valid'])
         self.assertIsNone(result['fps_change_percent'])
+
+    def test_p99_uses_nearest_rank_for_exact_hundred_samples(self):
+        switches = [{'epoch': 0, 'block': 0, 'fused': False},
+                    {'epoch': 8, 'block': 1, 'fused': True}]
+        frames = [{'epoch': 3 + i / 1000, 'frame_ms': i + 1} for i in range(100)]
+        phase = module.compare(frames, [{'name': 'crowd', 'start': 0, 'end': 8}], switches)[0]
+        self.assertEqual(phase['modes']['false']['frames'], 100)
+        self.assertEqual(phase['modes']['false']['p99_ms'], 99)
