@@ -1,7 +1,7 @@
 # Wine locale restoration and BLU spell freezes
 
 Build 27 packages a correction to Wine's UCRT locale selection. It keeps the
-existing cx-26.3.0-1 runtime, x87 acceleration, renderer, and launch preparation.
+runtime, x87 acceleration, renderer, and launch preparation.
 Only the 32-bit and 64-bit `ucrtbase.dll` files change.
 
 ## Failure and correction
@@ -27,10 +27,12 @@ locale-restoration bug; it is not a guarantee against every possible freeze.
 
 ## Provenance
 
-- Wine source: `athei/wine` commit `16aac07e6fe9815ffb51efe0e736ba6a3dc97a9c`.
+- Wine source: `athei/wine` commit `d82e36650b034b7ba63eb671c672c578c88e282f`
+  (`cx-26.3.0-6`; originally built against `16aac07e6fe9815ffb51efe0e736ba6a3dc97a9c`
+  for `cx-26.3.0-1`, validated below).
 - Verified from the source-checkout step in release build
-  [32250417447](https://github.com/athei/wine-build/actions/runs/32250417447),
-  which produced `cx-26.3.0-1`.
+  [36098830787](https://github.com/athei/wine-build/actions/runs/36098830787),
+  which produced `cx-26.3.0-6`.
 - Compiler: `llvm-mingw-20260616-ucrt-macos-universal`, matching that release.
 - Patch and regression: `patches/wine-ucrt-country-locale.patch`.
 - Binary hashes and original hashes: `vendor/wine-locale-fix/build.json`.

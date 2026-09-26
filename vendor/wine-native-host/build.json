@@ -1,7 +1,9 @@
 {
-  "runtime": "wine-cx-26.3.0-1",
-  "source_commit": "16aac07e6fe9815ffb51efe0e736ba6a3dc97a9c",
-  "original": "16f50e7eded5128ba192e5e8cda2e5b625f35cb0acb3de792043331fbc7bc30a",
-  "replacement": "2369351e43051deece242b532ccb7ca1884bc80a69244b932e9dce6dd7cabe5f",
-  "patch_sha256": "2ec1fb645b1b0f68f9fae70e123dfa5c31f732c517bfacc24ec462718f13c3f7"
+  "runtime": "wine-cx-26.3.0-6",
+  "source_repository": "https://github.com/athei/wine",
+  "source_commit": "d82e36650b034b7ba63eb671c672c578c88e282f",
+  "compiler": "llvm-mingw-20260616-ucrt-macos-universal",
+  "original": "b87301342d3d8ad03e317fb6700c60d0e339285123ac3f6d1b01c1376e3c3787",
+  "replacement": "fa84fae33e153a97f8b460f873b720237ed6370f82d1d0ab3addedc5cc6be57a",
+  "patch_sha256": "8284d4168d85253d5c0614f4cfc2553f62246343da55efe3ffa1fe9a64034005"
 }

@@ -7,12 +7,12 @@ import Foundation
 /// wineboot to reinstall its Windows files before every launch. This build also
 /// contains the cooperative x87sidecar handshake used by `ROSETTA_X87_PATH`.
 enum WineRuntime {
-    static let version = "wine-cx-26.3.0-1"
+    static let version = "wine-cx-26.3.0-6"
     static let downloadURL = URL(string:
-        "https://github.com/athei/wine-build/releases/download/cx-26.3.0-1/"
-        + "wine-cx-26.3.0-1-macos-x86_64.tar.xz")!
-    static let downloadBytes = 203_696_924
-    static let sha256 = "ec2a9e4d438917a26e381c01367773df79c3b0d6f0504b8183464619cad7e661"
+        "https://github.com/athei/wine-build/releases/download/cx-26.3.0-6/"
+        + "wine-cx-26.3.0-6-macos-x86_64.tar.xz")!
+    static let downloadBytes = 232_982_868
+    static let sha256 = "11cb278a82ba8c2e7563c02afd7fb369702ca193b0b3ebfc8db22e771900ce37"
 
     static var applicationSupport: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]

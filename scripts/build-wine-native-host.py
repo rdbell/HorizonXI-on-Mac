@@ -17,7 +17,7 @@ from pathlib import Path
 import shutil
 
 REPO = Path(__file__).resolve().parent.parent
-RUNTIME = 'wine-cx-26.3.0-1'
+RUNTIME = 'wine-cx-26.3.0-6'
 _spec = importlib.util.spec_from_file_location('wine_locale_builder', REPO / 'scripts/build-wine-locale-fix.py')
 base = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(base)

@@ -206,7 +206,7 @@ Building it yourself needs only Apple's Command Line Tools:
 ```
 
 Tested on: MacBook Pro M1, 8 GB, macOS 26.5, Sikarugir Wine 10.0 for wrapper
-maintenance, athei wine-cx-26.3.0-1 for play, Ashita 4.3.1.2.
+maintenance, athei wine-cx-26.3.0-6 for play, Ashita 4.3.1.2.
 
 ## Credits
 

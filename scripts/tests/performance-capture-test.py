@@ -357,7 +357,7 @@ class PerformanceCaptureTests(unittest.TestCase):
 
     def test_export_symbols_name_runtime_leaves_and_callers_blame_game_code(self):
         ucrt = Path.home() / ("Library/Application Support/HorizonXI-on-Mac/runtimes/"
-                              "wine-cx-26.3.0-1/wine/lib/wine/i386-windows/ucrtbase.dll")
+                              "wine-cx-26.3.0-6/wine/lib/wine/i386-windows/ucrtbase.dll")
         if not ucrt.is_file():
             self.skipTest("patched Wine runtime is not installed")
         exports = capture.pe_exports(str(ucrt))

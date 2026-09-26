@@ -23,7 +23,7 @@ import sys
 import time
 
 
-RUNTIME = Path.home() / "Library/Application Support/HorizonXI-on-Mac/runtimes/wine-cx-26.3.0-1/wine"
+RUNTIME = Path.home() / "Library/Application Support/HorizonXI-on-Mac/runtimes/wine-cx-26.3.0-6/wine"
 PREFIX = Path.home() / "Applications/FFXI on Mac Wine.app/Contents/SharedSupport/prefix10"
 
 
