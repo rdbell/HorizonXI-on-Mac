@@ -43,5 +43,10 @@ The harness verified the loaded modules on `-6`: our mtld3d from the app bundle,
 native-host `winemac.so`, the locale-fixed `ucrtbase.dll`. The native window attached and
 rendering matched `-1`. The native window's title is left-aligned on `-6` instead of centred.
 
+After merging into development, the same scenario on `-6` ran at 111.76 fps in Bastok Markets
+and 120.00 in Gusgen Mines (worst frames 19.1 and 13.9 ms), again with the native window
+attached and x87 acceleration active. Classic (OpenGL) logged in on `-6` with Wine's builtin
+`d3d8.dll`, drew Bastok Mines correctly and held 38-41 fps there at draw distance 10.
+
 Not measured: the click-stall, cursor-flicker and window-race fixes themselves, the Command-comma
 panel, HorizonXI, and macOS 27.
