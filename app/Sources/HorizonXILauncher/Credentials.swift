@@ -323,7 +323,7 @@ enum Credentials {
             guard let out = xmlSetting("boot_command",
                                        to: "--server \(server) --user \(user) --pass \(password)",
                                        in: text),
-                  (try? out.write(to: url, atomically: true, encoding: .utf8)) != nil
+                  writeProfile(out, to: url)
             else { return false }
             try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
             return true
@@ -342,10 +342,17 @@ enum Credentials {
             return String(l)
         }
         text = TextFile.join(lines, terminator: eol)
-        guard replaced, (try? text.write(to: url, atomically: true, encoding: .utf8)) != nil
-        else { return false }
+        guard replaced, writeProfile(text, to: url) else { return false }
         try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
         return true
+    }
+
+    /// Atomic first. An atomic write creates a sibling temporary file and renames it over the
+    /// profile, which some external volumes refuse even when the profile itself is writable; the
+    /// direct write is the fallback so the account still reaches the game.
+    private static func writeProfile(_ text: String, to url: URL) -> Bool {
+        if (try? text.write(to: url, atomically: true, encoding: .utf8)) != nil { return true }
+        return (try? text.write(to: url, atomically: false, encoding: .utf8)) != nil
     }
 
     /// Set `key = value` lines in the boot profile, leaving commented examples alone.
