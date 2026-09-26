@@ -1296,10 +1296,6 @@ struct ContentView: View {
                     .disabled(!Narration.isAvailable || !Narration.allowed(by: addonPolicy))
             }
             row("Large address aware") { Toggle("", isOn: $perf.largeAddressAware).toggleStyle(.switch).labelsHidden() }
-            row("Fast lens flares (skip occlusion wait) — glitches",
-                "Roughly doubles the frame rate, but NPCs blink in and out about once a second. Off until that is fixed properly.") {
-                Toggle("", isOn: $perf.flareReadbackNoWait).toggleStyle(.switch).labelsHidden()
-            }
             row("Show frame rate (Metal HUD)") { Toggle("", isOn: $perf.metalHUD).toggleStyle(.switch).labelsHidden() }
         }
         .onChange(of: perf.msync) { _ in perf.save() }
