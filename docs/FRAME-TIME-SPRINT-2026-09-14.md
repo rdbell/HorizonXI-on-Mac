@@ -119,6 +119,29 @@ claim that it removes long frames. The final candidate keeps this feature opt-in
 `FFXI_ON_MAC_DISABLE_SCAN=1` still wins. The earlier `scanner-early-candidate`
 package deliberately enabled it for the combined integration measurements.
 
+### Paired arrivals, 2026-09-26
+
+The retry the index asked for: separate launches in ABBA order (off, on, on, off, three minutes
+apart) on development 966b1aa with cx-26.3.0-6, mtld3d, 512-draw submission and the native
+window, the sprint's boot script and shader seed, 4096 background and draw distance 20. The only
+difference between arms was `FFXI_ON_MAC_ENABLE_SCAN=1`; each run confirmed from the live game
+that the packaged scanner DLL was, or was not, mapped. All four workloads were valid.
+
+| phase | FPS off -> on | p99 off -> on | worst off -> on |
+| --- | --- | --- | --- |
+| arrival-1 | 30.38 -> 31.99 (+5.3%) | 38.9 -> 37.2 ms | 53.5 -> 42.2 ms |
+| arrival-warm-1 | 26.98 -> 28.46 (+5.5%) | 40.7 -> 38.2 ms | 46.0 -> 44.4 ms |
+| arrival-2 | 28.48 -> 29.40 (+3.3%) | 43.0 -> 42.1 ms | 65.3 -> 52.2 ms |
+| arrival-warm-2 | 26.43 -> 27.84 (+5.3%) | 40.3 -> 39.0 ms | 58.7 -> 50.4 ms |
+| arrival-3 | 28.56 -> 30.27 (+6.0%) | 41.1 -> 45.6 ms | 51.6 -> 56.1 ms |
+| arrival-warm-3 | 26.34 -> 27.73 (+5.3%) | 40.6 -> 39.1 ms | 49.7 -> 45.0 ms |
+
+Means of two runs per arm; worst is the larger of the two. Both scanner runs beat both controls
+in every phase (mean +5.1%) and no phase had a frame above 100 ms. arrival-3 p99 was worse in
+both scanner runs by 2.5-6 ms. The unpaired `normalized-scanner-arrivals` tail above did not
+reproduce. The launcher now enables the scanner by default; `FFXI_ON_MAC_DISABLE_SCAN=1` turns it
+off. Two runs per arm on local LSB only; hosted worlds were not tested.
+
 ## Renderer work
 
 ### Full-viewport reused-target clears: rejected

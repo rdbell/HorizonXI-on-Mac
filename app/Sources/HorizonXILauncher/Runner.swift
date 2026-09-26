@@ -627,11 +627,10 @@ final class Runner: ObservableObject {
             env[MemoryScan.libraryVariable] = ""
             let disableScanner = env["FFXI_ON_MAC_DISABLE_SCAN"]
                 ?? ProcessInfo.processInfo.environment["FFXI_ON_MAC_DISABLE_SCAN"]
-            // Throughput gains repeated, but arrival tail latency remains mixed.
-            // Keep shared scanning opt-in until that tradeoff is better understood.
-            let enableScanner = env["FFXI_ON_MAC_ENABLE_SCAN"]
-                ?? ProcessInfo.processInfo.environment["FFXI_ON_MAC_ENABLE_SCAN"]
-            if install.ashitaGeneration == .v4, enableScanner == "1", disableScanner != "1",
+            // On by default since paired arrivals runs on 2026-09-26 settled the tail-latency
+            // question: +5.1% FPS with no frame over 100 ms (docs/PERFORMANCE-EXPERIMENT-INDEX.md).
+            // FFXI_ON_MAC_DISABLE_SCAN=1 keeps the original search.
+            if install.ashitaGeneration == .v4, disableScanner != "1",
                let resources = Bundle.main.resourceURL {
                 let scanner = MemoryScan.prepare(
                     common: install.gameDir.appendingPathComponent("addons/libs/common.lua"),
