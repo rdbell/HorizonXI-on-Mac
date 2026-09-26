@@ -33,43 +33,106 @@ struct HorizonXILauncherApp: App {
     var body: some Scene {
         WindowGroup("FFXI on Mac") {
             ContentView()
-                .frame(minWidth: 940, minHeight: 600)
+                .frame(minWidth: 1000, minHeight: 674)
                 .preferredColorScheme(.dark)
+                // Otherwise every checkbox, picker and default button is macOS blue, which is
+                // the one colour this palette does not have anywhere in it.
+                .tint(Vana.jade)
         }
         .windowResizability(.contentMinSize)
+        // The traffic lights sit over the navigation rail; there is no title bar to speak of.
+        .windowStyle(.hiddenTitleBar)
     }
 }
 
 // MARK: - Palette
 //
-// Vana'diel by way of the crystal: deep indigo night, crystal cyan, and the warm gold the game
-// uses for every selected menu item. Deliberately not macOS-grey — this is a game launcher.
+// Charcoal and jade. The launcher used to be indigo, crystal-blue and FFXI's menu gold, which is
+// the game's own palette but reads as neon once the window is dark. This is the other half of
+// Vana'diel: the warm nocturnal green of a Ronfaure night. Surfaces are neutral charcoal --
+// never black, because a crushed-black panel loses every hairline it has -- the accent is a
+// muted jade, and the only saturated thing on screen is the button that starts the game.
 
 enum Vana {
-    static let night     = Color(red: 0.05, green: 0.05, blue: 0.12)
-    static let indigo    = Color(red: 0.11, green: 0.10, blue: 0.26)
-    static let violet    = Color(red: 0.20, green: 0.14, blue: 0.36)
-    static let crystal   = Color(red: 0.55, green: 0.83, blue: 0.95)
-    static let crystalDim = Color(red: 0.33, green: 0.55, blue: 0.70)
-    static let gold      = Color(red: 0.93, green: 0.79, blue: 0.44)
-    static let goldDim   = Color(red: 0.66, green: 0.55, blue: 0.29)
-    static let ember     = Color(red: 0.90, green: 0.45, blue: 0.35)
-    static let panel     = Color(red: 0.08, green: 0.08, blue: 0.17).opacity(0.85)
-    static let stroke    = Color.white.opacity(0.14)
-    static let text      = Color(red: 0.94, green: 0.95, blue: 0.99)
-    static let muted     = Color(red: 0.64, green: 0.68, blue: 0.80)
+    static let night   = Color(hex: 0x191E20)   // window background
+    static let side    = Color(hex: 0x14191B)   // navigation rail
+    static let raised  = Color(hex: 0x252D2E)   // cards, fields, anything lifted off the page
+    static let panel   = Color(hex: 0x1D2325)   // the column behind the raised things
+    static let stroke  = Color(hex: 0x384143)   // hairline divider
 
-    /// The blue-violet wash behind everything, with a crystal glow up top.
-    static var backdrop: some View {
-        ZStack {
-            LinearGradient(colors: [violet, indigo, night],
-                           startPoint: .topLeading, endPoint: .bottomTrailing)
-            RadialGradient(colors: [crystal.opacity(0.22), .clear],
-                           center: .init(x: 0.22, y: 0.08), startRadius: 8, endRadius: 460)
-            RadialGradient(colors: [gold.opacity(0.10), .clear],
-                           center: .init(x: 0.85, y: 0.95), startRadius: 8, endRadius: 380)
+    static let text    = Color(hex: 0xEDF0E9)   // warm off-white
+    static let muted   = Color(hex: 0xB6C0BD)   // secondary text, still readable on `night`
+    static let muted2  = Color(hex: 0x7E8A85)   // captions and section labels
+
+    /// The accent: section labels, the selected rail item, anything the eye should land on.
+    static let jade    = Color(hex: 0x8BC4AA)
+    static let jadeDim = Color(hex: 0x6E9986)
+
+    /// Play, and nothing else. White text clears contrast on this; on `jade` it does not.
+    static let forest     = Color(hex: 0x2F6249)
+    static let forestDeep = Color(hex: 0x23503A)
+
+    /// Something is wrong (`ember`) or worth a second look (`sand`). Both are deliberately
+    /// desaturated: a pure red beside a caution reads as an error even when it is not one.
+    static let ember   = Color(hex: 0xCE8A6F)
+    static let sand    = Color(hex: 0xC9AC7C)
+
+    /// Flat, not a gradient. The old blue-violet wash with two radial glows was doing the work
+    /// of artwork the app does not ship; a plain charcoal lets the one hero band carry it.
+    static var backdrop: some View { night.ignoresSafeArea() }
+}
+
+/// A tall six-sided gem: point at the top, widest a third of the way down, tapering to a base.
+struct CrystalShape: Shape {
+    func path(in r: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: r.midX, y: r.minY))
+        p.addLine(to: CGPoint(x: r.maxX, y: r.minY + r.height * 0.32))
+        p.addLine(to: CGPoint(x: r.minX + r.width * 0.78, y: r.maxY))
+        p.addLine(to: CGPoint(x: r.minX + r.width * 0.22, y: r.maxY))
+        p.addLine(to: CGPoint(x: r.minX, y: r.minY + r.height * 0.32))
+        p.closeSubpath()
+        return p
+    }
+}
+
+extension Color {
+    /// 0xRRGGBB, so the values above can be read against the design notes they came from.
+    init(hex: UInt32) {
+        self.init(.sRGB,
+                  red:   Double((hex >> 16) & 0xFF) / 255,
+                  green: Double((hex >>  8) & 0xFF) / 255,
+                  blue:  Double( hex        & 0xFF) / 255,
+                  opacity: 1)
+    }
+}
+
+/// The four screens, in the order the rail lists them.
+///
+/// Graphics and Add-ons used to be modal sheets hung off two small buttons beside Play. They are
+/// the two things a player opens most often, so they are places you navigate to now rather than
+/// dialogues that take the window over; and the front screen is no longer carrying every control
+/// in the app at once.
+private enum Page: String, CaseIterable, Identifiable {
+    case play, graphics, addons, setup
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .play:     return "Play"
+        case .graphics: return "Graphics"
+        case .addons:   return "Add-ons"
+        case .setup:    return "Settings"
         }
-        .ignoresSafeArea()
+    }
+
+    var icon: String {
+        switch self {
+        case .play:     return "play"
+        case .graphics: return "display"
+        case .addons:   return "puzzlepiece.extension"
+        case .setup:    return "gearshape"
+        }
     }
 }
 
@@ -102,13 +165,13 @@ struct ContentView: View {
     @State private var newHost = ""
     @State private var newProfile = ""
 
+    /// Which screen the rail is showing.
+    @State private var page: Page = .play
+
     @State private var user = Credentials.username
     @State private var pass = ""
     @State private var remember = Credentials.remember
-    @State private var showDetails = false
-    @State private var showGraphics = false
     @State private var graphics = GraphicsSettings.load(world: nil)
-    @State private var showAddons = false
     @State private var locating = false
     @State private var locateHits: [Locator.Hit] = []
     @State private var locateFor: Server? = nil
@@ -127,6 +190,14 @@ struct ContentView: View {
 
     private var blocked: Bool { checks.contains { $0.state == .bad } }
 
+    /// This world cannot be played out of the files that are on disk: either there is no client
+    /// at all, or it would be run out of HorizonXI's folder, which is what earns "The game's data
+    /// has been updated" from a server that is not HorizonXI.
+    private var needsGameData: Bool {
+        guard let i = active, let s = store.selected else { return false }
+        return !i.hasGame || (s.dataPath.isEmpty && !s.local && s.name != "HorizonXI")
+    }
+
     private var statusText: String {
         if scanning { return "looking for your install…" }
         if selected == nil { return "nothing installed yet" }
@@ -138,11 +209,35 @@ struct ContentView: View {
         ZStack {
             Vana.backdrop
             HStack(spacing: 0) {
-                hero
+                navRail
                 Rectangle().fill(Vana.stroke).frame(width: 1)
-                sidebar.frame(width: 372)
+                VStack(spacing: 0) {
+                    Group {
+                        switch page {
+                        case .play:     playPage
+                        case .graphics: graphicsPage
+                        case .addons:   addonsPage
+                        case .setup:    setupPage
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    noticeStrip
+                    switch page {
+                    case .play:     playFooter
+                    case .graphics: graphicsFooter
+                    case .addons:   addonsFooter
+                    case .setup:    footer {
+                        Text("Measured on this Mac with Metal/DXVK: correct at 4K with every setting at maximum — see docs/MAX4K.md.")
+                            .lineLimit(1)
+                    } right: { updateBanner }
+                    }
+                }
             }
         }
+        .sheet(isPresented: $newServer) { addServerSheet }
+        .sheet(isPresented: Binding(get: { locateFor != nil },
+                                    set: { if !$0 { locateFor = nil } })) { locateSheet }
+        .sheet(isPresented: $showSetup) { SetupSheet { refresh() } }
         .onAppear {
             if store.selected?.local == true { local.refresh() }
             // Off the main actor out of habit from when this was a Keychain read that could
@@ -179,6 +274,10 @@ struct ContentView: View {
             // The preflight checks are per world now (each has its own game folder): CatsEye's
             // "no client" verdict must not keep Play grey after switching back to HorizonXI.
             recheck()
+            // Graphics and add-ons are per world too, and both screens stay open across a world
+            // change -- showing the previous world's list until something forces a reload.
+            if page == .graphics { loadGraphics() }
+            if page == .addons { loadAddons() }
         }
         // Keep the players-online line current: on launch, whenever the world changes, and
         // every two minutes while the window is open. The fetch is three tiny GETs and silent
@@ -234,114 +333,409 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - Left: title, server, status
+    // MARK: - Left: where you are
 
-    private var hero: some View {
+    /// Brand, the three places you go, and Settings pinned to the bottom. The title bar is hidden,
+    /// so the traffic lights sit over the top of this column and the brand starts below them.
+    private var navRail: some View {
         VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text((store.selected?.name ?? "FINAL FANTASY XI").uppercased())
-                    .font(.system(size: 46, weight: .light, design: .serif))
-                    .tracking(10)
-                    .foregroundStyle(
-                        LinearGradient(colors: [Vana.text, Vana.crystal],
-                                       startPoint: .top, endPoint: .bottom))
-                    .shadow(color: Vana.crystal.opacity(0.35), radius: 12, y: 2)
-                Text("FINAL FANTASY XI ON APPLE SILICON")
-                    .font(.system(size: 11, weight: .semibold))
-                    .tracking(3.5)
-                    .foregroundStyle(Vana.gold)
-                updateBanner
-                newsBanner
-                populationLine
+            HStack(spacing: 11) {
+                crystal.frame(width: 17, height: 27)
+                Text("FFXI on Mac").font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Vana.text)
             }
-            .padding(.horizontal, 34).padding(.top, 34).padding(.bottom, 20)
+            .padding(.leading, 22).padding(.top, 50).padding(.bottom, 26)
 
-            // Scrolled rather than clipped: the cards below already overflow a 632pt window once
-            // the signup list is open, and an overflowing VStack pushes the game's title off the
-            // top of the window instead of cutting the bottom off.
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    accountCard
-                    localServerCard
-                    rendererBanner
-                    notesCard
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .scrollIndicators(.hidden)
-            Spacer(minLength: 0)
+            VStack(spacing: 4) { navItem(.play); navItem(.graphics); navItem(.addons) }
+                .padding(.horizontal, 12)
 
-            if showDetails {
-                ScrollView { statusList.padding(.horizontal, 34) }
-                    .frame(maxHeight: 200)
-            }
-            logStrip
+            Spacer(minLength: 16)
+
+            Rectangle().fill(Vana.stroke).frame(height: 1).padding(.horizontal, 20)
+            navItem(.setup).padding(.horizontal, 12).padding(.vertical, 12)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(width: 190)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .background(Vana.side)
     }
 
-    /// One dropdown for every server, kept next to the account fields since choosing a world and
-    /// typing the account that logs into it are one decision, not two. HorizonXI is pinned to the
-    /// top; the rest are ordered by community size, which is metadata the user never has to see
-    /// or maintain. Sized for the 372pt sidebar column rather than the wide hero pane.
-    private var serverPicker: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("WORLD").font(.caption).tracking(2.5).foregroundStyle(Vana.gold)
-                Spacer()
-                if store.selected?.verified == true {
-                    Label("verified", systemImage: "checkmark.seal.fill")
-                        .labelStyle(.iconOnly).font(.caption2)
-                        .foregroundStyle(Vana.crystal)
-                        .help("This project logs into this server successfully.")
-                } else {
-                    Image(systemName: "questionmark.circle").font(.caption2)
-                        .foregroundStyle(Vana.muted)
-                        .help("This project has not logged into this server itself yet.")
-                }
+    private func navItem(_ p: Page) -> some View {
+        Button { go(p) } label: {
+            HStack(spacing: 12) {
+                Image(systemName: p.icon).font(.system(size: 15)).frame(width: 20)
+                Text(p.title).font(.system(size: 15, weight: page == p ? .medium : .regular))
+                Spacer(minLength: 0)
             }
+            .foregroundStyle(page == p ? Vana.jade : Vana.muted)
+            .padding(.horizontal, 12).frame(height: 38)
+            .background(RoundedRectangle(cornerRadius: 9)
+                .fill(page == p ? Vana.jade.opacity(0.13) : Color.clear))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
 
-            // `.borderlessButton` renders a custom Menu label as bare text (no pill, no border,
-            // no hover), which is why the world name never looked clickable. A plain-styled
-            // button menu draws the label exactly as declared.
-            Menu {
-                ForEach(store.ordered) { s in
-                    Button { store.select(s) } label: {
-                        if s.era.isEmpty { Text(s.name) }
-                        else { Text("\(s.name)  ·  \(s.era)") }
+    /// Graphics reads the boot profile and Add-ons rescans the game folder on the way in, so both
+    /// screens open on what is on disk rather than on whatever this app wrote last.
+    private func go(_ p: Page) {
+        switch p {
+        case .graphics: loadGraphics()
+        case .addons:   loadAddons()
+        default:        break
+        }
+        page = p
+    }
+
+    /// The crystal: a tall gem, drawn. The one piece of FFXI iconography the launcher can put on
+    /// screen without touching Square Enix's artwork.
+    private var crystal: some View {
+        CrystalShape()
+            .fill(LinearGradient(colors: [Color(hex: 0xA9E3C4), Vana.jade, Vana.forest],
+                                 startPoint: .top, endPoint: .bottom))
+            .overlay(CrystalShape().stroke(Color.white.opacity(0.35), lineWidth: 0.8))
+            .shadow(color: Vana.jade.opacity(0.45), radius: 6)
+    }
+
+    // MARK: - Page chrome
+
+    /// Title on the left, the one-line state of things on the right.
+    private func pageHeader(_ title: String, status: String, tone: Color) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title).font(.system(size: 26, weight: .bold)).foregroundStyle(Vana.text)
+            Spacer()
+            HStack(spacing: 8) {
+                Circle().fill(tone).frame(width: 8, height: 8)
+                Text(status).font(.system(size: 15)).foregroundStyle(Vana.muted)
+            }
+        }
+        .padding(.horizontal, 32).padding(.top, 24).padding(.bottom, 4)
+    }
+
+    private var statusTone: Color {
+        if scanning { return Vana.sand }
+        if selected == nil || blocked || needsGameData { return Vana.sand }
+        return Vana.jade
+    }
+
+    /// Section caption over a card of rows. Every settings screen is a few of these.
+    private func section<C: View>(_ title: String, @ViewBuilder _ rows: () -> C) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title.uppercased()).font(.system(size: 12, weight: .semibold)).tracking(1.5)
+                .foregroundStyle(Vana.muted2).padding(.leading, 4)
+            VStack(spacing: 0) { rows() }
+                .background(RoundedRectangle(cornerRadius: 12).fill(Vana.raised.opacity(0.45)))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Vana.stroke))
+        }
+    }
+
+    /// One row: what it is on the left, the control on the right, a hairline underneath.
+    private func row<C: View>(_ label: String, _ detail: String = "",
+                              @ViewBuilder control: () -> C) -> some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .center, spacing: 16) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(label).font(.system(size: 15)).foregroundStyle(Vana.text)
+                    if !detail.isEmpty {
+                        Text(detail).font(.system(size: 13)).foregroundStyle(Vana.muted)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
-                Divider()
-                Button("Add a server…") { newServer = true }
-            } label: {
-                worldRow
+                Spacer(minLength: 12)
+                control()
             }
-            .menuStyle(.button)
-            .buttonStyle(.plain)
-            .menuIndicator(.hidden)
+            .padding(.horizontal, 16).padding(.vertical, 12)
+            .frame(minHeight: 48)
+            Rectangle().fill(Vana.stroke).frame(height: 1).padding(.leading, 16)
+        }
+    }
 
-            // The host and boot-profile fields used to sit here for every unverified world,
-            // which read as something the player was expected to fill in. They now live under
-            // Setup & Diagnostics; only the one thing that actually blocks Play stays visible.
-            if let s = store.selected, !s.local, s.host.isEmpty {
-                Text("No login host set for \(s.name) — add it under Setup & Diagnostics.")
-                    .font(.caption2).foregroundStyle(Vana.ember)
+    /// A row whose content is a block rather than a label/control pair (a list, a set of buttons).
+    private func block<C: View>(@ViewBuilder _ content: () -> C) -> some View {
+        VStack(alignment: .leading, spacing: 10) { content() }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func note(_ s: String) -> some View {
+        Text(s).font(.system(size: 13)).foregroundStyle(Vana.muted)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// What is in the footer depends on the page; the footer itself is always the same strip.
+    private func footer<L: View, R: View>(@ViewBuilder left: () -> L,
+                                          @ViewBuilder right: () -> R) -> some View {
+        HStack(spacing: 12) {
+            left()
+            Spacer(minLength: 12)
+            right()
+        }
+        .font(.system(size: 14))
+        .foregroundStyle(Vana.muted)
+        .padding(.horizontal, 32)
+        .frame(height: 52)
+        .overlay(alignment: .top) { Rectangle().fill(Vana.stroke).frame(height: 1) }
+    }
+
+    /// Whatever the launcher last had to say, above the footer on whichever page you are on.
+    @ViewBuilder private var noticeStrip: some View {
+        if !notice.isEmpty {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "info.circle").font(.system(size: 14)).foregroundStyle(Vana.jade)
+                Text(notice).font(.system(size: 13)).foregroundStyle(Vana.text)
                     .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+                Spacer(minLength: 0)
+                Button { notice = "" } label: { Image(systemName: "xmark").font(.system(size: 11)) }
+                    .buttonStyle(.borderless).foregroundStyle(Vana.muted)
             }
-        // A world other than HorizonXI with no folder of its own would be run out of HorizonXI's
-        // files -- which is exactly what earns "The game's data has been updated" from CatsEye.
-        // Say so right under the world, and offer the two ways to fix it.
-        if let i = active, let s = store.selected,
-           !i.hasGame || (s.dataPath.isEmpty && !s.local && s.name != "HorizonXI") {
-            gameDataCard(for: s, install: i)
+            .padding(14)
+            .background(RoundedRectangle(cornerRadius: 10).fill(Vana.jade.opacity(0.10)))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Vana.jade.opacity(0.25)))
+            .padding(.horizontal, 32).padding(.bottom, 14)
         }
+    }
+
+    // MARK: - Play
+
+    private var playPage: some View {
+        VStack(spacing: 0) {
+            pageHeader("Play", status: statusText, tone: statusTone)
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 0) {
+                    hero.padding(.top, 14)
+
+                    // The one thing standing between the player and the game, when there is
+                    // one: the world's files, or the local server. Otherwise nothing sits here.
+                    VStack(spacing: 16) {
+                        if needsGameData, let i = active, let s = store.selected {
+                            gameDataCard(for: s, install: i)
+                        }
+                        localServerCard
+                    }
+                    .frame(maxWidth: 640)
+                    .padding(.top, 24)
+
+                    launchFields.padding(.top, 24)
+
+                    primaryButton.frame(width: 340).padding(.top, 30)
+
+                    Group {
+                        if !perf.renderer.playable {
+                            Label("\(perf.renderer.title) is experimental — \(perf.renderer.blurb)",
+                                  systemImage: "exclamationmark.triangle.fill")
+                                .foregroundStyle(Vana.ember)
+                        } else {
+                            Text(nextStepHelp)
+                        }
+                    }
+                    .font(.system(size: 13)).foregroundStyle(Vana.muted)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 560)
+                    .padding(.top, 14)
+                }
+                .padding(.horizontal, 32).padding(.bottom, 28)
+                .frame(maxWidth: .infinity)
+            }
         }
-        .sheet(isPresented: $newServer) { addServerSheet }
-        .sheet(isPresented: $showGraphics) { graphicsSheet }
-        .sheet(isPresented: $showAddons) { addonsSheet }
-        .sheet(isPresented: Binding(get: { locateFor != nil },
-                                    set: { if !$0 { locateFor = nil } })) { locateSheet }
-        .sheet(isPresented: $showSetup) { SetupSheet { refresh() } }
+    }
+
+    /// The world you are about to enter, named in the game's own typeface over the landscape.
+    private var hero: some View {
+        ZStack(alignment: .leading) {
+            if let art = heroArt {
+                Image(nsImage: art).resizable().scaledToFill()
+            } else {
+                LinearGradient(colors: [Vana.forestDeep, Vana.night],
+                               startPoint: .topLeading, endPoint: .bottomTrailing)
+            }
+            // A scrim on the left so the title reads, thinning to nothing so the painting shows.
+            LinearGradient(stops: [.init(color: Color(hex: 0x0A100C).opacity(0.85), location: 0),
+                                   .init(color: Color(hex: 0x0A100C).opacity(0.55), location: 0.45),
+                                   .init(color: .clear, location: 0.8)],
+                           startPoint: .leading, endPoint: .trailing)
+            VStack(alignment: .leading, spacing: 8) {
+                Text(heroEyebrow)
+                    .font(.system(size: 11, weight: .semibold)).tracking(3.2)
+                    .foregroundStyle(Vana.jade)
+                Text((store.selected?.name ?? "FINAL FANTASY XI").uppercased())
+                    .font(.system(size: 44, weight: .light, design: .serif)).tracking(6)
+                    .foregroundStyle(Color(hex: 0xF6F2E6))
+                    .shadow(color: .black.opacity(0.5), radius: 14, y: 2)
+                    .lineLimit(1).minimumScaleFactor(0.5)
+                Text(heroSubtitle).font(.system(size: 15)).foregroundStyle(Vana.text.opacity(0.9))
+                    .shadow(color: .black.opacity(0.6), radius: 6)
+            }
+            .padding(.leading, 30).padding(.trailing, 60)
+        }
+        .frame(height: 228)
+        .frame(maxWidth: .infinity)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(alignment: .topTrailing) {
+            crystal.frame(width: 20, height: 32).padding(.top, 22).padding(.trailing, 28)
+        }
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.06)))
+    }
+
+    private var heroEyebrow: String {
+        guard let s = store.selected else { return "FINAL FANTASY XI ON APPLE SILICON" }
+        if s.local { return "FINAL FANTASY XI · YOUR OWN SERVER" }
+        return "FINAL FANTASY XI · PRIVATE SERVER"
+    }
+
+    /// Era and, when the world publishes a counter, how many people are on right now.
+    private var heroSubtitle: String {
+        var parts: [String] = []
+        if let era = store.selected?.era, !era.isEmpty { parts.append(era) }
+        if let name = store.selected?.name, let n = feeds.populations[name] {
+            parts.append("\(n.formatted()) adventurers online")
+        }
+        if parts.isEmpty { parts.append("Running natively on Apple Silicon — no virtual machine") }
+        return parts.joined(separator: "  ·  ")
+    }
+
+    /// Ships in the bundle (see bundle.sh). Under `swift run` there is no bundle and the band is
+    /// a plain gradient; nothing else changes.
+    private var heroArt: NSImage? {
+        guard let url = Bundle.main.url(forResource: "hero", withExtension: "jpg") else { return nil }
+        return NSImage(contentsOf: url)
+    }
+
+    /// World on the left, account on the right. Choosing a world and typing the account that
+    /// logs into it are one decision, so they sit on one line.
+    private var launchFields: some View {
+        HStack(alignment: .top, spacing: 36) {
+            VStack(alignment: .leading, spacing: 8) {
+                fieldLabel("World")
+                worldMenu
+                worldNote
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            VStack(alignment: .leading, spacing: 8) {
+                fieldLabel("Account")
+                // The local server auto-creates its own account on first login (see
+                // LocalServer.swift) -- there is no real account to type here.
+                field("Account name", text: $user, secure: false, disabled: store.selected?.local == true)
+                field("Password", text: $pass, secure: true, disabled: store.selected?.local == true)
+                HStack(spacing: 14) {
+                    Toggle("Remember me", isOn: $remember)
+                        .toggleStyle(.checkbox).font(.system(size: 13)).foregroundStyle(Vana.muted)
+                        .help("Stored in the macOS Keychain, never in a file in this project.")
+                    Spacer(minLength: 0)
+                    accountLinks
+                }
+                if installs.count > 1 {
+                    Picker("", selection: Binding(
+                        get: { selected?.id ?? "" },
+                        set: { id in selected = installs.first { $0.id == id }; recheck() })
+                    ) {
+                        ForEach(installs) { i in
+                            Text("\(i.wrapper.lastPathComponent) · \(i.prefixName)").tag(i.id)
+                        }
+                    }
+                    .labelsHidden()
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(maxWidth: 760)
+    }
+
+    private func fieldLabel(_ s: String) -> some View {
+        Text(s).font(.system(size: 14)).foregroundStyle(Vana.muted)
+    }
+
+    /// Under the world: what the launcher actually holds about it. The rotating banner used to
+    /// carry this; it is the server's own note, its addon rules, or whether this project has
+    /// tested it. Nothing is invented to fill the space.
+    @ViewBuilder private var worldNote: some View {
+        if let s = store.selected, !s.local, s.host.isEmpty {
+            Text("No login host set for \(s.name) — add it under Settings.")
+                .font(.system(size: 13)).foregroundStyle(Vana.ember)
+                .fixedSize(horizontal: false, vertical: true)
+        } else {
+            newsBanner
+        }
+    }
+
+    /// Where to get an account. Every world runs its own account database, and some have no web
+    /// signup at all -- the account is typed into the loader console on first launch. So this
+    /// says the actual route for the selected world, and links to it. See `Server.accountHow`.
+    @ViewBuilder private var accountLinks: some View {
+        if let s = store.selected, !s.local {
+            HStack(spacing: 12) {
+                if let u = URL(string: s.accountURL), !s.accountURL.isEmpty {
+                    Button { NSWorkspace.shared.open(u) } label: {
+                        Label(Self.signupVerb(for: s), systemImage: "arrow.up.forward")
+                            .labelStyle(.titleAndIcon)
+                    }
+                    .buttonStyle(.plain).font(.system(size: 13)).foregroundStyle(Vana.jade)
+                    .help(s.accountHow.isEmpty ? u.absoluteString : s.accountHow)
+                } else if s.accountHow.contains("loader window") {
+                    Text("Account is created in the loader window")
+                        .font(.system(size: 13)).foregroundStyle(Vana.muted)
+                        .help(s.accountHow)
+                }
+                if let d = URL(string: s.discordURL), !s.discordURL.isEmpty, s.discordURL != s.accountURL {
+                    Button { NSWorkspace.shared.open(d) } label: { Text("Discord") }
+                        .buttonStyle(.plain).font(.system(size: 13)).foregroundStyle(Vana.jade)
+                        .help(d.absoluteString)
+                }
+            }
+        }
+    }
+
+    /// The footer under Play: the three things that have to be true, then whatever the updater
+    /// is doing. While an install runs, the last line of its log takes the left side.
+    @ViewBuilder private var playFooter: some View {
+        footer {
+            if runner.busy, let last = runner.log.split(separator: "\n").last {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text(String(last)).font(.system(size: 13, design: .monospaced)).lineLimit(1)
+                }
+            } else {
+                HStack(spacing: 8) {
+                    Image(systemName: statusTone == Vana.jade ? "checkmark.circle.fill" : "circle.dashed")
+                        .foregroundStyle(statusTone)
+                    Text(footerFacts.joined(separator: "  ·  ")).lineLimit(1)
+                }
+            }
+        } right: {
+            updateBanner
+        }
+    }
+
+    private var footerFacts: [String] {
+        guard let i = selected else { return [scanning ? "Looking for your install…" : "Wine not installed yet"] }
+        var out = ["Wine ready · \(i.prefixName)"]
+        if let a = active, a.hasGame { out.append(needsGameData ? "Game files need attention" : "Game files ready") }
+        else { out.append("Game files not installed") }
+        out.append(perf.renderer.title)
+        return out
+    }
+
+    /// One dropdown for every server. HorizonXI is pinned to the top; the rest are ordered by
+    /// community size, which is metadata the user never has to see or maintain.
+    private var worldMenu: some View {
+        // `.borderlessButton` renders a custom Menu label as bare text (no pill, no border, no
+        // hover), which is why the world name never looked clickable. A plain-styled button
+        // menu draws the label exactly as declared.
+        Menu {
+            ForEach(store.ordered) { s in
+                Button { store.select(s) } label: {
+                    if s.era.isEmpty { Text(s.name) }
+                    else { Text("\(s.name)  ·  \(s.era)") }
+                }
+            }
+            Divider()
+            Button("Add a server…") { newServer = true }
+        } label: {
+            worldRow
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
     }
 
     /// What the selected server permits. See `AddonPolicy` for why an unsourced policy shows
@@ -383,48 +777,25 @@ struct ContentView: View {
         switch updater.state {
         case .ready(let release):
             HStack(spacing: 10) {
-                Image(systemName: "arrow.down.circle.fill").foregroundStyle(Vana.gold)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("Update \(release.version) is ready").font(.caption).foregroundStyle(Vana.text)
-                    Text("Restart to finish installing it.").font(.caption2).foregroundStyle(Vana.muted)
-                }
-                Spacer()
+                Text("Update \(release.version) is ready").foregroundStyle(Vana.text)
                 Button("Restart") { updater.restartToUpdate() }
-                    .buttonStyle(.borderedProminent).controlSize(.small)
+                    .buttonStyle(.borderedProminent).tint(Vana.forest).controlSize(.small)
+                    .help("Restart to finish installing it.")
             }
-            .padding(10)
-            .background(RoundedRectangle(cornerRadius: 8).fill(Vana.gold.opacity(0.12)))
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Vana.gold.opacity(0.35), lineWidth: 1))
-            .padding(.top, 6)
         case .downloading(let frac):
             HStack(spacing: 8) {
-                ProgressView(value: frac).frame(width: 120)
-                Text("Downloading update… \(Int(frac * 100))%").font(.caption2).foregroundStyle(Vana.muted)
-            }.padding(.top, 6)
+                ProgressView(value: frac).frame(width: 90)
+                Text("Downloading update… \(Int(frac * 100))%")
+            }
         case .staging:
-            Text("Preparing update…").font(.caption2).foregroundStyle(Vana.muted).padding(.top, 6)
+            Text("Preparing update…")
         case .failed(let msg):
             // Only worth showing when it is about an update that exists, not routine offline noise.
             if msg.contains("available") {
-                Text(msg).font(.caption2).foregroundStyle(Vana.ember)
-                    .fixedSize(horizontal: false, vertical: true).padding(.top, 6)
+                Text(msg).foregroundStyle(Vana.ember).lineLimit(1).help(msg)
             }
         case .idle, .checking:
             EmptyView()
-        }
-    }
-
-    /// Live players-online for the selected world, under the news banner. Only shown when the
-    /// server publishes a counter (its own website's number); no counter, no line — never a 0.
-    @ViewBuilder
-    private var populationLine: some View {
-        if let name = store.selected?.name, let n = feeds.populations[name] {
-            HStack(spacing: 8) {
-                Circle().fill(Color.green.opacity(0.8)).frame(width: 6, height: 6)
-                Text("\(n.formatted()) players online now")
-                    .font(.callout).foregroundStyle(Vana.muted)
-            }
-            .padding(.top, 2)
         }
     }
 
@@ -432,28 +803,21 @@ struct ContentView: View {
     private var newsBanner: some View {
         let items = feeds.bannerItems(for: store.selected, policy: addonPolicy)
         if items.isEmpty {
-            Text("running natively — no virtual machine")
-                .font(.callout).foregroundStyle(Vana.muted).padding(.top, 4)
+            Text("Running natively — no virtual machine")
+                .font(.system(size: 13)).foregroundStyle(Vana.muted)
         } else {
             let item = items[min(bannerIndex, items.count - 1) % items.count]
-            HStack(alignment: .top, spacing: 8) {
-                Circle().fill(item.fetched ? Vana.gold : Vana.crystal.opacity(0.5))
-                    .frame(width: 6, height: 6).padding(.top, 6)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(item.title)
-                        .font(.callout).foregroundStyle(Vana.muted)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if let url = item.url {
-                        Link("Open \(url.host ?? "page")", destination: url)
-                            .font(.caption2).foregroundStyle(Vana.gold)
-                    }
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(item.title)
+                    .font(.system(size: 13)).foregroundStyle(Vana.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let url = item.url {
+                    Link("Open", destination: url).font(.system(size: 13)).foregroundStyle(Vana.jade)
                 }
-                Spacer(minLength: 0)
             }
-            // Tall enough for the longest item (three lines): sized to the two-line items, the
-            // whole page nudged up and down as the banner rotated onto a three-line one.
-            .frame(minHeight: 66, alignment: .top)
-            .padding(.top, 4)
+            // Tall enough for the longest item: sized to the two-line items, the whole page
+            // nudged up and down as the banner rotated onto a three-line one.
+            .frame(minHeight: 50, alignment: .top)
             .id(item.id)
             .transition(.opacity)
             .animation(.easeInOut(duration: 0.45), value: bannerIndex)
@@ -524,270 +888,507 @@ struct ContentView: View {
         }
     }
 
-    /// One addon, with what it says about itself underneath. The description comes out of the
-    /// addon's own Lua header (see `AddonSuite.metadata`), so it always matches what is installed.
-    @ViewBuilder
-    private func addonRow(_ item: Binding<AddonSuite.Item>) -> some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Toggle(item.wrappedValue.name, isOn: item.enabled)
-            let detail = item.wrappedValue.desc
-            let byline = item.wrappedValue.byline
-            if !detail.isEmpty || !byline.isEmpty {
-                Text(detail.isEmpty ? byline
-                                    : (byline.isEmpty ? detail : "\(detail)  ·  \(byline)"))
-                    .font(.caption2).foregroundStyle(Vana.muted)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.leading, 2)
-            }
-        }
-        .padding(.vertical, 2)
-    }
-
-    /// Ashita's plugins and Lua addons, the same set HorizonXI's own launcher manages.
-    private var addonsSheet: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Addons & plugins").font(.headline)
-            Text("Written to scripts/default.txt, between the launcher-managed markers. Anything "
-                 + "you added by hand outside those blocks is left alone.")
-                .font(.caption).foregroundStyle(Vana.muted)
-
-            addonPolicyNote
-
-            if !addonWarning.isEmpty {
-                Text(addonWarning).font(.caption2).foregroundStyle(Vana.ember)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            // Extras this project can fetch for the local world. Never shown for a live server
-            // — nothing here is on any published approved list.
-            if case .unrestricted = addonPolicy, let i = active {
-                ForEach(LocalWorldAddons.all, id: \.name) { e in
-                    if !LocalWorldAddons.isInstalled(e, in: i) {
-                        HStack(alignment: .top) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(e.title).font(.caption).bold()
-                                Text(e.blurb).font(.caption2).foregroundStyle(Vana.muted)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                            Spacer()
-                            Button(installingExtra == e.name ? "Installing…" : "Get") {
-                                installingExtra = e.name
-                                Task {
-                                    let ok = await LocalWorldAddons.install(e, into: i) { line in
-                                        Task { @MainActor in runner.appendLine(line) }
-                                    }
-                                    await MainActor.run {
-                                        installingExtra = ""
-                                        if ok {
-                                            addonItems = AddonSuite.scan(i)
-                                            if let idx = addonItems.firstIndex(where: {
-                                                !$0.isPlugin && $0.name.lowercased() == e.name }) {
-                                                addonItems[idx].enabled = true
-                                            }
-                                            notice = "\(e.title) installed — press Apply to load it next Play."
-                                        } else {
-                                            notice = "\(e.title) could not be installed; see the log."
-                                        }
-                                    }
-                                }
-                            }
-                            .disabled(!installingExtra.isEmpty)
-                        }
-                        .padding(8)
-                        .background(RoundedRectangle(cornerRadius: 6).fill(Vana.panel.opacity(0.6)))
-                    }
-                }
-            }
-
-            // Why the screen is empty, when it is. A blank list is the one outcome that
-            // tells the player nothing: it reads the same whether the world has no client
-            // installed, the folder is on a drive that is not mounted, or the server's list
-            // hid everything. Each of those needs a different thing done about it.
-            if addonItems.isEmpty {
-                Text(emptyAddonReason)
-                    .font(.caption).foregroundStyle(Vana.ember)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.vertical, 6)
-            }
-
-            List {
-                Section("Plugins") {
-                    ForEach($addonItems.filter {
-                        $0.wrappedValue.isPlugin && addonPolicy.allows($0.wrappedValue.name)
-                    }) { $item in
-                        addonRow($item)
-                    }
-                }
-                Section("Addons") {
-                    ForEach($addonItems.filter {
-                        !$0.wrappedValue.isPlugin && addonPolicy.allows($0.wrappedValue.name)
-                    }) { $item in
-                        addonRow($item)
-                    }
-                }
-                // Shown, not hidden. An allowlist is the server's list of what it has approved,
-                // which is not the same as a list of everything that exists: an addon the player
-                // wrote themselves is on nobody's list and used to vanish from this screen with
-                // no way to manage it. The rules still get stated plainly, and nothing here is
-                // enabled by "Enable all" -- the choice is the player's to make knowingly.
-                if addonItems.contains(where: { !addonPolicy.allows($0.name) }) {
-                    Section("Not on \(store.selected?.name ?? "this server")'s approved list") {
-                        Text(unlistedNote)
-                            .font(.caption2).foregroundStyle(Vana.ember)
-                            .fixedSize(horizontal: false, vertical: true)
-                        ForEach($addonItems.filter {
-                            !addonPolicy.allows($0.wrappedValue.name)
-                        }) { $item in
-                            addonRow($item)
-                        }
-                    }
-                }
-            }
-            .frame(height: 320)
-
-            HStack {
-                // "All" means all the ones this server permits. Enabling something the server
-                // forbids is not a convenience, it is a ban.
-                Button("Enable all") {
-                    for i in addonItems.indices where addonPolicy.allows(addonItems[i].name) {
-                        addonItems[i].enabled = true
-                    }
-                }
-                Button("Disable all") {
-                    for i in addonItems.indices { addonItems[i].enabled = false }
-                }
-                Spacer()
-                Button("Cancel") { showAddons = false }
-                Button("Apply") {
-                    // Refuse to write a block that would disable everything.
-                    //
-                    // On 2026-08-22 a broken fetch made the policy reject every installed addon
-                    // (see ServerFeeds.resembles). The screen went blank, Apply wrote an empty
-                    // managed block, and the cursor fix -- which lived in an addon on nobody's
-                    // published list -- vanished from scripts/default.txt with it. A player
-                    // pressing Apply is asking to save a list, never to lose one, so a policy
-                    // that permits *nothing* is treated as a broken policy rather than obeyed.
-                    let permitted = addonItems.filter { addonPolicy.allows($0.name) }
-                    if !addonItems.isEmpty && permitted.isEmpty {
-                        notice = "Not saving: this server's addon list came back empty, so every "
-                               + "addon you have would be switched off. Nothing was written."
-                        showAddons = false
-                        return
-                    }
-                    // Belt and braces: a hidden row cannot be toggled on, but the list on disk
-                    // may already have named something this server forbids, and pressing Apply
-                    // must not write it back out.
-                    for i in addonItems.indices where !addonPolicy.allows(addonItems[i].name) {
-                        addonItems[i].enabled = false
-                    }
-                    // What is enabled here is what gets written, including anything from the
-                    // unlisted section. Force-disabling those behind the player's back is what
-                    // removed the cursor fix on 2026-08-22, and now that they are visible and
-                    // individually toggled, switching them off would be overriding a choice
-                    // rather than preventing an accident. It is said out loud instead.
-                    let unapproved = addonItems.filter { $0.enabled && !addonPolicy.allows($0.name) }
-                    if let i = active, !AddonSuite.write(addonItems, to: i) {
-                        notice = "Could not write scripts/default.txt — its launcher markers are missing."
-                    } else if !unapproved.isEmpty, addonPolicy.isRestricting {
-                        notice = "Addon list saved, including \(unapproved.count) "
-                               + "\(store.selected?.name ?? "this server") does not approve: "
-                               + unapproved.map(\.name).joined(separator: ", ") + "."
-                    } else {
-                        notice = "Addon list saved. It takes effect the next time you press Play."
-                    }
-                    showAddons = false
-                }
-                .keyboardShortcut(.defaultAction)
-            }
-        }
-        .padding(20).frame(width: 460)
-    }
+    // MARK: - Graphics
 
     /// FFXI's own graphics settings, written into the selected world's boot profile. See
     /// `GraphicsSettings` for why this is not a wrapper around Config.exe.
-    private var graphicsSheet: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Graphics").font(.headline)
-            Text("Applied to \(store.selected?.bootProfile ?? "the boot profile") the next time "
-                 + "you press Play.")
-                .font(.caption).foregroundStyle(Vana.muted)
+    private var graphicsPage: some View {
+        VStack(spacing: 0) {
+            pageHeader("Graphics", status: "Applies next launch", tone: Vana.sand)
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 22) {
+                    HStack(alignment: .center) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Preset").font(.system(size: 15)).foregroundStyle(Vana.text)
+                            Text(presetBlurb).font(.system(size: 13)).foregroundStyle(Vana.muted)
+                        }
+                        Spacer()
+                        Picker("", selection: presetBinding) {
+                            Text("Low").tag(Preset.low)
+                            Text("Balanced").tag(Preset.balanced)
+                            Text("Max 4K").tag(Preset.max4K)
+                            Text("Custom").tag(Preset.custom)
+                        }
+                        .pickerStyle(.segmented).labelsHidden().frame(width: 320)
+                    }
+                    .padding(.horizontal, 4)
 
-            Picker("Resolution", selection: Binding(
-                get: { "\(graphics.width)x\(graphics.height)" },
-                set: { id in
-                    let parts = id.split(separator: "x").compactMap { Int($0) }
-                    if parts.count == 2 { graphics.width = parts[0]; graphics.height = parts[1] }
-                })) {
-                ForEach(GraphicsSettings.resolutions, id: \.0) { r in
-                    Text(r.0).tag("\(r.1)x\(r.2)")
-                }
-            }
-            Picker("Texture resolution", selection: $graphics.textureResolution) {
-                ForEach([512, 1024, 2048, 4096], id: \.self) { Text(String($0)).tag($0) }
-            }
-            Picker("Mip mapping", selection: $graphics.mipMapping) {
-                ForEach(0...4, id: \.self) { Text($0 == 0 ? "Off" : String($0)).tag($0) }
-            }
-            Picker("Textures", selection: $graphics.textureCompression) {
-                Text("Uncompressed").tag(0)
-                Text("Compressed").tag(2)
-            }
-            Toggle("Bump mapping", isOn: $graphics.bumpMapping)
-            Toggle("Environmental animation", isOn: $graphics.environmentAnimation)
-            Divider()
-            Toggle("Remember window size", isOn: $graphics.rememberWindowSize)
-            Text("Resize the game window however you like; the next Play opens at that size, "
-                 + "drawn at full detail. FFXI cannot redraw at a new size while running, so a "
-                 + "window enlarged mid-game is stretched until the next launch.")
-                .font(.caption2).foregroundStyle(Vana.muted)
-                .fixedSize(horizontal: false, vertical: true)
-            Toggle("Match interface to render resolution", isOn: $graphics.uiFollowsResolution)
-            if !graphics.uiFollowsResolution {
-                Picker("Interface resolution", selection: Binding(
-                    get: { "\(graphics.uiWidth)x\(graphics.uiHeight)" },
-                    set: { id in
-                        let parts = id.split(separator: "x").compactMap { Int($0) }
-                        if parts.count == 2 { graphics.uiWidth = parts[0]; graphics.uiHeight = parts[1] }
-                    })) {
-                    ForEach(GraphicsSettings.uiResolutions, id: \.0) { r in
-                        Text(r.0).tag("\(r.1)x\(r.2)")
+                    section("Rendering") {
+                        row("Resolution", "The world is drawn at this size.") {
+                            Picker("", selection: Binding(
+                                get: { "\(graphics.width)x\(graphics.height)" },
+                                set: { id in
+                                    let parts = id.split(separator: "x").compactMap { Int($0) }
+                                    if parts.count == 2 { graphics.width = parts[0]; graphics.height = parts[1] }
+                                })) {
+                                ForEach(GraphicsSettings.resolutions, id: \.0) { r in
+                                    Text(r.0).tag("\(r.1)x\(r.2)")
+                                }
+                            }
+                            .labelsHidden().frame(width: 190)
+                        }
+                        row("Texture resolution") {
+                            Picker("", selection: $graphics.textureResolution) {
+                                ForEach([512, 1024, 2048, 4096], id: \.self) { Text(String($0)).tag($0) }
+                            }
+                            .labelsHidden().frame(width: 130)
+                        }
+                        row("Mip mapping") {
+                            Picker("", selection: $graphics.mipMapping) {
+                                ForEach(0...4, id: \.self) { Text($0 == 0 ? "Off" : String($0)).tag($0) }
+                            }
+                            .labelsHidden().frame(width: 130)
+                        }
+                        row("Textures") {
+                            Picker("", selection: $graphics.textureCompression) {
+                                Text("Uncompressed").tag(0)
+                                Text("Compressed").tag(2)
+                            }
+                            .labelsHidden().frame(width: 160)
+                        }
+                        row("Bump mapping") {
+                            Toggle("", isOn: $graphics.bumpMapping).toggleStyle(.switch).labelsHidden()
+                        }
+                        row("Environmental animation") {
+                            Toggle("", isOn: $graphics.environmentAnimation).toggleStyle(.switch).labelsHidden()
+                        }
+                    }
+
+                    // "Interface resolution" is FFXI's own name for this and it explains nothing:
+                    // the number goes *down* to make the menus bigger, the opposite of every other
+                    // resolution control on the screen. Say what it changes.
+                    section("Interface") {
+                        row("Menu and text size",
+                            graphics.uiFollowsResolution
+                                ? "Drawn at the render resolution, which at 4K is unreadably small."
+                                : "Drawn at \(graphics.uiWidth) × \(graphics.uiHeight) and scaled up. A lower number means bigger menus and text.") {
+                            Picker("", selection: uiSizeBinding) {
+                                Text("Match render").tag("match")
+                                ForEach(GraphicsSettings.uiResolutions, id: \.0) { r in
+                                    Text(r.0).tag("\(r.1)x\(r.2)")
+                                }
+                            }
+                            .labelsHidden().frame(width: 200)
+                        }
+                        row("Remember window size",
+                            "The next Play opens at whatever size you left the window. FFXI cannot redraw at a new size while running, so a window enlarged mid-game is stretched until then.") {
+                            Toggle("", isOn: $graphics.rememberWindowSize).toggleStyle(.switch).labelsHidden()
+                        }
                     }
                 }
-                Text("FFXI draws the interface at this resolution and scales it up to the "
-                     + "window, so a lower number means bigger menus and text. The world is "
-                     + "still drawn at the render resolution above.")
-                    .font(.caption2).foregroundStyle(Vana.muted)
-                    .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 32).padding(.top, 20).padding(.bottom, 28)
             }
-
-            HStack {
-                Button("Low") { graphics = .lowSpec }
-                Button("Balanced") { graphics = .balanced }
-                Button("Max (4K)") { graphics = .max4K }
-                Spacer()
-                Button("Cancel") { showGraphics = false }
-                Button("Apply") {
-                    graphics.save(world: store.selected?.name)
-                    if let i = selected, let s = store.selected {
-                        Credentials.ensureProfile(s.bootProfile, in: i)
-                        graphics.write(to: i, profile: s.bootProfile)
-                        notice = "Graphics written to \(s.bootProfile)."
-                    }
-                    showGraphics = false
-                }
-                .keyboardShortcut(.defaultAction)
-            }
-            .padding(.top, 4)
         }
-        .padding(20).frame(width: 380)
+    }
+
+    private enum Preset: Hashable { case low, balanced, max4K, custom }
+
+    /// Which preset the current settings *are*, if any. Nothing is stored: a Custom that matches
+    /// Balanced exactly is Balanced.
+    private var presetBinding: Binding<Preset> {
+        Binding(get: {
+            if graphics == .lowSpec { return .low }
+            if graphics == .balanced { return .balanced }
+            if graphics == .max4K { return .max4K }
+            return .custom
+        }, set: { p in
+            switch p {
+            case .low:      graphics = .lowSpec
+            case .balanced: graphics = .balanced
+            case .max4K:    graphics = .max4K
+            case .custom:   break
+            }
+        })
+    }
+
+    private var presetBlurb: String {
+        switch presetBinding.wrappedValue {
+        case .low:      return "For the local world and older Macs."
+        case .balanced: return "Right for most Apple Silicon Macs."
+        case .max4K:    return "Everything at maximum, drawn at 4K."
+        case .custom:   return "Your own mix of the settings below."
+        }
+    }
+
+    private var uiSizeBinding: Binding<String> {
+        Binding(get: {
+            graphics.uiFollowsResolution ? "match" : "\(graphics.uiWidth)x\(graphics.uiHeight)"
+        }, set: { id in
+            if id == "match" { graphics.uiFollowsResolution = true; return }
+            let parts = id.split(separator: "x").compactMap { Int($0) }
+            guard parts.count == 2 else { return }
+            graphics.uiFollowsResolution = false
+            graphics.uiWidth = parts[0]; graphics.uiHeight = parts[1]
+        })
+    }
+
+    private var graphicsFooter: some View {
+        footer {
+            Text("Written into \(store.selected?.bootProfile ?? "the boot profile") for "
+                 + "\(store.selected?.name ?? "this world") the next time you press Play.")
+                .lineLimit(1)
+        } right: {
+            Button("Revert") { loadGraphics() }
+            Button("Apply") { applyGraphics() }
+                .buttonStyle(.borderedProminent).tint(Vana.forest)
+                .keyboardShortcut(.defaultAction)
+        }
+    }
+
+    private func applyGraphics() {
+        graphics.save(world: store.selected?.name)
+        guard let i = selected, let s = store.selected else {
+            notice = "Saved. There is no install selected yet, so nothing was written to a boot "
+                   + "profile — it will be written the first time you play."
+            return
+        }
+        Credentials.ensureProfile(s.bootProfile, in: i)
+        graphics.write(to: i, profile: s.bootProfile)
+        notice = "Graphics written to \(s.bootProfile). They take effect the next time you press Play."
+    }
+
+    // MARK: - Add-ons
+
+    /// Ashita's plugins and Lua addons, the same set HorizonXI's own launcher manages.
+    private var addonsPage: some View {
+        VStack(spacing: 0) {
+            pageHeader("Add-ons", status: "Applies next launch", tone: Vana.sand)
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 22) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        addonPolicyNote
+                        if !addonWarning.isEmpty {
+                            Text(addonWarning).font(.system(size: 13)).foregroundStyle(Vana.ember)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        if addonItems.isEmpty {
+                            Text(emptyAddonReason).font(.system(size: 13)).foregroundStyle(Vana.ember)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .padding(.horizontal, 4)
+
+                    // Extras this project can fetch for the local world. Never shown for a live
+                    // server — nothing here is on any published approved list.
+                    if case .unrestricted = addonPolicy, let i = active {
+                        let missing = LocalWorldAddons.all.filter { !LocalWorldAddons.isInstalled($0, in: i) }
+                        if !missing.isEmpty {
+                            section("Available for this world") {
+                                ForEach(missing, id: \.name) { e in extraAddonRow(e, install: i) }
+                            }
+                        }
+                    }
+
+                    let plugins = $addonItems.filter { $0.wrappedValue.isPlugin && addonPolicy.allows($0.wrappedValue.name) }
+                    let addons  = $addonItems.filter { !$0.wrappedValue.isPlugin && addonPolicy.allows($0.wrappedValue.name) }
+                    let unlisted = $addonItems.filter { !addonPolicy.allows($0.wrappedValue.name) }
+                    if !plugins.isEmpty { section("Plugins") { ForEach(plugins) { $item in addonRow($item) } } }
+                    if !addons.isEmpty { section("Add-ons") { ForEach(addons) { $item in addonRow($item) } } }
+                    // Shown, not hidden. An allowlist is the server's list of what it has approved,
+                    // which is not the same as a list of everything that exists: an addon the
+                    // player wrote themselves is on nobody's list and used to vanish from this
+                    // screen with no way to manage it. The rules still get stated plainly, and
+                    // nothing here is enabled by "Enable all" -- the choice is the player's.
+                    if !unlisted.isEmpty {
+                        section("Not on \(store.selected?.name ?? "this server")'s approved list") {
+                            block {
+                                Text(unlistedNote).font(.system(size: 13)).foregroundStyle(Vana.ember)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            Rectangle().fill(Vana.stroke).frame(height: 1).padding(.leading, 16)
+                            ForEach(unlisted) { $item in addonRow($item) }
+                        }
+                    }
+                }
+                .padding(.horizontal, 32).padding(.top, 20).padding(.bottom, 28)
+            }
+        }
+    }
+
+    /// One addon, with what it says about itself underneath. The description comes out of the
+    /// addon's own Lua header (see `AddonSuite.metadata`), so it always matches what is installed.
+    private func addonRow(_ item: Binding<AddonSuite.Item>) -> some View {
+        let detail = item.wrappedValue.desc
+        let byline = item.wrappedValue.byline
+        let sub = detail.isEmpty ? byline : (byline.isEmpty ? detail : "\(detail)  ·  \(byline)")
+        return row(item.wrappedValue.name, sub) {
+            Toggle("", isOn: item.enabled).toggleStyle(.switch).labelsHidden()
+        }
+    }
+
+    /// One of this project's own extras for the local world, with the button that fetches it.
+    private func extraAddonRow(_ e: LocalWorldAddons.Entry, install i: Install) -> some View {
+        row(e.title, e.blurb) {
+            Button(installingExtra == e.name ? "Installing…" : "Get") {
+                installingExtra = e.name
+                Task {
+                    let ok = await LocalWorldAddons.install(e, into: i) { line in
+                        Task { @MainActor in runner.appendLine(line) }
+                    }
+                    await MainActor.run {
+                        installingExtra = ""
+                        if ok {
+                            addonItems = AddonSuite.scan(i)
+                            if let idx = addonItems.firstIndex(where: {
+                                !$0.isPlugin && $0.name.lowercased() == e.name }) {
+                                addonItems[idx].enabled = true
+                            }
+                            notice = "\(e.title) installed — press Apply to load it next Play."
+                        } else {
+                            notice = "\(e.title) could not be installed; see the log under Settings."
+                        }
+                    }
+                }
+            }
+            .disabled(!installingExtra.isEmpty)
+        }
+    }
+
+    private var addonsFooter: some View {
+        footer {
+            // "All" means all the ones this server permits. Enabling something the server
+            // forbids is not a convenience, it is a ban.
+            Button("Enable all") {
+                for i in addonItems.indices where addonPolicy.allows(addonItems[i].name) {
+                    addonItems[i].enabled = true
+                }
+            }
+            Button("Disable all") { for i in addonItems.indices { addonItems[i].enabled = false } }
+        } right: {
+            Button("Revert") { loadAddons() }
+            Button("Apply") { applyAddons() }
+                .buttonStyle(.borderedProminent).tint(Vana.forest)
+                .keyboardShortcut(.defaultAction)
+        }
+    }
+
+    private func applyAddons() {
+        // Refuse to write a block that would disable everything.
+        //
+        // On 2026-08-22 a broken fetch made the policy reject every installed addon (see
+        // ServerFeeds.resembles). The screen went blank, Apply wrote an empty managed block,
+        // and the cursor fix -- which lived in an addon on nobody's published list -- vanished
+        // from scripts/default.txt with it. A player pressing Apply is asking to save a list,
+        // never to lose one, so a policy that permits *nothing* is treated as a broken policy
+        // rather than obeyed.
+        let permitted = addonItems.filter { addonPolicy.allows($0.name) }
+        if !addonItems.isEmpty && permitted.isEmpty {
+            notice = "Not saving: this server's addon list came back empty, so every addon you "
+                   + "have would be switched off. Nothing was written."
+            return
+        }
+        // Belt and braces: a hidden row cannot be toggled on, but the list on disk
+        // may already have named something this server forbids, and pressing Apply
+        // must not write it back out.
+        for i in addonItems.indices where !addonPolicy.allows(addonItems[i].name) {
+            addonItems[i].enabled = false
+        }
+        // What is enabled here is what gets written, including anything from the unlisted
+        // section. Force-disabling those behind the player's back is what removed the cursor fix
+        // on 2026-08-22, and now that they are visible and individually toggled, switching them
+        // off would be overriding a choice rather than preventing an accident. It is said out
+        // loud instead.
+        let unapproved = addonItems.filter { $0.enabled && !addonPolicy.allows($0.name) }
+        if let i = active, !AddonSuite.write(addonItems, to: i) {
+            notice = "Could not write scripts/default.txt — its launcher markers are missing."
+        } else if !unapproved.isEmpty, addonPolicy.isRestricting {
+            notice = "Addon list saved, including \(unapproved.count) "
+                   + "\(store.selected?.name ?? "this server") does not approve: "
+                   + unapproved.map(\.name).joined(separator: ", ") + "."
+        } else {
+            notice = "Addon list saved. It takes effect the next time you press Play."
+        }
+    }
+
+    // MARK: - Settings
+
+    /// Everything that is not a per-world game setting: what preflight found, which renderer, how
+    /// the wrapper behaves while the game runs, the maintenance actions, and the log.
+    private var setupPage: some View {
+        VStack(spacing: 0) {
+            pageHeader("Settings", status: statusText, tone: statusTone)
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 22) {
+                    if !checks.isEmpty {
+                        section("What \(store.selected?.name ?? "this world") needs") {
+                            block {
+                                statusList
+                                if checks.contains(where: { $0.id == "fda" && $0.state == .bad }) {
+                                    Button("Open Full Disk Access settings…") {
+                                        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")!)
+                                    }
+                                    .buttonStyle(.borderedProminent).tint(Vana.forest)
+                                }
+                            }
+                        }
+                    }
+
+                    section("Renderer") {
+                        row("Renderer", perf.renderer.blurb) {
+                            Picker("", selection: $perf.renderer) {
+                                ForEach(Renderer.allCases) { r in Text(r.title).tag(r) }
+                            }
+                            .labelsHidden().frame(width: 220)
+                            .onChange(of: perf.renderer) { _ in perf.save() }
+                        }
+                        if perf.renderer == .mtld3d {
+                            row("Native game window",
+                                "Use macOS window controls. Press Command-comma while playing for graphics settings. Applies on the next launch.") {
+                                Toggle("", isOn: $perf.nativeGameHost).toggleStyle(.switch).labelsHidden()
+                                    .onChange(of: perf.nativeGameHost) { _ in perf.save() }
+                            }
+                        }
+                    }
+
+                    // The host and boot-profile fields are the two things that can be wrong in a
+                    // way no amount of pressing Play will fix, so they are editable — but here,
+                    // not beside the world picker, where they read as something to fill in.
+                    if let s = store.selected, !s.local {
+                        section("Server connection · \(s.name)") { block { serverConnectionFields(s) } }
+                    }
+
+                    section("While the game runs") { perfToggles }
+
+                    section("Maintenance") { block { maintenance } }
+
+                    section("Accounts on other worlds") {
+                        block {
+                            ForEach(store.ordered.filter { $0.name != store.selected?.name }) { other in
+                                signupRow(other)
+                            }
+                        }
+                    }
+
+                    section("Log") { logView }
+                }
+                .padding(.horizontal, 32).padding(.top, 20).padding(.bottom, 28)
+            }
+        }
+    }
+
+    private func serverConnectionFields(_ s: Server) -> some View {
+        HStack(alignment: .bottom, spacing: 12) {
+            field("Login host", text: Binding(
+                get: { s.host }, set: { var c = s; c.host = $0; store.update(c) }), secure: false)
+            field("Boot profile (.ini)", text: Binding(
+                get: { s.bootProfile },
+                set: { var c = s; c.bootProfile = $0; store.update(c) }), secure: false)
+            if !Server.builtins.contains(where: { $0.name == s.name }) {
+                Button(role: .destructive) { store.remove(s) } label: { Image(systemName: "trash") }
+                    .buttonStyle(.borderless).foregroundStyle(Vana.ember)
+                    .padding(.bottom, 9)
+                    .help("Remove \(s.name) from the world list.")
+            }
+        }
+    }
+
+    private var perfToggles: some View {
+        Group {
+            row("Fast synchronisation (msync)") { Toggle("", isOn: $perf.msync).toggleStyle(.switch).labelsHidden() }
+            row("Silence wine debug channels") { Toggle("", isOn: $perf.silenceWineDebug).toggleStyle(.switch).labelsHidden() }
+            row("Keep awake (no App Nap)") { Toggle("", isOn: $perf.disableAppNap).toggleStyle(.switch).labelsHidden() }
+            row("Follow the Mac's sound output",
+                "Switch headphones, speakers or a Bluetooth device while the game is running and the sound moves with it.") {
+                Toggle("", isOn: $perf.followSoundOutput).toggleStyle(.switch).labelsHidden()
+            }
+            row("Read cutscenes aloud (VanaVoice)", narrationHelp) {
+                Toggle("", isOn: $perf.narrateCutscenes).toggleStyle(.switch).labelsHidden()
+                    .disabled(!Narration.isAvailable || !Narration.allowed(by: addonPolicy))
+            }
+            row("Large address aware") { Toggle("", isOn: $perf.largeAddressAware).toggleStyle(.switch).labelsHidden() }
+            row("Fast lens flares (skip occlusion wait) — glitches",
+                "Roughly doubles the frame rate, but NPCs blink in and out about once a second. Off until that is fixed properly.") {
+                Toggle("", isOn: $perf.flareReadbackNoWait).toggleStyle(.switch).labelsHidden()
+            }
+            row("Show frame rate (Metal HUD)") { Toggle("", isOn: $perf.metalHUD).toggleStyle(.switch).labelsHidden() }
+        }
+        .onChange(of: perf.msync) { _ in perf.save() }
+        .onChange(of: perf.silenceWineDebug) { _ in perf.save() }
+        .onChange(of: perf.disableAppNap) { _ in perf.save() }
+        .onChange(of: perf.followSoundOutput) { _ in perf.save() }
+        .onChange(of: perf.largeAddressAware) { _ in perf.save() }
+        .onChange(of: perf.narrateCutscenes) { _ in perf.save() }
+        .onChange(of: perf.metalHUD) { _ in perf.save() }
+    }
+
+    @ViewBuilder private var maintenance: some View {
+        HStack(spacing: 8) {
+            Button("Repair") {
+                if let i = active { runner.repair(i) { _ in recheck() } }
+            }
+            .disabled(runner.busy)
+            if store.selected?.name == "HorizonXI" {
+                Button("Update HorizonXI…") {
+                    if let i = active { runner.updateHorizon(i) { _ in recheck() } }
+                }
+                .disabled(runner.busy)
+                .help("""
+                    Only press this when HorizonXI have actually published an \
+                    update and the game is refusing to let you in. It is not \
+                    routine maintenance: it rewrites files in a working install, \
+                    takes an hour or more over BitTorrent, and can leave the \
+                    client mid-update if it stalls. A working install does not \
+                    need it. Play stays available either way — HorizonXI's login \
+                    server accepts an install that is a version or two behind.
+                    """)
+            }
+            if store.selected?.name == "CatsEyeXI" {
+                Button("CatsEyeXI installer…") { if let i = active, let s = store.selected { runner.runCatsEyeLauncher(i, dataPath: s.dataPath) } }
+                    .disabled(runner.busy)
+                    .help("Runs CatsEyeXI's own launcher inside the wrapper to install or update their client (their storage is private, so only their launcher can fetch it).")
+            }
+            if let s = store.selected, !s.local {
+                Button("Run installer…") { if let i = active { runLocalInstaller(for: s, install: i) } }
+                    .disabled(runner.busy)
+                    .help("Run a Windows installer or launcher (.exe or .zip) you already downloaded for \(s.name), inside the wrapper. It installs into C:\\Games\\\(s.name), which is \(s.dataPath.isEmpty ? "the folder you choose" : s.dataPath).")
+            }
+            if runner.busy {
+                Button("Stop install") { if let i = active { runner.cancelInstaller(i) } }
+                    .help("Kills whatever is running in the installer prefix.")
+            }
+            // Also reachable when an install already exists: a wrapper can be broken past what
+            // Repair fixes, and rebuilding a fresh one beside it is faster than diagnosing wine
+            // by hand.
+            Button("Install wine…") { showSetup = true }
+            Button { refresh() } label: { Label("Rescan", systemImage: "arrow.clockwise") }
+                .help("Rescan for installs")
+            Button { chooseInstall() } label: { Label("Choose install…", systemImage: "folder") }
+                .help("Point at the wrapper app if it lives somewhere the scan does not look, such as Downloads")
+        }
+        .lineLimit(1)
+
+        // Said out loud, not just in a tooltip. Chasing client updates that the game does not
+        // need is a good way to break a working install: the fetch is a multi-hour torrent, it
+        // rewrites files in place, and a stall leaves the client half-updated. Being a version
+        // behind is normal and playable.
+        note("Don't update the client unless the world has actually published an update and the "
+             + "game is turning you away. A working install does not need one — being a version "
+             + "or two behind is normal, and Play still works. Updating rewrites a working "
+             + "install over a multi-hour download.")
+    }
+
+    private var logView: some View {
+        ScrollViewReader { sp in
+            ScrollView {
+                Text(runner.log.isEmpty ? "ready." : runner.log)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(Vana.muted)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .textSelection(.enabled)
+                    .padding(14)
+                    .id("end")
+            }
+            .frame(height: 180)
+            .onChange(of: runner.log) { _ in sp.scrollTo("end", anchor: .bottom) }
+        }
     }
 
     private var addServerSheet: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Add a server").font(.headline)
-            TextField("Name", text: $newName).textFieldStyle(.roundedBorder)
-            TextField("Login host", text: $newHost).textFieldStyle(.roundedBorder)
-            TextField("Boot profile (.ini)", text: $newProfile).textFieldStyle(.roundedBorder)
+            Text("Add a server").font(.headline).foregroundStyle(Vana.text)
+            field("Name", text: $newName, secure: false)
+            field("Login host", text: $newHost, secure: false)
+            field("Boot profile (.ini)", text: $newProfile, secure: false)
             HStack {
                 Spacer()
                 Button("Cancel") { newServer = false }
@@ -795,10 +1396,12 @@ struct ContentView: View {
                     store.add(name: newName, host: newHost, profile: newProfile)
                     newName = ""; newHost = ""; newProfile = ""; newServer = false
                 }
+                .buttonStyle(.borderedProminent).tint(Vana.forest)
                 .keyboardShortcut(.defaultAction)
             }
         }
         .padding(20).frame(width: 360)
+        .background(Vana.backdrop)
     }
 
     /// Shown only for the local world. Selecting it means building an FFXI server on this Mac, so
@@ -808,8 +1411,8 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 8) {
                     Label("Your own server", systemImage: "internaldrive")
-                        .font(.system(size: 12, weight: .semibold, design: .serif))
-                        .foregroundStyle(Vana.gold)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Vana.text)
                     Spacer()
                     if local.busy {
                         ProgressView().controlSize(.small)
@@ -825,7 +1428,7 @@ struct ContentView: View {
                     HStack(spacing: 6) {
                         Image(systemName: (s.spaceOK || s.ready)
                               ? "checkmark.circle" : "exclamationmark.triangle.fill")
-                            .foregroundStyle((s.spaceOK || s.ready) ? Vana.crystal : Vana.ember)
+                            .foregroundStyle((s.spaceOK || s.ready) ? Vana.jade : Vana.ember)
                         Text(s.ready
                              ? String(format: "%.1f GB free on this disk", s.freeGB)
                              : String(format: "%.1f GB free · about %.0f GB needed",
@@ -887,150 +1490,10 @@ struct ContentView: View {
                         .font(.caption2).foregroundStyle(Vana.muted)
                 }
             }
-            .padding(14)
-            .frame(maxWidth: 500, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 10).fill(Color.black.opacity(0.25)))
-            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Vana.stroke))
-            .padding(.horizontal, 34).padding(.top, 14)
-        }
-    }
-
-    /// Say plainly when the chosen renderer is not one you can actually play on.
-    @ViewBuilder private var rendererBanner: some View {
-        if !perf.renderer.playable {
-            HStack(alignment: .top, spacing: 8) {
-                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Vana.ember)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("\(perf.renderer.title) is experimental")
-                        .font(.caption).foregroundStyle(Vana.text)
-                    Text(perf.renderer.blurb).font(.caption2).foregroundStyle(Vana.muted)
-                }
-            }
-            .padding(10)
-            .background(RoundedRectangle(cornerRadius: 8).fill(Vana.ember.opacity(0.10)))
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Vana.ember.opacity(0.35)))
-            .padding(.horizontal, 34).padding(.top, 14)
-            .frame(maxWidth: 500, alignment: .leading)
-        }
-    }
-
-    /// The Horizon launcher fills this space with news. This project's equivalent is honest
-    /// status: what the current renderer does, and where the write-up lives.
-    private var notesCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label("Vana'diel on Apple Silicon", systemImage: "sparkles")
-                .font(.system(size: 12, weight: .semibold, design: .serif))
-                .foregroundStyle(Vana.gold)
-
-            row("Renderer", perf.renderer.title)
-            row("Wine prefix", selected?.prefixName ?? (scanning ? "scanning…" : "not found"))
-            row("Client", selected == nil ? (scanning ? "scanning…" : "not found") : "Ashita · \(store.selected?.bootProfile ?? "")")
-
-            Text("Measured on this Mac with Metal/DXVK: rendering is correct, fog included, "
-                 + "at 4K with every setting at maximum — see docs/MAX4K.md.")
-                .font(.caption2).foregroundStyle(Vana.muted)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(14)
-        .frame(maxWidth: 500, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 10).fill(Color.black.opacity(0.25)))
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Vana.stroke))
-        .padding(.horizontal, 34).padding(.top, 16)
-    }
-
-
-    // MARK: - Signup
-
-    /// Where to get an account, always on screen rather than buried in a sheet.
-    ///
-    /// This is the one thing a new player cannot do from inside the launcher: every world runs
-    /// its own account database, and four of the ten have no web signup at all — the account is
-    /// typed into the loader console on first launch, or gated behind a Discord bot. So the card
-    /// states the actual route for the selected world and offers the link that leads to it, and
-    /// keeps a link for every other world one disclosure away. See `Server.accountHow`.
-    @ViewBuilder
-    private var accountCard: some View {
-        if let s = store.selected {
-            VStack(alignment: .leading, spacing: 10) {
-                Label("Getting an account", systemImage: "person.badge.key")
-                    .font(.system(size: 12, weight: .semibold, design: .serif))
-                    .foregroundStyle(Vana.gold)
-
-                Text(s.accountHow.isEmpty
-                     ? "\(s.name) publishes no signup route this project could find."
-                     : s.accountHow)
-                    .font(.caption).foregroundStyle(Vana.muted)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                HStack(spacing: 10) {
-                    // Only the worlds whose account really is typed into the loader console get
-                    // this line -- Tabula Rasa XI has no route at all and must not be told it
-                    // has one.
-                    if s.accountURL.isEmpty, s.accountHow.contains("loader window") {
-                        Label("Created in the loader window when you press Play",
-                              systemImage: "terminal")
-                            .font(.caption).foregroundStyle(Vana.crystalDim)
-                    }
-                    if let u = URL(string: s.accountURL), !s.accountURL.isEmpty {
-                        Button {
-                            NSWorkspace.shared.open(u)
-                        } label: {
-                            Label(Self.signupVerb(for: s), systemImage: "arrow.up.forward.square")
-                                .font(.caption)
-                        }
-                        .buttonStyle(.borderedProminent).tint(Vana.goldDim)
-                        .help(u.absoluteString)
-                    }
-                    if let d = URL(string: s.discordURL), !s.discordURL.isEmpty,
-                       s.discordURL != s.accountURL {
-                        Button { NSWorkspace.shared.open(d) } label: {
-                            Label("Discord", systemImage: "bubble.left.and.bubble.right")
-                                .font(.caption)
-                        }
-                        .buttonStyle(.bordered).tint(Vana.crystalDim)
-                        .help(d.absoluteString)
-                    }
-                    Spacer(minLength: 0)
-                }
-
-                // A plain DisclosureGroup only toggles from its chevron on macOS -- clicking
-                // the words did nothing, which is exactly the kind of dead target this card
-                // exists to avoid. A button makes the whole row the target.
-                Button { withAnimation(.easeInOut(duration: 0.18)) { showAllSignups.toggle() } } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 9, weight: .semibold))
-                            .rotationEffect(.degrees(showAllSignups ? 90 : 0))
-                        Text(showAllSignups ? "Every other world" : "Every other world")
-                            .font(.caption2)
-                        Spacer(minLength: 0)
-                    }
-                    .foregroundStyle(Vana.crystalDim)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-
-                // Bounded and scrolled: the hero column has no scroll view of its own, so an
-                // unbounded ten-row list pushed the game's title off the top of the window.
-                if showAllSignups {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 6) {
-                            ForEach(store.ordered.filter { $0.name != s.name }) { other in
-                                signupRow(other)
-                            }
-                        }
-                        .padding(.trailing, 4)
-                    }
-                    // A ScrollView asks for zero height in a plain VStack, which rendered the
-                    // list as an empty gap. Give it the rows' own height, capped.
-                    .frame(height: CGFloat(store.ordered.count - 1) * 21 + 6)
-                }
-            }
-            .padding(14)
-            .frame(maxWidth: 500, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 10).fill(Color.black.opacity(0.25)))
-            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Vana.stroke))
-            .padding(.horizontal, 34).padding(.top, 16)
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 12).fill(Vana.raised.opacity(0.45)))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Vana.stroke))
         }
     }
 
@@ -1039,22 +1502,22 @@ struct ContentView: View {
     @ViewBuilder
     private func signupRow(_ other: Server) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(other.name).font(.caption).foregroundStyle(Vana.text)
-                .frame(width: 104, alignment: .leading)
+            Text(other.name).font(.system(size: 14)).foregroundStyle(Vana.text)
+                .frame(width: 130, alignment: .leading)
             if let u = URL(string: other.accountURL), !other.accountURL.isEmpty {
                 Link(Self.signupVerb(for: other), destination: u)
-                    .font(.caption2).foregroundStyle(Vana.gold)
+                    .font(.system(size: 13)).foregroundStyle(Vana.jade)
                     .help(other.accountHow.isEmpty ? u.absoluteString : other.accountHow)
             } else {
                 Text(other.accountHow.contains("loader window")
                      ? "in the loader window" : "no signup published")
-                    .font(.caption2).foregroundStyle(Vana.muted)
+                    .font(.system(size: 13)).foregroundStyle(Vana.muted)
                     .help(other.accountHow)
             }
             Spacer(minLength: 0)
             if let d = URL(string: other.discordURL), !other.discordURL.isEmpty,
                other.discordURL != other.accountURL {
-                Link("Discord", destination: d).font(.caption2).foregroundStyle(Vana.crystalDim)
+                Link("Discord", destination: d).font(.system(size: 13)).foregroundStyle(Vana.jade)
             }
         }
     }
@@ -1074,9 +1537,9 @@ struct ContentView: View {
 
     private func row(_ k: String, _ v: String) -> some View {
         HStack(spacing: 8) {
-            Text(k.uppercased()).font(.system(size: 9)).tracking(1.2)
-                .foregroundStyle(Vana.crystalDim).frame(width: 84, alignment: .leading)
-            Text(v).font(.caption).foregroundStyle(Vana.text)
+            Text(k.uppercased()).font(.system(size: 10, weight: .semibold)).tracking(1.2)
+                .foregroundStyle(Vana.muted2).frame(width: 90, alignment: .leading)
+            Text(v).font(.system(size: 13)).foregroundStyle(Vana.text)
             Spacer()
         }
     }
@@ -1087,8 +1550,8 @@ struct ContentView: View {
                 HStack(alignment: .top, spacing: 8) {
                     Circle().fill(color(c.state)).frame(width: 7, height: 7).padding(.top, 5)
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(c.title).font(.caption).foregroundStyle(Vana.text)
-                        Text(c.detail).font(.caption2).foregroundStyle(Vana.muted)
+                        Text(c.title).font(.system(size: 14)).foregroundStyle(Vana.text)
+                        Text(c.detail).font(.system(size: 12)).foregroundStyle(Vana.muted)
                             .textSelection(.enabled)
                     }
                 }
@@ -1096,301 +1559,44 @@ struct ContentView: View {
         }
     }
 
-    private var logStrip: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Rectangle().fill(Vana.stroke).frame(height: 1)
-            ScrollViewReader { sp in
-                ScrollView {
-                    Text(runner.log.isEmpty ? "ready." : runner.log)
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundStyle(Vana.muted)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .textSelection(.enabled)
-                        .padding(10)
-                        .id("end")
-                }
-                .frame(height: 108)
-                .onChange(of: runner.log) { _ in sp.scrollTo("end", anchor: .bottom) }
-            }
-        }
-        .background(Color.black.opacity(0.28))
-    }
-
-    // MARK: - Right: account + play
-
-    private var sidebar: some View {
-        // Scrolls rather than clips: with two prefixes found the install picker appears, and
-        // together with a long notice the column outgrew a 632pt window and lost its top edge.
-        ScrollView(.vertical, showsIndicators: false) {
-        VStack(alignment: .leading, spacing: 14) {
-            serverPicker
-
-            Rectangle().fill(Vana.stroke).frame(height: 1)
-
-            HStack {
-                Text("ACCOUNT").font(.caption).tracking(2.5).foregroundStyle(Vana.gold)
-                Spacer()
-                Button { refresh() } label: { Image(systemName: "arrow.clockwise") }
-                    .buttonStyle(.borderless).foregroundStyle(Vana.muted)
-                    .help("Rescan for installs")
-                Button { chooseInstall() } label: { Image(systemName: "folder") }
-                    .buttonStyle(.borderless).foregroundStyle(Vana.muted)
-                    .help("Choose install… — point at the wrapper app if it lives somewhere the "
-                          + "scan does not look, such as Downloads")
-            }
-
-            // The local server auto-creates its own account on first login (see LocalServer.swift)
-            // -- there is no real account to type here, so the fields are disabled rather than
-            // left editable and silently ignored.
-            field("Account name", text: $user, secure: false, disabled: store.selected?.local == true)
-            field("Password", text: $pass, secure: true, disabled: store.selected?.local == true)
-            Toggle("Remember me", isOn: $remember)
-                .toggleStyle(.checkbox).font(.caption).foregroundStyle(Vana.muted)
-                .help("Stored in the macOS Keychain, never in a file in this project.")
-
-            if installs.count > 1 {
-                Picker("", selection: Binding(
-                    get: { selected?.id ?? "" },
-                    set: { id in selected = installs.first { $0.id == id }; recheck() })
-                ) {
-                    ForEach(installs) { i in
-                        Text("\(i.wrapper.lastPathComponent) · \(i.prefixName)").tag(i.id)
-                    }
-                }
-                .labelsHidden()
-            }
-
-            playButton
-
-            // Graphics and addons are things people change often -- they belong next to Play,
-            // not inside a collapsed diagnostics section.
-            HStack(spacing: 8) {
-                Button("Graphics…") { openGraphics() }
-                Button("Addons…") { openAddons() }
-            }
-            .font(.caption)
-
-            if !notice.isEmpty {
-                Text(notice).font(.caption2).foregroundStyle(Vana.gold)
-            }
-
-            Rectangle().fill(Vana.stroke).frame(height: 1)
-
-            rendererSection
-
-            DisclosureGroup(isExpanded: $showDetails) {
-                VStack(alignment: .leading, spacing: 6) {
-                    if let s = store.selected, !s.local {
-                        Text("SERVER CONNECTION").font(.caption2).tracking(2).foregroundStyle(Vana.muted)
-                        TextField("login host", text: Binding(
-                            get: { s.host }, set: { var c = s; c.host = $0; store.update(c) }))
-                            .textFieldStyle(.roundedBorder).font(.caption2)
-                        HStack(spacing: 6) {
-                            TextField("boot profile .ini", text: Binding(
-                                get: { s.bootProfile }, set: { var c = s; c.bootProfile = $0; store.update(c) }))
-                                .textFieldStyle(.roundedBorder).font(.caption2)
-                            if !Server.builtins.contains(where: { $0.name == s.name }) {
-                                Button(role: .destructive) { store.remove(s) } label: {
-                                    Image(systemName: "trash")
-                                }.buttonStyle(.borderless)
-                            }
-                        }
-                        Divider()
-                    }
-                    Toggle("Fast synchronisation (msync)", isOn: $perf.msync)
-                    Toggle("Silence wine debug channels", isOn: $perf.silenceWineDebug)
-                    Toggle("Keep awake (no App Nap)", isOn: $perf.disableAppNap)
-                    Toggle("Follow the Mac's sound output", isOn: $perf.followSoundOutput)
-                        .help("Switch headphones, speakers or a Bluetooth device while the game "
-                              + "is running and the sound moves with it. Without this, wine keeps "
-                              + "playing to whichever device was default when the game started.")
-                    Toggle("Read cutscenes aloud (VanaVoice)", isOn: $perf.narrateCutscenes)
-                        .disabled(!Narration.isAvailable || !Narration.allowed(by: addonPolicy))
-                        .help(narrationHelp)
-                    Toggle("Large address aware", isOn: $perf.largeAddressAware)
-                    Toggle("Fast lens flares (skip occlusion wait) — glitches", isOn: $perf.flareReadbackNoWait)
-                        .help("Roughly doubles the frame rate: FFXI stops the whole frame four "
-                              + "times to read back a 16×16 visibility test. But it hands the game "
-                              + "a buffer the GPU has not finished writing, so NPCs blink in and "
-                              + "out about once a second. Off until that is fixed properly.")
-                    Toggle("Show frame rate (Metal HUD)", isOn: $perf.metalHUD)
-                    if checks.contains(where: { $0.id == "fda" && $0.state == .bad }) {
-                        Button("Open Full Disk Access settings…") {
-                            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")!)
-                        }.buttonStyle(.borderedProminent)
-                    }
-                    HStack(spacing: 8) {
-                        Button("Repair") {
-                            if let i = active { runner.repair(i) { _ in recheck() } }
-                        }
-                            .disabled(runner.busy)
-                        if store.selected?.name == "HorizonXI" {
-                            Button("Update HorizonXI…") {
-                                if let i = active { runner.updateHorizon(i) { _ in recheck() } }
-                            }
-                            .disabled(runner.busy)
-                            .help("""
-                                Only press this when HorizonXI have actually published an \
-                                update and the game is refusing to let you in. It is not \
-                                routine maintenance: it rewrites files in a working install, \
-                                takes an hour or more over BitTorrent, and can leave the \
-                                client mid-update if it stalls. A working install does not \
-                                need it. Play stays available either way — HorizonXI's login \
-                                server accepts an install that is a version or two behind.
-                                """)
-                        }
-                        if store.selected?.name == "CatsEyeXI" {
-                            Button("CatsEyeXI installer…") { if let i = active, let s = store.selected { runner.runCatsEyeLauncher(i, dataPath: s.dataPath) } }
-                                .disabled(runner.busy)
-                                .help("Runs CatsEyeXI's own launcher inside the wrapper to install or update their client (their storage is private, so only their launcher can fetch it).")
-                        }
-                        if let s = store.selected, !s.local {
-                            Button("Run installer…") { if let i = active { runLocalInstaller(for: s, install: i) } }
-                                .disabled(runner.busy)
-                                .help("Run a Windows installer or launcher (.exe or .zip) you already downloaded for \(s.name), inside the wrapper. It installs into C:\\Games\\\(s.name), which is \(s.dataPath.isEmpty ? "the folder you choose" : s.dataPath).")
-                        }
-                        if runner.busy {
-                            Button("Stop install") { if let i = active { runner.cancelInstaller(i) } }
-                                .help("Kills whatever is running in the installer prefix.")
-                        }
-                        // Also reachable when an install already exists: a wrapper can be
-                        // broken past what Repair fixes, and rebuilding a fresh one beside it
-                        // is faster than diagnosing wine by hand.
-                        Button("Install wine…") { showSetup = true }
-                    }
-                    .padding(.top, 4)
-
-                    // Said out loud, not just in a tooltip. Chasing client updates that the
-                    // game does not need is a good way to break a working install: the fetch
-                    // is a multi-hour torrent, it rewrites files in place, and a stall leaves
-                    // the client half-updated. Being a version behind is normal and playable.
-                    Text("Don't update the client unless the world has actually published an "
-                       + "update and the game is turning you away. A working install does not "
-                       + "need one — being a version or two behind is normal, and Play still "
-                       + "works. Updating rewrites a working install over a multi-hour "
-                       + "download.")
-                        .font(.caption2)
-                        .foregroundStyle(Vana.muted)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.top, 6)
-                }
-                .font(.caption)
-                .foregroundStyle(Vana.muted)
-                .padding(.top, 8)
-                .onChange(of: perf.msync) { _ in perf.save() }
-                .onChange(of: perf.silenceWineDebug) { _ in perf.save() }
-                .onChange(of: perf.disableAppNap) { _ in perf.save() }
-                .onChange(of: perf.followSoundOutput) { _ in perf.save() }
-                .onChange(of: perf.largeAddressAware) { _ in perf.save() }
-                .onChange(of: perf.narrateCutscenes) { _ in perf.save() }
-                .onChange(of: perf.metalHUD) { _ in perf.save() }
-            } label: {
-                Text("SETUP & DIAGNOSTICS").font(.caption).tracking(2.5)
-                    .foregroundStyle(Vana.gold)
-            }
-
-            Spacer()
-
-            // Nothing found and the scan has finished: this is a first run, and the one thing
-            // the user needs is the button that installs everything. Offering it here rather
-            // than burying it in Setup & Diagnostics is the difference between a launcher that
-            // works out of the box and one that needs the README first.
-            if !scanning && selected == nil {
-                Button { showSetup = true } label: {
-                    Label("Set up FFXI on Mac", systemImage: "wand.and.stars")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .help("Installs Rosetta 2 and Wine, and creates the Windows drive FFXI installs into")
-            }
-
-            HStack(spacing: 5) {
-                Circle().fill(scanning ? Vana.gold : (blocked ? Vana.ember : Vana.crystal)).frame(width: 6, height: 6)
-                Text(statusText).font(.caption2).foregroundStyle(Vana.muted)
-            }
-        }
-        .padding(22)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .background(Vana.panel)
-    }
-
-    private var rendererSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("RENDERER").font(.caption).tracking(2.5).foregroundStyle(Vana.gold)
-            Picker("", selection: $perf.renderer) {
-                ForEach(Renderer.allCases) { r in Text(r.title).tag(r) }
-            }
-            .labelsHidden()
-            .onChange(of: perf.renderer) { _ in perf.save() }
-            Text(perf.renderer.blurb)
-                .font(.caption2).foregroundStyle(Vana.muted).fixedSize(horizontal: false, vertical: true)
-            if perf.renderer == .mtld3d {
-                Toggle("Native game window", isOn: $perf.nativeGameHost)
-                    .onChange(of: perf.nativeGameHost) { _ in perf.save() }
-                Text("Use macOS window controls. Press Command-comma while playing for graphics settings. Applies on the next launch.")
-                    .font(.caption2).foregroundStyle(Vana.muted)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-
     private func field(_ title: String, text: Binding<String>, secure: Bool,
                        disabled: Bool = false) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title.uppercased()).font(.caption2).tracking(1.5).foregroundStyle(Vana.muted)
-            Group {
-                if secure { SecureField("", text: text) } else { TextField("", text: text) }
-            }
-            .textFieldStyle(.plain)
-            .disabled(disabled)
-            .padding(8)
-            .background(RoundedRectangle(cornerRadius: 6).fill(Color.black.opacity(0.40)))
-            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Vana.crystalDim.opacity(0.5)))
-            .foregroundStyle(disabled ? Vana.muted : Vana.text)
-            .opacity(disabled ? 0.5 : 1)
+        Group {
+            if secure { SecureField(title, text: text) } else { TextField(title, text: text) }
         }
+        .textFieldStyle(.plain)
+        .font(.system(size: 15))
+        .disabled(disabled)
+        .padding(.horizontal, 12).frame(height: 34)
+        .background(RoundedRectangle(cornerRadius: 8).fill(Vana.raised))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Vana.stroke))
+        .foregroundStyle(disabled ? Vana.muted : Vana.text)
+        .opacity(disabled ? 0.5 : 1)
     }
 
     /// The visible world picker row (see the ZStack in the sidebar for why it is separate).
     private var worldRow: some View {
-                HStack(spacing: 8) {
-                    Image(systemName: "diamond.fill")
-                        .font(.system(size: 10))
-                        .foregroundStyle(Vana.crystal)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(store.selected?.name ?? "Choose a world")
-                            .font(.system(size: 14, weight: .semibold, design: .serif))
-                            .foregroundStyle(Vana.text)
-                            .lineLimit(1)
-                        if let era = store.selected?.era, !era.isEmpty {
-                            Text(era).font(.caption2).foregroundStyle(Vana.muted).lineLimit(1)
-                        }
-                    }
-                    Spacer(minLength: 4)
-                    // Say it in words. The chevron-in-a-circle this replaced still read as
-                    // decoration to a first-time user; a labelled gold pill does not.
-                    HStack(spacing: 4) {
-                        Text("CHANGE WORLD").font(.system(size: 9, weight: .bold)).tracking(1)
-                        Image(systemName: "chevron.up.chevron.down")
-                            .font(.system(size: 9, weight: .bold))
-                    }
-                    .foregroundStyle(Color.black.opacity(0.85))
-                    .padding(.horizontal, 8).padding(.vertical, 5)
-                    .background(Capsule().fill(worldHover ? Vana.crystal : Vana.gold))
-                }
-                .padding(.horizontal, 10).padding(.vertical, 9)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: 8)
-                    .fill(worldHover ? Color.white.opacity(0.10) : Color.black.opacity(0.32)))
-                .overlay(RoundedRectangle(cornerRadius: 8)
-                    .stroke(worldHover ? Vana.crystal : Vana.crystalDim.opacity(0.7),
-                            lineWidth: worldHover ? 1.5 : 1))
-                .contentShape(Rectangle())
-                .onHover { hovering in
-                    worldHover = hovering
-                    if hovering { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() }
-                }
+        HStack(spacing: 8) {
+            Text(store.selected?.name ?? "Choose a world")
+                .font(.system(size: 15)).foregroundStyle(Vana.text).lineLimit(1)
+            if store.selected?.verified == true {
+                Image(systemName: "checkmark.seal.fill").font(.system(size: 11))
+                    .foregroundStyle(Vana.jade)
+                    .help("This project logs into this server successfully.")
+            }
+            Spacer(minLength: 4)
+            Image(systemName: "chevron.down").font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Vana.muted)
+        }
+        .padding(.horizontal, 12).frame(height: 34)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 8).fill(worldHover ? Vana.raised : Vana.raised.opacity(0.75)))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(worldHover ? Vana.jade.opacity(0.6) : Vana.stroke))
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            worldHover = hovering
+            if hovering { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() }
+        }
     }
 
     /// Shown when the chosen world's game files are not where the launcher expects them. Two
@@ -1399,14 +1605,14 @@ struct ContentView: View {
     /// is remembered per world in servers.json.
     private func gameDataCard(for s: Server, install i: Install) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("GAME DATA").font(.caption).tracking(2.5).foregroundStyle(Vana.gold)
+            Text("Before you can play").font(.system(size: 15, weight: .semibold)).foregroundStyle(Vana.text)
             Text(s.dataPath.isEmpty
                  ? (i.hasGame ? "\(s.name) has no folder of its own yet — Play would use HorizonXI's files, which \(s.name)'s login server may reject."
                               : "\(s.name)'s game files are not installed yet.")
                  : "Nothing playable at \(s.dataPath).")
-                .font(.caption2).foregroundStyle(Vana.muted).fixedSize(horizontal: false, vertical: true)
+                .font(.system(size: 13)).foregroundStyle(Vana.muted).fixedSize(horizontal: false, vertical: true)
             if !s.installNote.isEmpty {
-                Text(s.installNote).font(.caption2).foregroundStyle(Vana.muted)
+                Text(s.installNote).font(.system(size: 13)).foregroundStyle(Vana.muted)
                     .fixedSize(horizontal: false, vertical: true)
             }
             // Three buttons never fit this panel's width: they rendered as "Downloa…",
@@ -1422,7 +1628,7 @@ struct ContentView: View {
                         Label(runner.busy ? "Downloading…" : "Download…",
                               systemImage: runner.busy ? "arrow.down.circle.dotted" : "arrow.down.circle")
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.borderedProminent).tint(Vana.forest)
                     .disabled(runner.busy || runner.running)
                     .help(runner.busy
                           ? "Another download or install is running — watch the log on the left. It resumes where it left off if it is interrupted."
@@ -1443,14 +1649,14 @@ struct ContentView: View {
                         .help("The classic route: run HorizonXI's installer inside the wrapper.")
                 }
                 }
-            }.font(.caption).lineLimit(1)
+            }.lineLimit(1)
         }
-        .padding(10)
-        .background(RoundedRectangle(cornerRadius: 8).fill(Color.black.opacity(0.25)))
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 12).fill(Vana.raised.opacity(0.45)))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Vana.stroke))
     }
 
-    /// Ask where this world's files are (or should go). Defaults to ~/Games/FFXI/<world>, and
-    /// the user can pick any drive. The choice is stored on the server entry.
     /// What "Locate…" found, with the reason it thinks so. The reason is shown because a
     /// wrong guess here is not cosmetic: pointing a world at another world's client launches
     /// and plays *that* world's data (Install.clientAmbiguity), so the player gets to judge.
@@ -1507,6 +1713,8 @@ struct ContentView: View {
         recheck()
     }
 
+    /// Ask where this world's files are (or should go). Defaults to ~/Games/FFXI/<world>, and
+    /// the user can pick any drive. The choice is stored on the server entry.
     private func chooseGameData(for s: Server) {
         let panel = NSOpenPanel()
         panel.title = "Game data for \(s.name)"
@@ -1590,25 +1798,110 @@ struct ContentView: View {
         }
     }
 
-    private var playButton: some View {
-        Button(action: play) {
-            Text(runner.running ? "RUNNING" : "PLAY")
-                .font(.system(size: 15, weight: .semibold, design: .serif)).tracking(5)
-                .frame(maxWidth: .infinity).padding(.vertical, 13)
-                .background(
-                    LinearGradient(colors: runner.running
-                                   ? [Vana.goldDim.opacity(0.45), Vana.goldDim.opacity(0.25)]
-                                   : [Vana.gold, Vana.goldDim],
-                                   startPoint: .top, endPoint: .bottom))
-                .foregroundStyle(Color.black.opacity(0.86))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .shadow(color: Vana.gold.opacity(runner.running ? 0 : 0.35), radius: 10, y: 3)
+    /// What to do next, said on the button rather than left for the player to work out.
+    ///
+    /// A first run used to show a greyed-out PLAY and nothing else: the one state where the
+    /// launcher knows exactly what is missing was also the state where it said the least. So the
+    /// button *is* the next step — install wine, fetch the world's files, go and read what
+    /// preflight found, or play. It is only ever grey while something is genuinely in flight.
+    private enum NextStep {
+        case scanning, installing, setUp, getData, chooseData, fixSetup, running, play
+    }
+
+    private var nextStep: NextStep {
+        if runner.running { return .running }
+        if runner.busy { return .installing }
+        if selected == nil { return scanning ? .scanning : .setUp }
+        if needsGameData {
+            // A world with no download route of its own cannot be fetched from here; the only
+            // thing that can move it forward is pointing the launcher at files already on disk.
+            if let s = store.selected, s.installKind == .none { return .chooseData }
+            return .getData
+        }
+        if blocked { return .fixSetup }
+        return .play
+    }
+
+    private var nextStepLabel: String {
+        let world = store.selected?.name ?? "the game"
+        switch nextStep {
+        case .scanning:   return "Looking for your install…"
+        case .installing: return "Working — see the log below"
+        case .setUp:      return "Set up FFXI on Mac"
+        case .getData:    return "Get \(world)'s game files"
+        case .chooseData: return "Choose \(world)'s game folder…"
+        case .fixSetup:   return "Finish setting up \(world)"
+        case .running:    return "Running"
+        case .play:       return "Play \(world)"
+        }
+    }
+
+    private var nextStepHelp: String {
+        switch nextStep {
+        case .scanning:   return "Looking through /Applications and /Volumes for a wrapper."
+        case .installing: return "A download or install is running in the wrapper. It is resumable."
+        case .setUp:      return "Installs Rosetta 2 and Wine, and creates the Windows drive FFXI installs into."
+        case .getData:    return "Gets this world's client the way that world distributes it."
+        case .chooseData: return "Point the launcher at the folder that holds this world's game files."
+        case .fixSetup:   return "Opens Settings, which lists what is blocking this world."
+        case .running:    return "The game is running."
+        case .play:       return "Launches the client and logs in."
+        }
+    }
+
+    private func doNextStep() {
+        switch nextStep {
+        case .scanning, .installing, .running:
+            return
+        case .setUp:
+            showSetup = true
+        case .getData:
+            if let s = store.selected, let i = active { downloadGameData(for: s, install: i) }
+        case .chooseData:
+            if let s = store.selected { chooseGameData(for: s) }
+        case .fixSetup:
+            page = .setup
+        case .play:
+            play()
+        }
+    }
+
+    private var primaryButton: some View {
+        let step = nextStep
+        let waiting = step == .scanning || step == .installing || step == .running
+        return Button(action: doNextStep) {
+            HStack(spacing: 12) {
+                if waiting {
+                    ProgressView().controlSize(.small)
+                } else if step == .play {
+                    Image(systemName: "play.fill").font(.system(size: 13, weight: .bold))
+                }
+                Text(nextStepLabel)
+                    .font(.system(size: 17, weight: .semibold))
+                    .lineLimit(1).minimumScaleFactor(0.7)
+                if step == .play {
+                    Text("Return ↵")
+                        .font(.system(size: 12, weight: .medium))
+                        .padding(.horizontal, 8).padding(.vertical, 3)
+                        .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.14)))
+                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.white.opacity(0.25)))
+                }
+            }
+            .frame(maxWidth: .infinity).frame(height: 50)
+            .background(
+                LinearGradient(colors: waiting ? [Vana.raised, Vana.raised]
+                                               : [Vana.forest, Vana.forestDeep],
+                               startPoint: .top, endPoint: .bottom))
+            .foregroundStyle(waiting ? Vana.muted : Color.white)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12)
+                .stroke(waiting ? Vana.stroke : Vana.jade.opacity(0.35)))
+            .shadow(color: waiting ? .clear : Vana.forest.opacity(0.45), radius: 16, y: 6)
         }
         .buttonStyle(.plain)
         .keyboardShortcut(.defaultAction)
-        // Only the *absence* of an install should block Play. Once we have one — remembered
-        // or found — a still-running background rescan must not hold the user up.
-        .disabled(selected == nil || runner.running || blocked)
+        .disabled(waiting)
+        .help(nextStepHelp)
     }
 
     // MARK: - Actions
@@ -1785,9 +2078,9 @@ struct ContentView: View {
         checks = await Task.detached(priority: .userInitiated) { Preflight.run(i, profile: profile) }.value
     }
 
-    /// Open the panel on whatever the profile actually says, not on this app's last write —
-    /// the boot .ini is a plain text file the user may well have edited by hand.
-    private func openGraphics() {
+    /// Read whatever the profile actually says, not this app's last write — the boot .ini is
+    /// a plain text file the user may well have edited by hand. Also the Revert button.
+    private func loadGraphics() {
         // Prefer what the profile actually says; fall back to this world's stored value, not
         // to a value some other world last wrote.
         if let s = store.selected {
@@ -1796,17 +2089,13 @@ struct ContentView: View {
                 graphics = onDisk
             }
         }
-        showGraphics = true
     }
 
-    private func openAddons() {
-        guard let i = active else {
-            // Silently doing nothing is indistinguishable from a broken button, and that is
-            // exactly what it looked like: the addon screen "wouldn't open".
-            notice = "No install selected, so there is nothing to list. Press the folder icon "
-                   + "above and point the launcher at your wrapper app."
-            return
-        }
+    /// Rescan the world's game folder. No install means an empty list rather than a refusal:
+    /// the screen explains an empty list for itself (see `emptyAddonReason`), and the button
+    /// that silently did nothing was indistinguishable from a broken one.
+    private func loadAddons() {
+        guard let i = active else { addonItems = []; addonWarning = ""; return }
         addonItems = AddonSuite.scan(i)
         let bad = AddonSuite.mismatchedPlugins(i)
         addonWarning = bad.isEmpty ? "" :
@@ -1815,13 +2104,12 @@ struct ContentView: View {
             + (bad.contains { $0.lowercased() == "addons" }
                ? "That includes the Lua host, so no addon below can run until it is fixed."
                : "")
-        showAddons = true
     }
 
     private func color(_ s: Check.State) -> Color {
         switch s {
-        case .ok: return Vana.crystal
-        case .warn: return Vana.gold
+        case .ok: return Vana.jade
+        case .warn: return Vana.sand
         case .bad: return Vana.ember
         }
     }

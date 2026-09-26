@@ -35,7 +35,7 @@ struct SetupSheet: View {
                         icon(for: s)
                         VStack(alignment: .leading, spacing: 1) {
                             Text(s.title).font(.callout.weight(.medium))
-                                .foregroundStyle(current == s ? Vana.gold : Vana.text)
+                                .foregroundStyle(current == s ? Vana.jade : Vana.text)
                             Text(s.detail).font(.caption).foregroundStyle(Vana.muted)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
@@ -89,13 +89,13 @@ struct SetupSheet: View {
                         NSWorkspace.shared.open(URL(string: "https://horizonxi.com/play-now")!)
                     }
                     Button("Install the game…") { chooseInstaller() }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.borderedProminent).tint(Vana.forest)
                 }
                 Spacer()
                 Button(done ? "Done" : "Cancel") { onFinished(); dismiss() }
                 if !done {
                     Button(running ? "Working…" : "Set it up") { start() }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.borderedProminent).tint(Vana.forest)
                         .disabled(running)
                 }
             }
@@ -109,7 +109,7 @@ struct SetupSheet: View {
     private func icon(for s: Bootstrap.Step) -> some View {
         let passed = done || (current.map { $0.rawValue > s.rawValue } ?? false)
         if passed {
-            Image(systemName: "checkmark.circle.fill").foregroundStyle(Vana.crystal)
+            Image(systemName: "checkmark.circle.fill").foregroundStyle(Vana.jade)
         } else if current == s {
             ProgressView().controlSize(.small).frame(width: 16, height: 16)
         } else {

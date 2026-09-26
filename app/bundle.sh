@@ -126,6 +126,10 @@ fi
 [[ -f "$REPO/app/Resources/audiofollow.dylib" ]] && \
   cp "$REPO/app/Resources/audiofollow.dylib" "$APP/Contents/Resources/audiofollow.dylib"
 
+# The landscape behind the Play page's hero band. Generated for this project (gpt-image-2,
+# 2026-09-20), so it is the project's own art in the same sense the icon is.
+[[ -f "$REPO/app/Resources/hero.jpg" ]] && cp "$REPO/app/Resources/hero.jpg" "$APP/Contents/Resources/hero.jpg"
+
 # Dock/Finder icon: an original crystal mark in the launcher's own Vana'diel palette (see
 # scripts/make_icon.py), not extracted from Square Enix's client -- this project's own art.
 [[ -f "$HERE/AppIcon.icns" ]] && cp "$HERE/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
