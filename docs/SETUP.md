@@ -40,7 +40,7 @@ already inside it is giving away Square Enix's client, which they may not do.
 
 Wine is free and open source. Setup installs two builds because they have different jobs. The
 [Sikarugir](https://github.com/Sikarugir-App/Sikarugir) build maintains the wrapper and Windows
-drive. The game runs under athei's patched, CrossOver-derived `wine-cx-26.3.0-1`; stock CrossOver
+drive. The game runs under athei's patched, CrossOver-derived `wine-cx-26.3.0-6`; stock CrossOver
 does not contain its `ROSETTA_X87_PATH` handshake. The launcher fetches both from pinned GitHub
 releases, checks their SHA-256 hashes, and stores the game runtime under
 `~/Library/Application Support/HorizonXI-on-Mac/runtimes/`.
@@ -211,11 +211,11 @@ Stock CrossOver Wine does not contain the x87sidecar handshake. These are the sa
 checksum, and destination used by the app:
 
 ```sh
-runtime_dir="$HOME/Library/Application Support/HorizonXI-on-Mac/runtimes/wine-cx-26.3.0-1"
-runtime_archive="/tmp/wine-cx-26.3.0-1-macos-x86_64.tar.xz"
+runtime_dir="$HOME/Library/Application Support/HorizonXI-on-Mac/runtimes/wine-cx-26.3.0-6"
+runtime_archive="/tmp/wine-cx-26.3.0-6-macos-x86_64.tar.xz"
 curl -fL -o "$runtime_archive" \
-  https://github.com/athei/wine-build/releases/download/cx-26.3.0-1/wine-cx-26.3.0-1-macos-x86_64.tar.xz
-expected_sha="ec2a9e4d438917a26e381c01367773df79c3b0d6f0504b8183464619cad7e661"
+  https://github.com/athei/wine-build/releases/download/cx-26.3.0-6/wine-cx-26.3.0-6-macos-x86_64.tar.xz
+expected_sha="11cb278a82ba8c2e7563c02afd7fb369702ca193b0b3ebfc8db22e771900ce37"
 actual_sha="$(shasum -a 256 "$runtime_archive" | cut -d' ' -f1)"
 if [[ "$actual_sha" == "$expected_sha" ]]; then
   mkdir -p "$runtime_dir"

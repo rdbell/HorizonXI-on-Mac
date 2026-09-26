@@ -15,11 +15,11 @@ import subprocess
 import sys
 import urllib.request
 
-SOURCE = '16aac07e6fe9815ffb51efe0e736ba6a3dc97a9c'
+SOURCE = 'd82e36650b034b7ba63eb671c672c578c88e282f'
 COMPILER = 'llvm-mingw-20260616-ucrt-macos-universal'
 DOWNLOADS = {
     'source': (f'https://codeload.github.com/athei/wine/tar.gz/{SOURCE}',
-               '99393a2ce22a0b848f71d41c16558d67b59867b1d3eeefe4a04cd8d7e4791bea'),
+               'bf2108fab9ca1eb229b731cb728ea55ddef8a3ff3cc678f60038cafb87d8ac22'),
     'toolchain': (f'https://github.com/mstorsjo/llvm-mingw/releases/download/20260616/{COMPILER}.tar.xz',
                   '2cab02a2e964bd4aae981150a45985d07c657cfa8d244959eb9e2dcc5eedd7b1'),
 }

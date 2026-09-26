@@ -32,14 +32,22 @@ enum Renderer: String, Codable, CaseIterable, Identifiable {
     /// D3D8 -> d3d8to9 -> mtld3d -> Metal, with the tested FFXI fixes and pass merging.
     case mtld3d
 
+    /// The pathways a player can choose. `vulkan` and `metal` (DXVK) are retired: the game Wine
+    /// from cx-26.3.0-2 on is built without Vulkan, so neither can run. Their cases stay so a
+    /// saved choice still decodes; `PerfSettings` moves it to the default. See docs/WINE-CX6.md.
+    static var allCases: [Renderer] { [.mtld3d, .openGL] }
+
+    /// No longer offered; a saved choice of one of these is replaced by `mtld3d`.
+    var retired: Bool { self == .vulkan || self == .metal }
+
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .openGL: return "Classic (OpenGL)"
         case .vulkan: return "Vulkan"
-        case .metal:  return "Metal / DXVK (recommended)"
-        case .mtld3d: return "Metal / mtld3d (experimental)"
+        case .metal:  return "Metal / DXVK"
+        case .mtld3d: return "Metal / mtld3d (recommended)"
         }
     }
 
@@ -47,7 +55,7 @@ enum Renderer: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .openGL:
             return "Everything draws correctly, on the CPU. Slow: about 3 fps in a zone on an "
-                 + "M1. Use it if Vulkan misbehaves."
+                 + "M1. Use it if Metal misbehaves."
         case .vulkan:
             return "Draws correctly on the GPU — 8-10 fps in a zone on an M1. The fallback if "
                  + "Metal/DXVK misbehaves on your machine."
@@ -55,8 +63,7 @@ enum Renderer: String, Codable, CaseIterable, Identifiable {
             return "Recommended. The world draws correctly, fog included, at 4K with every "
                  + "setting at maximum."
         case .mtld3d:
-            return "Native Metal with the FFXI rendering fixes and pass merging. Faster in our "
-                 + "local tests; broader play testing is still in progress."
+            return "Recommended. Native Metal with the FFXI rendering fixes and pass merging."
         }
     }
 
@@ -64,7 +71,7 @@ enum Renderer: String, Codable, CaseIterable, Identifiable {
     var playable: Bool { true }
 
     /// Shown as the default and the recommendation.
-    var recommended: Bool { self == .metal }
+    var recommended: Bool { self == .mtld3d }
 
     /// Value for HKCU\Software\Wine\Direct3D\renderer. DXVK replaces d3d9 outright, so the
     /// wined3d renderer is irrelevant there and left on gl.

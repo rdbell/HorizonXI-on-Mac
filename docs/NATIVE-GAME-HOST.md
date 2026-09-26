@@ -32,6 +32,10 @@ back to the checkout used to compile the launcher.
 
 ## Rebuild
 
+The package is built for `cx-26.3.0-6` from athei/wine `d82e36650b0`. That tree's makedep
+rejects any include ahead of `config.h`, so `source.patch` imports `<objc/runtime.h>` after it;
+the patch is otherwise unchanged from the `cx-26.3.0-1` build. See `WINE-CX6.md`.
+
 Use macOS Command Line Tools, Rosetta and Homebrew bison 3+. The builder downloads
 and verifies the source/toolchain pinned by `build-wine-locale-fix.py`, applies
 the supplied patch without fuzz, and builds only the macOS display driver and

@@ -29,11 +29,29 @@ struct RendererTest {
         let restored = try JSONDecoder().decode(PerfSettings.self, from: JSONEncoder().encode(native))
         expect(restored.nativeGameHost && restored.metalHUD && restored.renderer == .mtld3d,
                "native host preference did not round trip")
+        try retiredRenderers()
         try missingShim()
         try repeatedInstall()
         registryChecks()
         try unchangedFilesAndRepair()
         print("PASS: renderer settings, incomplete-package protection, repeat install and builtin preservation")
+    }
+
+    /// DXVK and wined3d-Vulkan cannot run on the current game Wine, so a saved choice of either,
+    /// or no saved choice, must come back as mtld3d, and neither may be offered again.
+    static func retiredRenderers() throws {
+        func decoded(_ json: String) throws -> Renderer {
+            try JSONDecoder().decode(PerfSettings.self, from: Data(json.utf8)).renderer
+        }
+        expect(try decoded(#"{"renderer":"metal"}"#) == .mtld3d, "saved DXVK choice was kept")
+        expect(try decoded(#"{"renderer":"vulkan"}"#) == .mtld3d, "saved Vulkan choice was kept")
+        expect(try decoded(#"{"renderer":"openGL"}"#) == .openGL, "saved OpenGL choice was lost")
+        expect(try decoded("{}") == .mtld3d && PerfSettings().renderer == .mtld3d, "default is not mtld3d")
+        expect(Renderer.allCases == [.mtld3d, .openGL], "a retired renderer is still offered")
+        expect(Renderer.allCases.filter(\.recommended) == [.mtld3d], "recommendation is not mtld3d")
+        let install = Install(wrapper: URL(fileURLWithPath: "/wrapper.app"), prefixName: "prefix10")
+        expect(PerfSettings().environment(for: install)["WINE_COMPATDB"]
+               == "v=3\nname=ffxi-on-mac;exe=*;d3d9=wined3d", "runtime d3d9 tree is not pinned")
     }
 
     static func registryChecks() {

@@ -41,7 +41,7 @@ struct WineRuntimeTest {
         let fakeSupport = URL(fileURLWithPath: "/Users/test/Library/Application Support")
         expect(WineRuntime.executable(in: fakeSupport).path ==
                "/Users/test/Library/Application Support/HorizonXI-on-Mac/runtimes/"
-               + "wine-cx-26.3.0-1/wine/bin/wine", "runtime path is not portable")
+               + "wine-cx-26.3.0-6/wine/bin/wine", "runtime path is not portable")
 
         let archive = try fixtureArchive(in: root)
         let support = root.appendingPathComponent("Application Support")

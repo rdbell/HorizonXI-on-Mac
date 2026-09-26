@@ -21,7 +21,7 @@ Two pieces, both already on this machine:
 | piece | where | what it does |
 | --- | --- | --- |
 | `x87sidecar-coop` | bundled in `FFXI-on-Mac.app/Contents/Resources` | the JIT; serves whoever handshakes with it |
-| patched CX wine | `~/Library/Application Support/HorizonXI-on-Mac/runtimes/wine-cx-26.3.0-1` | re-execs i386 processes through the sidecar and performs the handshake |
+| patched CX wine | `~/Library/Application Support/HorizonXI-on-Mac/runtimes/wine-cx-26.3.0-6` | re-execs i386 processes through the sidecar and performs the handshake |
 
 The wine side is [athei/wine `3804c30b`](https://github.com/athei/wine/commit/3804c30b), *"ntdll:
 HACK: Recognize ROSETTA_X87_PATH and attach x87sidecar cooperatively"*:
@@ -127,7 +127,7 @@ launcher logs which world it skipped and why.
   register-state reset when Rosetta restarts a block, and survival of asynchronous signals inside
   emitted code. With it, the pathological `FFXiMain.dll+0x3d638` geometry stall disappeared.
 * [athei/wine-build](https://github.com/athei/wine-build) — the prebuilt CX wine.
-  `cx-26.3.0-1` (2026-08-19) is pinned and installed by the app under Application Support.
+  `cx-26.3.0-6` (2026-09-25) is pinned and installed by the app under Application Support.
 * [athei/wine `cx-26-patched`](https://github.com/athei/wine/tree/cx-26-patched) — the wine patches,
   including `3804c30b` above.
 

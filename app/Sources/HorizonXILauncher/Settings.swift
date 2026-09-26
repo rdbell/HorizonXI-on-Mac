@@ -63,9 +63,8 @@ struct PerfSettings: Codable {
     var largeAddressAware = true
     /// Extra environment, one KEY=VALUE per line, for experiments.
     var extraEnv = ""
-    /// Which renderer pathway to run. Metal/DXVK reaches FFXI's 30 fps cap with the world
-    /// drawing correctly, so it is the default; Vulkan and Classic are fallbacks.
-    var renderer: Renderer = .metal
+    /// Which renderer pathway to run. mtld3d is the default; Classic (OpenGL) is the fallback.
+    var renderer: Renderer = .mtld3d
     /// Native presentation is opt-in and applies only to the Metal renderer.
     var nativeGameHost = false
 
@@ -100,7 +99,9 @@ struct PerfSettings: Codable {
         largeAddressAware = b(.largeAddressAware, true)
         narrateCutscenes = b(.narrateCutscenes, false)
         extraEnv = ((try? c.decodeIfPresent(String.self, forKey: .extraEnv)) ?? nil) ?? ""
-        renderer = ((try? c.decodeIfPresent(Renderer.self, forKey: .renderer)) ?? nil) ?? .metal
+        renderer = ((try? c.decodeIfPresent(Renderer.self, forKey: .renderer)) ?? nil) ?? .mtld3d
+        // DXVK and wined3d-Vulkan cannot run on the current game Wine; see Renderer.retired.
+        if renderer.retired { renderer = .mtld3d }
     }
 
     static func load() -> PerfSettings {
@@ -197,6 +198,12 @@ struct PerfSettings: Codable {
         }
         if disableAppNap { env["LSAppNapIsDisabled"] = "1" }
         if largeAddressAware { env["WINE_LARGE_ADDRESS_AWARE"] = "1" }
+        // From cx-26.3.0-3 the Wine runtime's compatdb.so prepends its own bundled mtld3d to
+        // every process's builtin search path. The renderer below supplies the game's d3d9
+        // itself, so keep the runtime on Wine's own d3d9 tree: otherwise our d3d9.dll pairs with
+        // the runtime's mtld3d.so and the first draw aborts in Metal (2026-09-26). Runtimes
+        // without compatdb ignore the variable.
+        env["WINE_COMPATDB"] = "v=3\nname=ffxi-on-mac;exe=*;d3d9=wined3d"
         for (k, v) in renderer.environment { env[k] = v }
         if renderer == .mtld3d && nativeGameHost {
             env["MTLD3D_CONFIG", default: ""] += ";present.nativeHost=true"
