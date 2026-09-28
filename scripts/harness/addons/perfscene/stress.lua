@@ -2,7 +2,16 @@
 local M = {}
 local bit = require('bit')
 local names = { lightsteady = true, crowdsteady = true, crowd = true, arrivals = true, camera = true,
+                addoncost = true,
                 aga8 = true, aga24 = true, aga40 = true }
+M.addoncost_order = {
+    {'addon','timers'}, {'addon','targetlines'}, {'addon','distance'}, {'addon','checker'},
+    {'addon','mobdb'}, {'addon','logs'}, {'addon','timestamp'}, {'addon','clock'},
+    {'addon','craftmon'}, {'addon','instantah'}, {'addon','macrofix'}, {'addon','nolock'},
+    {'addon','filterless'}, {'addon','hideconsole'},
+    {'plugin','Minimap'}, {'plugin','Nameplate'}, {'plugin','toon'}, {'plugin','Screenshot'},
+    {'plugin','HardwareMouse'}, {'plugin','Thirdparty'},
+}
 function M.is_scenario(name) return names[name] == true end
 function M.scenarios(world, entities)
     local result = {}
@@ -61,6 +70,19 @@ function M.scenarios(world, entities)
             add(2, 'fixture mixed 32', 'steady crowd requested')
             add(10, 'fixture_ready', 'steady crowd confirmed')
             phase('mixed-32', 96)
+        elseif name == 'addoncost' then
+            -- Diagnostic only: cumulative unloads under the steady crowd; the FPS step between
+            -- neighbouring phases is that add-on's marginal cost. fps, drawdistance, aspect and
+            -- PacketFlow stay loaded: unloading them changes the workload itself.
+            add(2, 'fixture mixed 32', 'steady crowd requested')
+            add(10, 'fixture_ready', 'steady crowd confirmed')
+            phase('all-loaded', 15)
+            for _, unload in ipairs(M.addoncost_order) do
+                local kind, id = unload[1], unload[2]
+                add(1, kind == 'addon' and '/addon unload '..id or '/unload '..id, id..' unloaded')
+                add(1.5, 'phase_start minus-'..id, 'minus-'..id..' settled')
+                add(8, 'phase_end minus-'..id, 'minus-'..id..' end')
+            end
         elseif name == 'crowd' then
             add(3, 'fixture_ready', 'empty fixture confirmed')
             phase('empty', 30)

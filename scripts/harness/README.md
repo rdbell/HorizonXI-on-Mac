@@ -494,3 +494,30 @@ fields, the 15-target packet cap, and full-pack server audits. Python checks cov
 completeness, frame continuity, cast order, Chainspell timing, snapshot restoration, and
 fixture ownership. Live validation results belong in the dated benchmark report; passing
 these tests alone does not establish in-game rendering or FPS.
+
+## Profiling and within-run comparisons (2026-09-28)
+
+`guest-hotspots.py RUN` reads a `--level standard` stress run (1 kHz guest-PC sampler) and reports,
+for one stress phase, per-module shares and the host wait syscalls; `--module M` lists hot offsets,
+`--lo/--hi/--callers N` walks callers of a leaf range, and `--dll/--pdb` rolls samples up to
+functions through `llvm-symbolizer`. Callers are leads: Rosetta unwinding of frameless leaves can
+return a stack address.
+
+`mtld3d-ab-report.py RUN` compares the two modes of a diagnostic mtld3d build that alternates in
+8-second blocks at Present (baseline, optimized, optimized, baseline) and logs
+`mtld3d::ab ... ab block=N optimized=true|false`. It reuses the conservative window selector of
+`inverse-ab-report.py` (whole frames, boundary exclusions, at least four windows per mode) and
+works for `crowdsteady` and `lightsteady`. Separate launches on a busy host varied by 5% or more;
+decisions in `docs/PERFORMANCE-2026-09-28.md` use this report.
+
+`--submit-draws N --pass-boundary on|off` sets the installed renderer's early submission for one
+run (16-1024); the spawn check verifies `render.submitDraws` and `render.submitAtPassBoundary`
+(packages before 2026-09-28 lack the key, which counts as off). The launcher default is 64 at pass
+boundaries.
+
+The `addoncost` stress scenario unloads add-ons and then plugins one at a time under the steady
+crowd (fps, drawdistance, aspect and PacketFlow stay loaded). Unloading changes the workload, so
+use it only to rank costs, and keep builds off the machine while it runs.
+
+A scene timeout with the game still alive saves `hang-<scene>.sample.txt` (native `sample`,
+3 seconds) in the capture before cleanup.

@@ -23,6 +23,10 @@ class RendererRunTests(unittest.TestCase):
             self.assertEqual(config["present.nativeHost"], str(native).lower())
             self.assertEqual(config["render.mergePasses"], "true")
             self.assertEqual(config["present.maxFps"], "0")
+        for boundary in (True, False):
+            config = dict(part.split("=", 1) for part in renderer.installed_config(64, True, boundary).split(";"))
+            self.assertEqual(config["render.submitDraws"], "64")
+            self.assertEqual(config["render.submitAtPassBoundary"], str(boundary).lower())
         for value in (-1, 513, 4096):
             with self.assertRaises(ValueError):
                 renderer.installed_config(value, True)

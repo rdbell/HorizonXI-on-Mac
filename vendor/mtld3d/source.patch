@@ -539,10 +539,10 @@ index 0000000..dd5362c
 +game directories on the next Play. The x87 sidecars and Wine runtime were not
 +changed. Source changes remain on `fix/window-resize`.
 diff --git a/mtld3d.conf b/mtld3d.conf
-index 8180614..4e434c1 100644
+index 8180614..a45869a 100644
 --- a/mtld3d.conf
 +++ b/mtld3d.conf
-@@ -191,6 +191,16 @@
+@@ -191,6 +191,21 @@
  
  # query.flushImmediate = false
  
@@ -552,6 +552,11 @@ index 8180614..4e434c1 100644
 +# preserved, at the cost of extra GPU store/load traffic at each split.
 +# render.submitDraws = 0
 +
++# With render.submitDraws, hold a due split until render target 0 changes, where
++# the open pass ends anyway, so the split adds no store/load traffic. A single pass
++# still splits after four times render.submitDraws draws.
++# render.submitAtPassBoundary = false
++
 +# Experimental: combine single-sample passes when texture dependencies allow it.
 +# Copies, clears, resolves, and visibility queries retain their ordering.
 +# render.mergePasses = false
@@ -559,7 +564,7 @@ index 8180614..4e434c1 100644
  
  #########
  # Depth #
-@@ -387,10 +397,9 @@
+@@ -387,10 +402,9 @@
  # In fullscreen the display mode picked in the game's own video options is
  # set (virtually, under Wine's EmulateModeset) and sizes the back buffer, and
  # this scale multiplies on top: a 1600x900 game setting at `0.75` rasterizes
@@ -573,7 +578,7 @@ index 8180614..4e434c1 100644
  #
  # A render target or depth buffer the game creates at exactly the size it
  # was given for the back buffer is treated as part of the same image and
-@@ -566,3 +575,9 @@
+@@ -566,3 +580,9 @@
  # Supported values: true | false
  
  # caps.dfFormats = true
@@ -1306,23 +1311,26 @@ index 0000000..878af3b
 +print("original=\(original) injected=\(value)")
 diff --git a/scripts/native-host/wine-native-host.patch b/scripts/native-host/wine-native-host.patch
 new file mode 100644
-index 0000000..be32448
+index 0000000..cd27627
 --- /dev/null
 +++ b/scripts/native-host/wine-native-host.patch
-@@ -0,0 +1,157 @@
+@@ -0,0 +1,160 @@
 +--- a/dlls/winemac.drv/cocoa_window.m
 ++++ b/dlls/winemac.drv/cocoa_window.m
-+@@ -1,3 +1,4 @@
++@@ -19,6 +19,8 @@
++  */
++ 
++ #include "config.h"
+++
 ++#import <objc/runtime.h>
-+ /*
-+  * MACDRV Cocoa window code
-+  *
-+@@ -391,9 +392,15 @@
-+     - (WineMetalView*) newMetalViewWithDevice:(id<MTLDevice>)device;
++ 
++ #define GL_SILENCE_DEPRECATION
++ #import <CoreVideo/CoreVideo.h>
++@@ -392,8 +394,14 @@
 + 
 + @end
-++
 + 
+++
 ++/* Native-host contract: this selector bypasses the request-first minimize action. */
 ++@interface NSWindow (MTLD3DNativeHost)
 ++- (void) nativeHostMiniaturizeFromWine:(id)sender;
@@ -1333,16 +1341,15 @@ index 0000000..be32448
 + 
 + @property (readwrite, nonatomic) BOOL disabled;
 + @property (readwrite, nonatomic) BOOL noForeground;
-+@@ -1002,7 +1009,18 @@
-+ @implementation WineWindow
++@@ -1010,6 +1018,17 @@
 + 
 +     static WineWindow* causing_becomeKeyWindow;
-++
++ 
 ++    - (NSWindow*) nativeHostWindow
 ++    {
 ++        return objc_getAssociatedObject(self, @selector(nativeHostWindow));
 ++    }
-+ 
+++
 ++    - (void) setNativeHostWindow:(NSWindow*)host
 ++    {
 ++        objc_setAssociatedObject(self, @selector(nativeHostWindow), host, OBJC_ASSOCIATION_ASSIGN);
@@ -1352,7 +1359,7 @@ index 0000000..be32448
 +     @synthesize disabled, noForeground, preventsAppActivation, floating, fullscreen, fakingClose, closing, latentParentWindow, hwnd, queue;
 +     @synthesize drawnSinceShown;
 +     @synthesize shapeChangedSinceLastDraw;
-+@@ -1185,6 +1203,7 @@
++@@ -1192,6 +1211,7 @@
 +         NSUInteger currentStyle = [self styleMask];
 +         NSUInteger newStyle = style_mask_for_features(wf) | (currentStyle & ~usedStyles);
 + 
@@ -1360,7 +1367,7 @@ index 0000000..be32448
 +         self.preventsAppActivation = wf->prevents_app_activation;
 + 
 +         if (newStyle != currentStyle)
-+@@ -1310,7 +1329,7 @@
++@@ -1310,7 +1330,7 @@
 +                 // Became floating.  If child of non-floating window, make that
 +                 // relationship latent.
 +                 WineWindow* parent = (WineWindow*)[self parentWindow];
@@ -1369,13 +1376,13 @@ index 0000000..be32448
 +                     [self becameIneligibleChild];
 +             }
 +             else
-+@@ -1333,7 +1352,22 @@
++@@ -1333,8 +1353,23 @@
 +             [[WineApplicationController sharedController] adjustWindowLevels];
 +         }
 + 
 +-        if (state->minimized_valid)
 ++        if (state->minimized_valid && self.nativeHostWindow)
-++        {
++         {
 ++            NSWindow* host = self.nativeHostWindow;
 ++            pendingMinimize = FALSE;
 ++            if (state->minimized && !host.miniaturized)
@@ -1390,10 +1397,11 @@ index 0000000..be32448
 ++            else if (!state->minimized && host.miniaturized) [host deminiaturize:nil];
 ++        }
 ++        else if (state->minimized_valid)
-+         {
+++        {
 +             macdrv_event_mask discard = event_mask_for_type(WINDOW_DID_UNMINIMIZE);
 + 
-+@@ -1565,7 +1599,7 @@
++             pendingMinimize = FALSE;
++@@ -1565,7 +1600,7 @@
 +     - (void) becameIneligibleChild
 +     {
 +         WineWindow* parent = (WineWindow*)[self parentWindow];
@@ -1402,7 +1410,7 @@ index 0000000..be32448
 +         {
 +             if (!parent->latentChildWindows)
 +                 parent->latentChildWindows = [[NSMutableArray alloc] init];
-+@@ -1955,6 +1989,8 @@
++@@ -1963,6 +1998,8 @@
 + 
 +     - (void) setFrameFromWine:(NSRect)contentRect
 +     {
@@ -1411,7 +1419,7 @@ index 0000000..be32448
 +         /* Origin is (left, top) in a top-down space.  Need to convert it to
 +            (left, bottom) in a bottom-up space. */
 +         [[WineApplicationController sharedController] flipRect:&contentRect];
-+@@ -2039,6 +2075,8 @@
++@@ -2047,6 +2084,8 @@
 + 
 +     - (void) setMacDrvParentWindow:(WineWindow*)parent
 +     {
@@ -1420,7 +1428,7 @@ index 0000000..be32448
 +         WineWindow* oldParent = (WineWindow*)[self parentWindow];
 +         if ((oldParent && oldParent != parent) || (!oldParent && latentParentWindow != parent))
 +         {
-+@@ -2454,7 +2492,7 @@
++@@ -2462,7 +2501,7 @@
 +     {
 +         if (causing_becomeKeyWindow == self) return YES;
 +         if (self.disabled || self.noForeground) return NO;
@@ -1429,7 +1437,7 @@ index 0000000..be32448
 + 
 +         // If a window's collectionBehavior says it participates in cycling,
 +         // it must return YES from this method to actually be eligible.
-+@@ -2463,6 +2501,7 @@
++@@ -2471,6 +2510,7 @@
 + 
 +     - (BOOL) canBecomeMainWindow
 +     {
@@ -1437,7 +1445,7 @@ index 0000000..be32448
 +         return [self canBecomeKeyWindow];
 +     }
 + 
-+@@ -2711,7 +2750,8 @@
++@@ -2719,7 +2759,8 @@
 +          */
 +         if (stage_manager_enabled())
 +         {
@@ -1447,7 +1455,7 @@ index 0000000..be32448
 +             return;
 +         }
 + 
-+@@ -4207,3 +4247,19 @@
++@@ -4222,3 +4263,19 @@
 +             [[window contentView] clearMarkedText];
 +     });
 + }
@@ -4148,10 +4156,10 @@ index 0000000..f7a926a
 +    );
 +}
 diff --git a/windows/core/src/config.rs b/windows/core/src/config.rs
-index b78574d..6850ec3 100644
+index b78574d..2386bb5 100644
 --- a/windows/core/src/config.rs
 +++ b/windows/core/src/config.rs
-@@ -138,6 +138,16 @@ pub struct Mtld3dConfig {
+@@ -138,6 +138,22 @@ pub struct Mtld3dConfig {
      /// fence every loading-screen upload batch that way and the wait costs
      /// seconds per load. File key: `query.flushImmediate`.
      pub query_flush_immediate: bool,
@@ -4161,6 +4169,12 @@ index b78574d..6850ec3 100644
 +    /// depth and does not present. Small values add render-pass store/load
 +    /// traffic. Default: `0`. File key: `render.submitDraws`.
 +    pub render_submit_draws: u32,
++    /// Defer a due `render.submitDraws` continuation to the next render-target-0 change.
++    ///
++    /// The open pass ends there anyway, so the split adds no attachment store or reload; a
++    /// single long pass still splits after four times the threshold. Default: `false`. File
++    /// key: `render.submitAtPassBoundary`.
++    pub render_submit_at_pass_boundary: bool,
 +    /// Merge independent single-sample passes. Experimental, default false.
 +    ///
 +    /// File key: `render.mergePasses`.
@@ -4168,7 +4182,7 @@ index b78574d..6850ec3 100644
      /// A newly bound same-size depth-stencil texture inherits the previous one's contents.
      ///
      /// D3D9-era drivers commonly backed all equal-size depth-stencil
-@@ -217,6 +227,8 @@ pub struct Mtld3dConfig {
+@@ -217,6 +233,8 @@ pub struct Mtld3dConfig {
      /// otherwise-unthrottled free-run. `0` = uncapped. Default: `0`.
      /// File key: `present.maxFps`.
      pub present_max_fps: u32,
@@ -4177,16 +4191,17 @@ index b78574d..6850ec3 100644
      /// Render resolution as a percentage of the reported back buffer, `MetalFX`-upscaled.
      ///
      /// `100` (the default) renders at the size the game sees, which is an
-@@ -309,6 +321,8 @@ impl Default for Mtld3dConfig {
+@@ -309,6 +327,9 @@ impl Default for Mtld3dConfig {
              bytecode_dump_dir: String::new(),
              skip_shaders: Vec::new(),
              query_flush_immediate: false,
 +            render_submit_draws: 0,
++            render_submit_at_pass_boundary: false,
 +            render_merge_passes: false,
              depth_alias_same_size: false,
              buffer_ignore_lock_bounds: false,
              vbib_retention_cap_bytes: 512 * 1024 * 1024,
-@@ -322,6 +336,7 @@ impl Default for Mtld3dConfig {
+@@ -322,6 +343,7 @@ impl Default for Mtld3dConfig {
              },
              pagebox_pool_cap_bytes: 128 * 1024 * 1024,
              present_max_fps: 0,
@@ -4194,7 +4209,7 @@ index b78574d..6850ec3 100644
              render_scale_percent: 100,
              adapter_spoof: AdapterSpoof::None,
              df_formats: true,
-@@ -453,6 +468,11 @@ pub fn log_options(cfg: &Mtld3dConfig) {
+@@ -453,6 +475,15 @@ pub fn log_options(cfg: &Mtld3dConfig) {
          target: crate::LOG_TARGET,
          "config: query.flushImmediate = {}", cfg.query_flush_immediate
      );
@@ -4202,11 +4217,15 @@ index b78574d..6850ec3 100644
 +        target: crate::LOG_TARGET,
 +        "config: render.submitDraws = {}", cfg.render_submit_draws
 +    );
++    info!(
++        target: crate::LOG_TARGET,
++        "config: render.submitAtPassBoundary = {}", cfg.render_submit_at_pass_boundary
++    );
 +    info!(target: crate::LOG_TARGET, "config: render.mergePasses = {}", cfg.render_merge_passes);
      info!(
          target: crate::LOG_TARGET,
          "config: depth.aliasSameSize = {}", cfg.depth_alias_same_size
-@@ -478,7 +498,7 @@ pub fn log_options(cfg: &Mtld3dConfig) {
+@@ -478,7 +509,7 @@ pub fn log_options(cfg: &Mtld3dConfig) {
      );
      info!(
          target: crate::LOG_TARGET,
@@ -4215,7 +4234,7 @@ index b78574d..6850ec3 100644
      );
      info!(
          target: crate::LOG_TARGET,
-@@ -536,6 +556,12 @@ fn apply(cfg: &mut Mtld3dConfig, source: &str, key: &str, value: &str) {
+@@ -536,6 +567,15 @@ fn apply(cfg: &mut Mtld3dConfig, source: &str, key: &str, value: &str) {
          "debug.bytecodeDumpDir" => value.clone_into(&mut cfg.bytecode_dump_dir),
          "debug.skipShaders" => cfg.skip_shaders = parse_hex_list(value),
          "query.flushImmediate" => assign_bool(source, key, value, &mut cfg.query_flush_immediate),
@@ -4224,11 +4243,14 @@ index b78574d..6850ec3 100644
 +            Err(_) => log::warn!(target: crate::LOG_TARGET,
 +                "{source}: invalid render.submitDraws {value:?}, expected a nonnegative integer"),
 +        },
++        "render.submitAtPassBoundary" => {
++            assign_bool(source, key, value, &mut cfg.render_submit_at_pass_boundary);
++        }
 +        "render.mergePasses" => assign_bool(source, key, value, &mut cfg.render_merge_passes),
          "depth.aliasSameSize" => assign_bool(source, key, value, &mut cfg.depth_alias_same_size),
          "buffer.ignoreLockBounds" => {
              assign_bool(source, key, value, &mut cfg.buffer_ignore_lock_bounds);
-@@ -549,6 +575,7 @@ fn apply(cfg: &mut Mtld3dConfig, source: &str, key: &str, value: &str) {
+@@ -549,6 +589,7 @@ fn apply(cfg: &mut Mtld3dConfig, source: &str, key: &str, value: &str) {
          "memory.pageboxPoolCapMB" => {
              assign_cap_mb(source, key, value, &mut cfg.pagebox_pool_cap_bytes);
          }
@@ -4448,10 +4470,29 @@ index 00692df..9182d68 100644
              mtld3d_shared::log_once_warn!(target: super::LOG_TARGET, "dxso FF: unknown material source {source} → MCS_MATERIAL");
          }
 diff --git a/windows/core/src/ff_state.rs b/windows/core/src/ff_state.rs
-index 9eab569..68edc8f 100644
+index 9eab569..9fe5678 100644
 --- a/windows/core/src/ff_state.rs
 +++ b/windows/core/src/ff_state.rs
-@@ -1743,7 +1743,6 @@ fn build_vs_flags(
+@@ -925,12 +925,16 @@ impl FfState {
+     #[must_use]
+     pub fn inverse(mat: &D3DMATRIX) -> Option<D3DMATRIX> {
+         /// `a * d - b * c`, the 2x2 minor.
++        ///
++        /// Array sums, not `mul_add`: on the no-FMA i686 baseline `mul_add` is a ucrtbase
++        /// `fmaf` libcall, and Wine's software `fmaf` cost about 3% of the game thread in a
++        /// crowd, since this inverse is rebuilt with every vertex-shader constant block.
+         fn det2(a: f32, b: f32, c: f32, d: f32) -> f32 {
+-            a.mul_add(d, -(b * c))
++            [a * d, -(b * c)].iter().sum()
+         }
+         /// `a0 * x0 + a1 * x1 + a2 * x2`, one cofactor row.
+         fn sum3(a0: f32, x0: f32, a1: f32, x1: f32, a2: f32, x2: f32) -> f32 {
+-            a0.mul_add(x0, a1.mul_add(x1, a2 * x2))
++            [a0 * x0, a1 * x1, a2 * x2].iter().sum()
+         }
+         let m = &mat.m;
+         // Cofactor expansion over the 2x2 minors of rows 0-1 (`s`) and rows
+@@ -1743,7 +1747,6 @@ fn build_vs_flags(
      let mut flags = FfVsFlags::empty();
      flags.set(FfVsFlags::HAS_NORMAL, layout.has_normal());
      flags.set(FfVsFlags::HAS_COLOR0, layout.has_color0());
@@ -5248,20 +5289,35 @@ index bd7aeaa..8587a5b 100644
          // WoW's own `WM_SIZE` handler (about to run via the
          // `CallWindowProcW` tail below) will call `ShowCursor(FALSE)`
 diff --git a/windows/d3d9/src/device.rs b/windows/d3d9/src/device.rs
-index 9f0ab21..cae7f80 100644
+index 9f0ab21..1e53bc6 100644
 --- a/windows/d3d9/src/device.rs
 +++ b/windows/d3d9/src/device.rs
-@@ -431,6 +431,9 @@ pub struct DeviceInner {
+@@ -298,6 +298,12 @@ bitflags::bitflags! {
+     }
+ }
+ 
++/// Mid-pass cap on a held continuation, in multiples of `render.submitDraws`.
++///
++/// With `render.submitAtPassBoundary`, a pass that never changes render target 0 still sends
++/// its work after this many thresholds' worth of draws.
++const PASS_BOUNDARY_SUBMIT_CAP: u32 = 4;
++
+ pub struct DeviceInner {
+     // Metal handles / presentation.
+     device_handle: MetalHandle<MTLDeviceKind>,
+@@ -431,6 +437,11 @@ pub struct DeviceInner {
      /// the same `MTLDevice`.
      prewarm: crate::shader_prewarm::PrewarmHandle,
      current_frame: FrameData,
 +    /// Optional continuation cadence; zero retains whole-frame submission.
 +    render_submit_draws: u32,
 +    pending_draw_count: u32,
++    /// Hold a due continuation until render target 0 changes (see `split_at_pass_boundary`).
++    submit_at_pass_boundary: bool,
      /// Shared with the encoder thread and the unix completion handler.
      ///
      /// The frame's submit seq is stamped in `stamp_and_swap`; this atomic
-@@ -1402,6 +1405,7 @@ impl DeviceInner {
+@@ -1402,6 +1413,7 @@ impl DeviceInner {
      /// the `submit_seq` it carries. Shared between `Present` and
      /// `flush_current_frame_blocking`.
      fn stamp_and_swap(&mut self, new_frame: FrameData, no_present: bool) -> (FrameData, u64) {
@@ -5269,7 +5325,7 @@ index 9f0ab21..cae7f80 100644
          let mut frame = core::mem::replace(&mut self.current_frame, new_frame);
          // An F12 run ends with the frame the closing `Present` submits. A
          // mid-frame flush sends the marked frame out early, so its stop mark
-@@ -1837,7 +1841,18 @@ impl DeviceInner {
+@@ -1837,7 +1849,45 @@ impl DeviceInner {
      /// Used by the hot draw path to emit `Op::Set*` + `Op::Draw` without
      /// per-op heap alloc.
      pub fn push_op_inline(&mut self, op: crate::encoder::Op) {
@@ -5277,7 +5333,17 @@ index 9f0ab21..cae7f80 100644
          self.current_frame.push_op_inline(op);
 +        if self.render_submit_draws != 0 && is_draw {
 +            self.pending_draw_count += 1;
-+            if self.pending_draw_count >= self.render_submit_draws {
++            // Splitting mid-pass costs the GPU a store and a reload of every attachment of
++            // the open pass (a full-size target each time); when the continuation waits for
++            // render target 0 to change, that pass boundary exists anyway. The cap keeps a
++            // single long pass submitting early.
++            let due = if self.submit_at_pass_boundary {
++                self.render_submit_draws
++                    .saturating_mul(PASS_BOUNDARY_SUBMIT_CAP)
++            } else {
++                self.render_submit_draws
++            };
++            if self.pending_draw_count >= due {
 +                // Use the existing continuation rules and bounded channel.
 +                // Readback still drains this queue and waits for GPU completion.
 +                let fresh = self.fresh_frame();
@@ -5285,10 +5351,27 @@ index 9f0ab21..cae7f80 100644
 +                self.encoder.send_frame(frame);
 +            }
 +        }
++    }
++
++    /// Send the due continuation before render target 0 changes to `next`.
++    ///
++    /// With `render.submitAtPassBoundary`, a continuation that `push_op_inline` found due
++    /// waits for this point: the open pass ends here regardless, so submitting now adds no
++    /// attachment store or reload. Rebinding the same surface is not a boundary.
++    pub fn split_at_pass_boundary(&mut self, next: *mut Direct3DSurface9) {
++        if self.submit_at_pass_boundary
++            && self.render_submit_draws != 0
++            && self.pending_draw_count >= self.render_submit_draws
++            && self.bound_rt.render_target(0) != next
++        {
++            let fresh = self.fresh_frame();
++            let (frame, _) = self.stamp_and_swap(fresh, true);
++            self.encoder.send_frame(frame);
++        }
      }
  
      /// Queue an eager `MTLTexture` create on the current frame.
-@@ -2384,143 +2399,6 @@ impl DeviceInner {
+@@ -2384,143 +2434,6 @@ impl DeviceInner {
              crate::fullscreen::leave(&saved);
          }
      }
@@ -5432,16 +5515,17 @@ index 9f0ab21..cae7f80 100644
  }
  
  // ── IDirect3DDevice9 COM object ──
-@@ -2644,6 +2522,8 @@ impl Direct3DDevice9 {
+@@ -2644,6 +2557,9 @@ impl Direct3DDevice9 {
              encoder: info.encoder,
              prewarm: info.prewarm,
              current_frame: info.current_frame,
 +            render_submit_draws: crate::config::CONFIG.render_submit_draws,
 +            pending_draw_count: 0,
++            submit_at_pass_boundary: crate::config::CONFIG.render_submit_at_pass_boundary,
              coherent_seq,
              upload_coherent_seq,
              failed_submit_seq,
-@@ -3763,6 +3643,45 @@ extern "system" fn device_reset(this: *mut c_void, present_params: *mut c_void)
+@@ -3763,6 +3679,45 @@ extern "system" fn device_reset(this: *mut c_void, present_params: *mut c_void)
          dev.flags.insert(DeviceFlags::NOT_RESET);
          return D3DERR_INVALIDCALL;
      }
@@ -5487,7 +5571,7 @@ index 9f0ab21..cae7f80 100644
      // Window transition first, then size against the window it produced: a
      // fullscreen or maximized Reset takes its back-buffer size from the client
      // rect, which is only final once the window has moved.
-@@ -3771,6 +3690,7 @@ extern "system" fn device_reset(this: *mut c_void, present_params: *mut c_void)
+@@ -3771,6 +3726,7 @@ extern "system" fn device_reset(this: *mut c_void, present_params: *mut c_void)
      } else {
          pp.device_window
      };
@@ -5495,7 +5579,7 @@ index 9f0ab21..cae7f80 100644
      apply_reset_window_mode(dev, &pp);
      crate::direct3d9::resolve_backbuffer_dims(target_window as u64, &mut pp);
      if pp.windowed != 0 && pp.back_buffer_format == 0 {
-@@ -3792,6 +3712,7 @@ extern "system" fn device_reset(this: *mut c_void, present_params: *mut c_void)
+@@ -3792,6 +3748,7 @@ extern "system" fn device_reset(this: *mut c_void, present_params: *mut c_void)
              pp.back_buffer_width, pp.back_buffer_height, pp.back_buffer_format,
          );
          dev.flags.insert(DeviceFlags::NOT_RESET);
@@ -5503,7 +5587,7 @@ index 9f0ab21..cae7f80 100644
          return D3DERR_INVALIDCALL;
      }
  
-@@ -3802,25 +3723,6 @@ extern "system" fn device_reset(this: *mut c_void, present_params: *mut c_void)
+@@ -3802,25 +3759,6 @@ extern "system" fn device_reset(this: *mut c_void, present_params: *mut c_void)
      pp_in.back_buffer_count = pp.back_buffer_count;
      pp_in.back_buffer_format = pp.back_buffer_format;
  
@@ -5529,7 +5613,7 @@ index 9f0ab21..cae7f80 100644
      let multi_sample_changed = new_sample_count != dev.backbuffer_sample_count;
      dev.set_backbuffer_multi_sample(
          pp.multi_sample_type,
-@@ -3830,15 +3732,6 @@ extern "system" fn device_reset(this: *mut c_void, present_params: *mut c_void)
+@@ -3830,15 +3768,6 @@ extern "system" fn device_reset(this: *mut c_void, present_params: *mut c_void)
      let resized = pp.back_buffer_width != dev.backbuffer_width
          || pp.back_buffer_height != dev.backbuffer_height
          || multi_sample_changed;
@@ -5545,7 +5629,7 @@ index 9f0ab21..cae7f80 100644
      // debug, not info — fires per-frame during a window drag.
      if resized {
          debug!(
-@@ -3851,21 +3744,19 @@ extern "system" fn device_reset(this: *mut c_void, present_params: *mut c_void)
+@@ -3851,21 +3780,19 @@ extern "system" fn device_reset(this: *mut c_void, present_params: *mut c_void)
          dev.depth_stencil_format = new_depth_format;
          if let Err(hr) = reset_recreate_resources(dev, &pp) {
              dev.flags.insert(DeviceFlags::NOT_RESET);
@@ -5571,7 +5655,7 @@ index 9f0ab21..cae7f80 100644
              return hr;
          }
          // Deliver every op queued since the last Present before the reseed
-@@ -3903,8 +3794,7 @@ extern "system" fn device_reset(this: *mut c_void, present_params: *mut c_void)
+@@ -3903,8 +3830,7 @@ extern "system" fn device_reset(this: *mut c_void, present_params: *mut c_void)
      //    submit a freed MTLTexture pointer (status=0xc0000005 on the
      //    unix side). Runs before the state defaults: `reset_to_defaults`
      //    pushes ops (default viewport, unbinds), and pushing them first
@@ -5581,7 +5665,7 @@ index 9f0ab21..cae7f80 100644
      dev.reseed_current_frame();
  
      // 8. Reset device state to D3D9 defaults. Cursor + silent-write
-@@ -3931,8 +3821,22 @@ extern "system" fn device_reset(this: *mut c_void, present_params: *mut c_void)
+@@ -3931,8 +3857,22 @@ extern "system" fn device_reset(this: *mut c_void, present_params: *mut c_void)
  fn apply_reset_window_mode(dev: &mut DeviceInner, pp: &mtld3d_types::D3DPRESENT_PARAMETERS) {
      if pp.windowed != 0 {
          dev.leave_fullscreen();
@@ -5604,7 +5688,17 @@ index 9f0ab21..cae7f80 100644
      // A Reset may retarget the device at another window. The one we took over
      // is the one we give back, so a retarget is a leave followed by an enter.
      let target = if pp.device_window == 0 {
-@@ -10353,10 +10257,7 @@ fn emit_snapshot_deltas(obj: &Direct3DDevice9) {
+@@ -8131,6 +8071,9 @@ extern "system" fn device_set_render_target(
+     }
+     dev.cur_autogen_rt_ids[slot] = new_autogen;
+ 
++    if slot == 0 {
++        dev.split_at_pass_boundary(surf);
++    }
+     dev.bound_rt_mut()
+         .replace_render_target(slot, surf, desc.width, desc.height);
+ 
+@@ -10353,10 +10296,7 @@ fn emit_snapshot_deltas(obj: &Direct3DDevice9) {
          let decl_ptr = dev.vertex_decl();
          let (resolved, vdecl_hash, ff_vs_layout) = if decl_ptr.is_null() {
              let (elements, _fvf_stride) = fvf_to_elements(fvf);
@@ -5616,7 +5710,7 @@ index 9f0ab21..cae7f80 100644
              // Pre-transformed (POSITIONT/XYZRHW) layouts bypass a bound VS —
              // D3D9 runs the FF pre-transformed path regardless, even when a
              // VS is still bound — so the attrs must resolve for the FF VS too.
-@@ -10372,7 +10273,7 @@ fn emit_snapshot_deltas(obj: &Direct3DDevice9) {
+@@ -10372,7 +10312,7 @@ fn emit_snapshot_deltas(obj: &Direct3DDevice9) {
              // SAFETY: non-null check passed; refcount holds it live.
              let decl = unsafe { &*decl_ptr };
              let elements = decl.inner().elements();
@@ -5625,7 +5719,7 @@ index 9f0ab21..cae7f80 100644
              // See the FVF arm: POSITIONT bypasses a bound VS.
              let resolved = if bound_vertex_shader.is_null() || layout.has_rhw() {
                  resolve_attrs_for_ff(elements)
-@@ -11479,7 +11380,7 @@ extern "system" fn device_set_vertex_declaration(this: *mut c_void, decl: *mut c
+@@ -11479,7 +11419,7 @@ extern "system" fn device_set_vertex_declaration(this: *mut c_void, decl: *mut c
          // unconditionally.
          let new_rhw = !new.is_null()
              // SAFETY: non-null checked; the slot adopted a ref above.
@@ -6580,7 +6674,7 @@ index f138aa3..75164f6 100644
 +    assert_eq!((after.width, after.height), (800, 600));
 +}
 diff --git a/windows/tests/tests/render_target.rs b/windows/tests/tests/render_target.rs
-index 405966b..402f89f 100644
+index 405966b..53f125c 100644
 --- a/windows/tests/tests/render_target.rs
 +++ b/windows/tests/tests/render_target.rs
 @@ -226,6 +226,61 @@ fn render_to_texture_then_sample() {
@@ -6694,7 +6788,7 @@ index 405966b..402f89f 100644
  /// Assert each RGB channel of `got` is within `tolerance` of `expected` (alpha ignored).
  fn assert_rgb_close(got: u32, expected: u32, tolerance: i32, context: &str) {
      let channel = |c: u32, shift: u32| i32::try_from((c >> shift) & 0xff).unwrap_or(0);
-@@ -4880,3 +4977,48 @@ fn get_render_target_data_from_a_cube_face_reads_that_face() {
+@@ -4880,3 +4977,170 @@ fn get_render_target_data_from_a_cube_face_reads_that_face() {
          "face 0 still reads its own fill"
      );
  }
@@ -6742,6 +6836,128 @@ index 405966b..402f89f 100644
 +        assert_eq!(h.read_pixel(32, 32), color, "retained target contents");
 +    }
 +    assert_eq!(h.set_render_target(0, &backbuffer), 0);
++}
++
++/// Two triangles covering clip `x0..x1` across the full height, sampling `u0..u1`.
++fn textured_band(x0: f32, x1: f32, u0: f32, u1: f32) -> [TexturedVertex; 6] {
++    let v = |x: f32, y: f32, u: f32, v: f32| TexturedVertex {
++        x,
++        y,
++        z: 0.5,
++        color: WHITE,
++        u,
++        v,
++    };
++    [
++        v(x0, 1.0, u0, 0.0),
++        v(x1, 1.0, u1, 0.0),
++        v(x0, -1.0, u0, 1.0),
++        v(x1, 1.0, u1, 0.0),
++        v(x1, -1.0, u1, 1.0),
++        v(x0, -1.0, u0, 1.0),
++    ]
++}
++
++/// FFXI's character pattern: draw into A, then B, then sample B into A, then overwrite B.
++///
++/// With `render.submitAtPassBoundary` every render-target change below sends a continuation
++/// (`submitDraws=1`), so each target's content must survive the split, and B's later
++/// overwrite must not reach the A pass that sampled it before the split.
++#[test]
++fn pass_boundary_submission_keeps_ping_pong_targets() {
++    let merged = format!(
++        "{};render.submitDraws=1;render.submitAtPassBoundary=true",
++        std::env::var("MTLD3D_CONFIG").unwrap_or_default()
++    );
++    // SAFETY: nextest gives each test its own process; no harness threads exist yet.
++    unsafe { std::env::set_var("MTLD3D_CONFIG", merged) };
++
++    let h = Harness::new();
++    let make = || {
++        h.create_texture(
++            256,
++            256,
++            1,
++            D3DUSAGE_RENDERTARGET,
++            D3DFMT_A8R8G8B8,
++            D3DPOOL_DEFAULT,
++        )
++    };
++    let (a, b) = (make(), make());
++    let (a_surface, b_surface) = (a.surface_level(0), b.surface_level(0));
++    let backbuffer = h.render_target(0);
++    for (state, value) in [
++        (D3DTSS_COLOROP, D3DTOP_MODULATE),
++        (D3DTSS_COLORARG1, D3DTA_TEXTURE),
++        (D3DTSS_COLORARG2, D3DTA_DIFFUSE),
++        (D3DTSS_ALPHAOP, D3DTOP_SELECTARG1),
++        (D3DTSS_ALPHAARG1, D3DTA_TEXTURE),
++    ] {
++        assert_eq!(h.set_texture_stage_state(0, state, value), 0, "TSS");
++    }
++    for (state, value) in [
++        (D3DSAMP_MINFILTER, D3DTEXF_POINT),
++        (D3DSAMP_MAGFILTER, D3DTEXF_POINT),
++        (D3DSAMP_ADDRESSU, D3DTADDRESS_CLAMP),
++        (D3DSAMP_ADDRESSV, D3DTADDRESS_CLAMP),
++    ] {
++        assert_eq!(h.set_sampler_state(0, state, value), 0, "sampler");
++    }
++    assert_eq!(h.set_render_state(D3DRS_LIGHTING, 0), 0, "lighting off");
++    let fill = |target: &Surface<'_>, color: u32| {
++        assert_eq!(h.set_render_target(0, target), 0, "bind target");
++        assert_eq!(h.clear_texture(0), 0, "no texture for a fill");
++        assert_eq!(h.set_fvf(D3DFVF_XYZ | D3DFVF_DIFFUSE), 0, "SetFVF");
++        assert_eq!(
++            h.draw_primitive_up(D3DPT_TRIANGLELIST, 1, &fullscreen_triangle(color)),
++            0,
++            "fill"
++        );
++    };
++
++    assert_eq!(h.begin_scene(), 0);
++    fill(&a_surface, RED);
++    fill(&b_surface, GREEN);
++    // Left half of A takes B's green; the right half keeps A's red.
++    assert_eq!(h.set_render_target(0, &a_surface), 0, "back to A");
++    assert_eq!(h.set_texture(0, &b), 0, "sample B");
++    assert_eq!(
++        h.set_fvf(D3DFVF_XYZ | D3DFVF_DIFFUSE | D3DFVF_TEX1),
++        0,
++        "SetFVF TEX1"
++    );
++    assert_eq!(
++        h.draw_primitive_up(D3DPT_TRIANGLELIST, 2, &textured_band(-1.0, 0.0, 0.0, 0.5)),
++        0,
++        "composite"
++    );
++    // Overwriting B after A consumed it must not change A.
++    fill(&b_surface, BLUE);
++    assert_eq!(h.set_render_target(0, &backbuffer), 0, "backbuffer");
++    assert_eq!(h.set_texture(0, &a), 0, "sample A");
++    assert_eq!(
++        h.set_fvf(D3DFVF_XYZ | D3DFVF_DIFFUSE | D3DFVF_TEX1),
++        0,
++        "SetFVF TEX1"
++    );
++    assert_eq!(
++        h.draw_primitive_up(D3DPT_TRIANGLELIST, 2, &textured_band(-1.0, 1.0, 0.0, 1.0)),
++        0,
++        "show A"
++    );
++    assert_eq!(h.end_scene(), 0);
++    assert_eq!(h.present(), 0);
++
++    assert_eq!(
++        h.read_pixel(160, 240),
++        GREEN,
++        "A lost the composite of B across the split"
++    );
++    assert_eq!(
++        h.read_pixel(480, 240),
++        RED,
++        "A lost its own content across the split"
++    );
 +}
 diff --git a/windows/tests/tests/streams.rs b/windows/tests/tests/streams.rs
 index 51fcfaa..da35c1e 100644

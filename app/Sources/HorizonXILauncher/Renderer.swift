@@ -196,7 +196,9 @@ enum RendererSetup {
 
     // Start rendering while the game prepares the rest of the frame. Readbacks
     // retain their ordinary synchronization, and Extra environment can override it.
-    static let mtld3dConfig = "color.hdr.enable=false;render.scale=1;present.maxFps=0;render.mergePasses=true;render.submitDraws=512"
+    // Work goes to the GPU every 64 draws, at the next render-target change so the split
+    // adds no attachment store/reload (see docs/PERFORMANCE-2026-09-28.md).
+    static let mtld3dConfig = "color.hdr.enable=false;render.scale=1;present.maxFps=0;render.mergePasses=true;render.submitDraws=64;render.submitAtPassBoundary=true"
     static let mtld3dFiles = ["native/i386-windows/d3d9.dll",
                             "wine/i386-windows/mtld3d.dll", "wine/x86_64-unix/mtld3d.so",
                             "prefix-markers/syswow64/mtld3d.dll", "prefix-markers/system32/mtld3d.dll"]

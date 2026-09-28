@@ -18,6 +18,11 @@ EXPECTED = {
     'camera': ['facing-crowd'] + [x for n, h in enumerate((0,64,128,192), 1)
                                 for x in (f'turn-{n}', f'heading-{h}')],
     **{f'aga{n}': ['aga-idle','aga-round-1','aga-round-2'] for n in (8,24,40)},
+    # Diagnostic: cumulative add-on/plugin unloads under the steady crowd (see stress.lua).
+    'addoncost': ['all-loaded'] + ['minus-' + n for n in (
+        'timers', 'targetlines', 'distance', 'checker', 'mobdb', 'logs', 'timestamp', 'clock',
+        'craftmon', 'instantah', 'macrofix', 'nolock', 'filterless', 'hideconsole',
+        'Minimap', 'Nameplate', 'toon', 'Screenshot', 'HardwareMouse', 'Thirdparty')],
 }
 
 
@@ -54,7 +59,7 @@ def phases(frames, markers, scenario, distance=20):
             errors.append('fixture changed inside settled phase')
         summary=effects.frame_summary(frames,first,last,expected_zone)
         if not summary.get('valid'): errors.append('missing or discontinuous frame data')
-        if not name.startswith(('turn-','arrival-','aga-round-')) and last-first<29:
+        if scenario != 'addoncost' and not name.startswith(('turn-','arrival-','aga-round-')) and last-first<29:
             # Warm arrival and discrete heading holds intentionally last 20 seconds.
             if not name.startswith(('heading-','arrival-warm-')): errors.append('settled phase too short')
         target_count = (int(scenario[3:]) if scenario.startswith('aga') else

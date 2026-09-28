@@ -4,25 +4,26 @@
   "perf": false,
   "frame_pointers": false,
   "rust": "1.97.1",
-  "created_utc": "2026-09-13T05:37:39.933173+00:00",
-  "patch_sha256": "05806b7d868664778dad5ca23bf896307fc2741b6cb167c9e9395dac7cc61f19",
+  "created_utc": "2026-09-28T13:39:06.672258+00:00",
+  "patch_sha256": "2b3e86f72c62d1ff2a909e864112ff8f93963ddb4d3d03c78ce0645728588a9f",
   "files": {
-    "native/i386-windows/d3d9.dll": "4a159a9b023c0c685dec4a5255c7bfb38ad84983cf66b3938270754a4e53a9e7",
-    "wine/i386-windows/mtld3d.dll": "88328434b273c72525380e1f271e07bf718b47ee8e48623a82e1ce0ed6191a82",
+    "native/i386-windows/d3d9.dll": "98ad9300a7117b6ca4b101f8c1537c4c8ccf31dc335c0d34a47c1f85a7d0edbf",
+    "wine/i386-windows/mtld3d.dll": "a4ed6ee37ba00e08de0e1b5bca6f683c38c0b99a5ff8acab2ea421c9a2eafbbb",
     "wine/x86_64-unix/mtld3d.so": "dde236e7b994147325f80d81e8aaa891e31e75dc66c09016fe11d7b6fb6def33",
     "prefix-markers/syswow64/mtld3d.dll": "a74c0363a54b92db5deb731533e27d1248b9e51bc770dac281f8925e518123dc",
     "prefix-markers/system32/mtld3d.dll": "602de35e20ca24d8d44eddc4e7a1d24a428e80fedc8aa012666cb35caa24a1af"
   },
   "parent_patch_sha256": "71657aaaad937afaaf799980e220e0f641075155bb5b6060e7ee4b5021866dde",
-  "change": "Space visibility reconciliation and long-wait diagnostics",
-  "source_head": "6cc0561815bb83d00d96f833ee84a1600736bdc6",
-  "source_dirty": true,
+  "change": "View inverse without the fmaf libcall (array sums); render.submitAtPassBoundary (PE only; native library unchanged)",
+  "source_head": "8f3b957691fc42a8282d5a67ddcfb4de65df7b36",
+  "source_dirty": false,
   "validation": {
-    "tests": "2161 passed",
-    "desktop_focus_probes": "12 passed",
-    "local_hxitest_space_round_trips": "6 passed",
-    "original_natural_freeze": "not reproduced",
-    "check_gate": "existing formatting/native-clippy/audit findings remain"
+    "core_types_unit": "1040 + 4 passed (native)",
+    "clippy_pe_i686": "clean",
+    "audit": "no findings in changed files (9 pre-existing, same as 930087e)",
+    "e2e_i686_targeted": "21 passed (clip, transform, inverse, light, fog, early_submission, pass_boundary, render_to_texture, readback, depth); successive_submits_preserve_up_data_across_readback_continuations fails identically on unmodified 930087e",
+    "game": "local LSB Hxitest ABBA: see docs/PERFORMANCE-2026-09-28.md",
+    "e2e_full": "i686 and x86_64: 454 passed each; successive_submits_preserve_up_data_across_readback_continuations excluded (fails identically on unmodified 930087e)"
   },
   "parent_baseline": {
     "name": "native-picture-controls-20260913",
@@ -50,5 +51,20 @@
   "baseline": {
     "name": "space-resume-early-submit-20260915",
     "record": "docs/baselines/space-resume-early-submit-20260915.json"
+  },
+  "pe_rebuilt_from": "rdbell/mtld3d development 8f3b957; production profile, rust 1.97.1",
+  "previous_build": {
+    "change": "Space visibility reconciliation and long-wait diagnostics",
+    "source_head": "6cc0561815bb83d00d96f833ee84a1600736bdc6",
+    "source_dirty": true,
+    "patch_sha256": "05806b7d868664778dad5ca23bf896307fc2741b6cb167c9e9395dac7cc61f19",
+    "created_utc": "2026-09-13T05:37:39.933173+00:00",
+    "validation": {
+      "tests": "2161 passed",
+      "desktop_focus_probes": "12 passed",
+      "local_hxitest_space_round_trips": "6 passed",
+      "original_natural_freeze": "not reproduced",
+      "check_gate": "existing formatting/native-clippy/audit findings remain"
+    }
   }
 }

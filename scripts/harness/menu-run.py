@@ -513,7 +513,16 @@ class MenuRun:
                     return True
             time.sleep(1)
         self.event(f"{label}: timed out")
+        self.sample_hang(label)
         return False
+
+    def sample_hang(self, label: str) -> None:
+        """Keep native stacks of a live game that stopped presenting, before cleanup kills it."""
+        if self.session_dir is None or self.game_pid is None or not process_exists(self.game_pid):
+            return
+        path = self.session_dir / f"hang-{label.replace(' ', '-')}.sample.txt"
+        result = run(["/usr/bin/sample", str(self.game_pid), "3", "-mayDie", "-file", str(path)], timeout=60)
+        self.event("hang sample", file=path.name if path.is_file() else None, status=result.returncode)
 
     def screenshot(self, label: str) -> None:
         if self.window_tool is None or self.session_dir is None or self.game_pid is None:

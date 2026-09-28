@@ -33,6 +33,13 @@ percentiles. Reconcile workload differences before using synthetic results to ch
 
 | Experiment | Recorded outcome and disposition | What would justify revisiting it? | Evidence |
 | --- | --- | --- | --- |
+| Submit every 64 draws at render-target changes (`render.submitAtPassBoundary`), 2026-09-28 | **Launcher default in the 2026-09-28 candidate.** Within-run ABBA against 512 mid-pass: light scene +12.2% FPS, p99 -9.5%; crowd +2.5% and +0.9% in two runs, p99 unchanged. Candidate arrivals +5-12% per phase against 2026-09-26 runs (separate launches). New e2e regression passes. | A scene where 64 regresses against 512, or an adaptive rule that beats both scenes (16 at boundaries: light +2.7%, crowd -16.8%). | [2026-09-28](PERFORMANCE-2026-09-28.md) |
+| View inverse without the `fmaf` libcall, 2026-09-28 | **Adopted in the candidate PE.** Removes Wine's software `fmaf` (~3% of the game thread). Array sums (unfused); consumed only by user clip planes, which FFXI never enables (18,378 dumped draws, all zero planes). | Any output difference in clip-plane rendering. | [2026-09-28](PERFORMANCE-2026-09-28.md) |
+| 512-draw split deferred to the next render-target change (no threshold change) | **No effect** (-0.45% crowd ABBA). The gain above comes from submitting more often once splits no longer add mid-pass store/load. | None expected. | [2026-09-28](PERFORMANCE-2026-09-28.md) |
+| Extra split when the GPU has retired all sent work | **Never triggered** (always one submission in flight at a boundary). | A rule keyed on one-or-fewer in flight, tested in both scenes. | [2026-09-28](PERFORMANCE-2026-09-28.md) |
+| Full-target reused-attachment fast clear, 2026-09-28 retry | **Neutral:** +0.2% crowd ABBA, GPU per large command buffer -5.7%. The September 14 loss did not reproduce; not adopted for lack of gain. | A workload where the clear quad is a measured GPU cost. | [2026-09-28](PERFORMANCE-2026-09-28.md) |
+| Small-copy fast path in Wine ucrtbase `memmove` | **No gain:** correct (453,440 overlap checks), ~5 ns per call before and after. | Evidence that copy length, not call overhead, dominates. | [2026-09-28](PERFORMANCE-2026-09-28.md) |
+| Background GPU keepalive (clock scaling) | **Rejected:** -0.9% crowd ABBA. | Direct GPU-frequency telemetry showing downclocking. | [2026-09-28](PERFORMANCE-2026-09-28.md) |
 | Earlier render submission, controlled retry | **Default in the play-test candidate; not installed.** Two within-run crowd tests improved FPS 31-45%; quiet control improved 14%. Normal launcher, 20-cast battle, and full arrivals validations passed; one 198 ms arrival outlier remains. Full 2161 renderer tests passed; conformance remains incomplete because the same window-test timeout occurs with submission 0 and 512. Not installed. | The new ABBA method, normalized character state, and quieter host justify revisiting earlier inconclusive results. | [Scheduling](FRAME-TIME-SPRINT-2026-09-14.md#early-submission-positive-initial-controls) |
 | Submission threshold 128 or 1024 versus 512 | **Not promoted.** Single ABBA comparisons lost 3.60% FPS at 128 and 3.72% at 1024. The 128 run had a slightly better p99; retain 512 pending stronger tradeoff evidence. | New repeated controls or an adaptive mechanism; do not sweep blindly. | [Threshold comparisons](FRAME-TIME-SPRINT-2026-09-14.md#early-submission-positive-initial-controls) |
 | Bounded CPU frame-storage recycling | **No demonstrated benefit; removed.** Working reuse counters, 213 targeted i686 tests passed, but first controlled early-submit crowd comparison lost 3.46% FPS. | Measure reuse counters and matched FPS, then complete lifetime/readback and broader checks. | [Storage reuse](FRAME-TIME-SPRINT-2026-09-14.md#cpu-frame-storage-recycling-no-demonstrated-benefit) |
@@ -72,6 +79,13 @@ percentiles. Reconcile workload differences before using synthetic results to ch
 | Renderer frame counters / forward clock changes | **Invalid measurement hazards corrected.** Internal submissions are not application frames; clock changes could expire sessions and leave stale scene state. Use verified live client markers and actual frame counters. | [Readback counters](MTLD3D-EXPERIMENTS.md#markets-readback-stalls), [clock validation](MTLD3D-EXPERIMENTS.md#reliable-benchmark-clock-setup) |
 
 ## Open questions, not completed optimizations
+
+- Ashita's per-draw add-on dispatch (2026-09-28) costs about 0.18 ms per loaded add-on per frame
+  in the light scene (full ~40 add-ons 37.6 FPS, three add-ons 50.3 FPS). It is inside
+  Addons.dll; only the add-on count changes it. User choice, not a renderer change.
+- A +15-20 ms frame recurs every 60 s (also with three add-ons); source not identified.
+- Intermittent startup hang after the first Present (2 of ~20 launches on 2026-09-28); the
+  harness now samples the hung process.
 
 - A September 14 capture identified an immediate consumer of 16x16 readback alpha
   bits that affects rendering. GPU dependencies still prevent assuming the work can
