@@ -145,3 +145,11 @@ compatibility and Developer ID notarization remain unvalidated.
 This candidate is suitable for opt-in local play testing. It supplies native
 window ownership and a live frame-limit panel; further graphical effects need
 separate implementation and validation.
+
+## Display changes, 2026-09-28
+
+A monitor powering off and on left the game drawn into part of the native window (white area
+beside a smaller picture) until the window was dragged. mtld3d 5aeb468 makes Wine re-read the
+window's frame after a display change when the game view no longer fills the window, the same
+thing a drag does. Confirmed by the user with a monitor power cycle; see mtld3d
+`docs/NATIVE-HOST.md`.

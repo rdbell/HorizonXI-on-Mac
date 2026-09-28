@@ -57,10 +57,10 @@ index f36189a..f8f4240 100644
  - Use `///` for items, `//` for fn-body and inline notes.
 diff --git a/docs/NATIVE-HOST.md b/docs/NATIVE-HOST.md
 new file mode 100644
-index 0000000..70770df
+index 0000000..4d03261
 --- /dev/null
 +++ b/docs/NATIVE-HOST.md
-@@ -0,0 +1,103 @@
+@@ -0,0 +1,114 @@
 +# Native game host
 +
 +The opt-in `present.nativeHost` path places the existing Metal-backed Wine
@@ -117,6 +117,17 @@ index 0000000..70770df
 +Unsupported MSAA and nonzero auto-depth formats are rejected before changing
 +window ownership. Later GPU allocation failures are not transactional and do
 +not promise restoration of the previous native-fullscreen state.
++
++## Display changes
++
++When a display is removed or returns (a monitor powering off and on), Wine shrinks the game's
++Win32 window to fit the displays of the moment. Its request to resize the Cocoa window is ignored
++while the host owns it, so the game drew into part of the window until the window was moved or
++resized. After a forwarded screen-parameters change, the host checks for about eight seconds
++whether the game view still fills the window (Wine's frame leaves a 4-point inset in normal play;
++anything over 16 counts) and, if not, posts `NSWindowDidResizeNotification` for the child, which
++makes Wine send the window's frame back to the Win32 side as a drag would. Verified by the user on
++an LG TV power cycle, 2026-09-28: the view went from 1024x742 back to 1920x1080 within a second.
 +
 +## Validation of the original host, before picture controls
 +
@@ -1914,7 +1925,7 @@ index 18e1be0..e9e6009 100644
      // untouched (deallocator was None).
      true
 diff --git a/unix/unix/src/metal/macdrv.rs b/unix/unix/src/metal/macdrv.rs
-index 13bdd0a..15f0cd3 100644
+index 13bdd0a..8499715 100644
 --- a/unix/unix/src/metal/macdrv.rs
 +++ b/unix/unix/src/metal/macdrv.rs
 @@ -20,6 +20,7 @@ use objc2_core_graphics::{CGColor, CGColorSpace};
@@ -1976,7 +1987,15 @@ index 13bdd0a..15f0cd3 100644
          install_occlusion_observer_once();
          // SAFETY: inside the main-thread dispatch above.
          let mtm = unsafe { objc2::MainThreadMarker::new_unchecked() };
-@@ -584,7 +591,8 @@ fn install_occlusion_observer_once() {
+@@ -556,6 +563,7 @@ fn install_screen_params_filter(mtm: objc2::MainThreadMarker) {
+         // SAFETY: the notification pointer is valid for the handler's
+         // duration; Wine implements this optional delegate method.
+         unsafe { delegate.applicationDidChangeScreenParameters(notification.as_ref()) };
++        native_host::after_display_change();
+     });
+     // SAFETY: objc2 typed binding; the center copies the block, and the
+     // token is leaked below so the observer is never removed.
+@@ -584,7 +592,8 @@ fn install_occlusion_observer_once() {
  
      use block2::RcBlock;
      use objc2_app_kit::{
@@ -1986,7 +2005,7 @@ index 13bdd0a..15f0cd3 100644
      };
      use objc2_foundation::{NSNotification, NSNotificationCenter};
  
-@@ -601,17 +609,12 @@ fn install_occlusion_observer_once() {
+@@ -601,17 +610,12 @@ fn install_occlusion_observer_once() {
                  return;
              };
              let object_ptr = Retained::as_ptr(&object) as usize;
@@ -2008,7 +2027,7 @@ index 13bdd0a..15f0cd3 100644
          });
  
          let center = NSNotificationCenter::defaultCenter();
-@@ -625,6 +628,21 @@ fn install_occlusion_observer_once() {
+@@ -625,6 +629,21 @@ fn install_occlusion_observer_once() {
              center.addObserverForName_object_queue_usingBlock(Some(name), None, None, &block)
          };
          core::mem::forget(token);
@@ -2030,7 +2049,7 @@ index 13bdd0a..15f0cd3 100644
          info!(
              target: LOG_TARGET,
              "present: installed NSWindowDidChangeOcclusionState observer (occluded presents skip nextDrawable)",
-@@ -632,6 +650,30 @@ fn install_occlusion_observer_once() {
+@@ -632,6 +651,30 @@ fn install_occlusion_observer_once() {
      });
  }
  
@@ -2061,7 +2080,7 @@ index 13bdd0a..15f0cd3 100644
  /// Minimum seconds between presents passed to `presentDrawable:afterMinimumDuration:`.
  ///
  /// Encoded as `f64::to_bits`. `0.0` means "no throttle" — `submit_frame`
-@@ -733,7 +775,11 @@ fn min_present_duration(panel_max_hz: f64, pacing: &PresentPacing) -> f64 {
+@@ -733,7 +776,11 @@ fn min_present_duration(panel_max_hz: f64, pacing: &PresentPacing) -> f64 {
  ///
  /// The present site consumes it from there.
  fn store_min_present_duration(panel_max_hz: f64, pacing: &PresentPacing) {
@@ -2074,7 +2093,7 @@ index 13bdd0a..15f0cd3 100644
      MIN_PRESENT_DURATION_BITS.store(seconds.to_bits(), Ordering::Relaxed);
  }
  
-@@ -1045,6 +1091,10 @@ fn run_on_main_thread_sync<F: FnOnce()>(f: F) {
+@@ -1045,6 +1092,10 @@ fn run_on_main_thread_sync<F: FnOnce()>(f: F) {
              f();
          }
      }
@@ -2085,7 +2104,7 @@ index 13bdd0a..15f0cd3 100644
      let mut ctx = CallCtx { f: Some(f) };
      // SAFETY: `_dispatch_main_q` is libSystem's main-queue singleton —
      // a valid `dispatch_queue_t` for the process lifetime. `&mut ctx`
-@@ -1113,6 +1163,17 @@ pub fn attach_metal_layer(
+@@ -1113,6 +1164,17 @@ pub fn attach_metal_layer(
          cursor_kick_sink_ptr,
          software_cursor,
      } = request;
@@ -2103,7 +2122,7 @@ index 13bdd0a..15f0cd3 100644
      if hwnd == 0 || device_handle.is_null() {
          return None;
      }
-@@ -1271,6 +1332,43 @@ pub fn set_display_sync_enabled(
+@@ -1271,6 +1333,43 @@ pub fn set_display_sync_enabled(
      store_min_present_duration(panel_max_hz, pacing);
  }
  
@@ -2147,7 +2166,7 @@ index 13bdd0a..15f0cd3 100644
  /// Host-time seconds (`CFTimeInterval`) to nanoseconds, saturating.
  ///
  /// `presentedTime` is a `CACurrentMediaTime`-based host time; a session's
-@@ -1700,6 +1798,7 @@ fn refresh_headroom_on_main() {
+@@ -1700,6 +1799,7 @@ fn refresh_headroom_on_main() {
      let Some(view_obj) = retain_bound_view() else {
          return;
      };
@@ -2155,7 +2174,7 @@ index 13bdd0a..15f0cd3 100644
      // SAFETY: we are on the main thread (dispatched to the main queue), where
      // NSScreen's main-thread-only class annotation is satisfied for real.
      let mtm = unsafe { MainThreadMarker::new_unchecked() };
-@@ -2136,9 +2235,11 @@ fn follow_screen_layer_mode(screen: &objc2_app_kit::NSScreen) {
+@@ -2136,9 +2236,11 @@ fn follow_screen_layer_mode(screen: &objc2_app_kit::NSScreen) {
      let hdr_enable = HDR_ENABLE_REQUESTED.load(Ordering::Relaxed);
      // The layer already matches this screen, which is every poll of a session
      // that stays on one display.
@@ -2169,7 +2188,7 @@ index 13bdd0a..15f0cd3 100644
      // No layer bound: attach configures the first one itself, and a torn-down
      // device leaves none to reconcile.
      let Some(layer) = retain_bound_layer() else {
-@@ -2166,11 +2267,13 @@ fn follow_screen_layer_mode(screen: &objc2_app_kit::NSScreen) {
+@@ -2166,11 +2268,13 @@ fn follow_screen_layer_mode(screen: &objc2_app_kit::NSScreen) {
          },
      );
      HDR_ACTIVE.store(mode == LayerMode::Hdr, Ordering::Relaxed);
@@ -2184,7 +2203,7 @@ index 13bdd0a..15f0cd3 100644
           pixelFormat={pf:?} wantsEDR={wants} colorspace={cs_label}",
      );
  }
-@@ -2203,7 +2306,8 @@ fn follow_screen_present_throttle(screen: &objc2_app_kit::NSScreen) {
+@@ -2203,7 +2307,8 @@ fn follow_screen_present_throttle(screen: &objc2_app_kit::NSScreen) {
      if !display_state_is_latched() {
          return;
      }
@@ -2194,7 +2213,7 @@ index 13bdd0a..15f0cd3 100644
      let panel_max_hz = screen_max_hz(screen);
      let applied = min_present_duration_sec();
      let Some(seconds) = min_present_duration_change(applied, panel_max_hz, &pacing) else {
-@@ -2534,3 +2638,19 @@ fn gamut_from_chromaticities(red_x: f32, green_y: f32) -> &'static str {
+@@ -2534,3 +2639,19 @@ fn gamut_from_chromaticities(red_x: f32, green_y: f32) -> &'static str {
  
  #[cfg(test)]
  mod tests;
@@ -2290,10 +2309,10 @@ index 8e87d49..e04ee67 100644
              self.ensure_content(Content::Sprite { hash, mode, peak });
 diff --git a/unix/unix/src/metal/macdrv/native_host.rs b/unix/unix/src/metal/macdrv/native_host.rs
 new file mode 100644
-index 0000000..e7fa55a
+index 0000000..e4cc62c
 --- /dev/null
 +++ b/unix/unix/src/metal/macdrv/native_host.rs
-@@ -0,0 +1,402 @@
+@@ -0,0 +1,455 @@
 +//! Native window ownership with Wine retaining game input and Metal presentation.
 +//!
 +//! All state and callbacks live on the `AppKit` main thread. The child remains a
@@ -2676,6 +2695,59 @@ index 0000000..e7fa55a
 +        let frame = self.window.contentRectForFrameRect(self.window.frame());
 +        self.child.setFrame_display(frame, true);
 +        self.synchronizing.set(false);
++    }
++}
++
++/// Refit the hosted game after a display configuration change. **Main thread only.**
++///
++/// Wine answers a display change on the Win32 side, which can shrink the game's Win32 window
++/// to fit the displays of the moment. Its request to resize the Cocoa window is ignored while
++/// the host owns it, so the window keeps its size while Wine's views follow the smaller Win32
++/// rectangle: the game draws into part of the window until a move or resize makes Wine read
++/// the frame again. The Win32 side settles over a few seconds, so the check repeats.
++pub fn after_display_change() {
++    resend_frame_if_stale();
++    std::thread::spawn(|| {
++        for delay_ms in [250, 750, 1000, 2000, 4000] {
++            std::thread::sleep(std::time::Duration::from_millis(delay_ms));
++            super::run_on_main_thread_async(resend_frame_if_stale);
++        }
++    });
++}
++
++/// Largest gap, in points, between the game view and the window it hosts in normal play.
++///
++/// Wine's Win32 frame leaves a few points (4 measured) between the view and the content area.
++const VIEW_INSET_SLACK: f64 = 16.0;
++
++/// Post the child's frame to Wine again when the game view no longer fills the window.
++fn resend_frame_if_stale() {
++    let Some(host) = current() else {
++        return;
++    };
++    let Some(content) = host.child.contentView() else {
++        return;
++    };
++    // SAFETY: the hosted view outlives the host; detach runs before Wine releases it.
++    let view = unsafe { &*(host.view as *const NSView) };
++    let drawn = view.convertRect_toView(view.bounds(), None);
++    let window = content.frame();
++    if window.size.width - drawn.size.width <= VIEW_INSET_SLACK
++        && window.size.height - drawn.size.height <= VIEW_INSET_SLACK
++    {
++        return;
++    }
++    info!(target: LOG_TARGET,
++        "native host: game view {:.0}x{:.0} in a {:.0}x{:.0} window after a display change; resending the frame to Wine",
++        drawn.size.width, drawn.size.height, window.size.width, window.size.height);
++    // Wine's window delegate answers a resize by posting the current frame to the Win32 side,
++    // the same path a drag takes.
++    // SAFETY: AppKit-exported notification-name constant, valid for the process lifetime.
++    let name = unsafe { objc2_app_kit::NSWindowDidResizeNotification };
++    // SAFETY: posting on the main thread to observers of a live window.
++    unsafe {
++        objc2_foundation::NSNotificationCenter::defaultCenter()
++            .postNotificationName_object(name, Some(&host.child));
 +    }
 +}
 +
